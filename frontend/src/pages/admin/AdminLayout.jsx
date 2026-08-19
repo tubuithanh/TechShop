@@ -1,43 +1,62 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Nav } from 'react-bootstrap';
+import {
+  Speedometer2,
+  BoxSeam,
+  Boxes,
+  ReceiptCutoff,
+  ShieldCheck,
+  People,
+  TagsFill,
+  Star,
+  Newspaper,
+  ChatDots,
+  ClockHistory,
+  HouseDoor
+} from 'react-bootstrap-icons';
 
 const menu = [
-  { path: '/admin', label: 'Tổng quan (Dashboard)' },
-  { path: '/admin/products', label: 'Quản lý sản phẩm' },
-  { path: '/admin/inventory', label: 'Quản lý tồn kho (đa chi nhánh)' },
-  { path: '/admin/orders', label: 'Quản lý đơn hàng' },
-  { path: '/admin/warranties', label: 'Quản lý bảo hành' },
-  { path: '/admin/customers', label: 'Quản lý khách hàng' },
-  { path: '/admin/vouchers', label: 'Quản lý khuyến mãi' },
-  { path: '/admin/reviews', label: 'Quản lý đánh giá' },
-  { path: '/admin/articles', label: 'Quản lý tin tức (CMS)' },
-  { path: '/admin/chat', label: 'Chat với khách hàng' },
-  { path: '/admin/audit-logs', label: 'Nhật ký thao tác' }
+  { path: '/admin', label: 'Tổng quan (Dashboard)', icon: Speedometer2 },
+  { path: '/admin/products', label: 'Quản lý sản phẩm', icon: BoxSeam },
+  { path: '/admin/inventory', label: 'Quản lý tồn kho (đa chi nhánh)', icon: Boxes },
+  { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: ReceiptCutoff },
+  { path: '/admin/warranties', label: 'Quản lý bảo hành', icon: ShieldCheck },
+  { path: '/admin/customers', label: 'Quản lý khách hàng', icon: People },
+  { path: '/admin/vouchers', label: 'Quản lý khuyến mãi', icon: TagsFill },
+  { path: '/admin/reviews', label: 'Quản lý đánh giá', icon: Star },
+  { path: '/admin/articles', label: 'Quản lý tin tức (CMS)', icon: Newspaper },
+  { path: '/admin/chat', label: 'Chat với khách hàng', icon: ChatDots },
+  { path: '/admin/audit-logs', label: 'Nhật ký thao tác', icon: ClockHistory }
 ];
 
 export default function AdminLayout() {
   const location = useLocation();
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-56 bg-gray-900 text-white p-4">
-        <h2 className="font-bold mb-6">⚙️ Trang quản trị</h2>
-        <nav className="space-y-1">
+    <div className="d-flex min-vh-100">
+      <aside className="bg-dark text-white p-3" style={{ width: '14rem', flexShrink: 0 }}>
+        <h2 className="fw-bold fs-6 mb-4 d-flex align-items-center gap-2">
+          <Speedometer2 size={18} /> Trang quản trị
+        </h2>
+        <Nav className="flex-column gap-1">
           {menu.map((m) => (
-            <Link
+            <Nav.Link
               key={m.path}
+              as={Link}
               to={m.path}
-              className={`block px-3 py-2 rounded text-sm ${
-                location.pathname === m.path ? 'bg-red-600' : 'hover:bg-gray-800'
+              className={`rounded-3 small d-flex align-items-center gap-2 ${
+                location.pathname === m.path ? 'bg-primary text-white' : 'text-white-50'
               }`}
             >
+              <m.icon size={16} className="flex-shrink-0" />
               {m.label}
-            </Link>
+            </Nav.Link>
           ))}
-          <Link to="/" className="block px-3 py-2 rounded text-sm hover:bg-gray-800 mt-4 text-gray-400">
-            ← Về trang chủ
-          </Link>
-        </nav>
+          <Nav.Link as={Link} to="/" className="rounded-3 small text-muted mt-3 d-flex align-items-center gap-2">
+            <HouseDoor size={16} /> Về trang chủ
+          </Nav.Link>
+        </Nav>
       </aside>
-      <main className="flex-1 bg-gray-50 p-6">
+      <main className="flex-grow-1 bg-light p-4">
         <Outlet />
       </main>
     </div>

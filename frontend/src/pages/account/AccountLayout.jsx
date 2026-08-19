@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Container, Row, Col, ListGroup } from 'react-bootstrap';
 
 const menu = [
   { path: '/account/profile', label: 'Thông tin tài khoản' },
@@ -12,25 +13,21 @@ const menu = [
 export default function AccountLayout() {
   const location = useLocation();
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-      <aside className="md:col-span-1">
-        <nav className="bg-white border rounded-lg divide-y">
-          {menu.map((m) => (
-            <Link
-              key={m.path}
-              to={m.path}
-              className={`block px-4 py-3 text-sm ${
-                location.pathname === m.path ? 'text-red-600 font-medium bg-red-50' : 'text-gray-700'
-              }`}
-            >
-              {m.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
-      <main className="md:col-span-3">
-        <Outlet />
-      </main>
-    </div>
+    <Container fluid="xl" className="py-4">
+      <Row className="g-4">
+        <Col xs={12} md={3}>
+          <ListGroup>
+            {menu.map((m) => (
+              <ListGroup.Item key={m.path} as={Link} to={m.path} action active={location.pathname === m.path}>
+                {m.label}
+              </ListGroup.Item>
+            ))}
+          </ListGroup>
+        </Col>
+        <Col xs={12} md={9}>
+          <Outlet />
+        </Col>
+      </Row>
+    </Container>
   );
 }

@@ -3,6 +3,42 @@
 
 ---
 
+## Phân công công việc nhóm
+
+| Giai đoạn (Phase) | Nhiệm vụ cụ thể (Task) | Người phụ trách (Assignee) |
+|---|---|---|
+| Bước 1: Khảo sát | Khảo sát 3 website (thegioididong, FPT Shop, CellphoneS) | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 1: Khảo sát | Xác định mục tiêu, phạm vi & yêu cầu đồ án (SRS sơ bộ) | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 2: Phân tích & thiết kế | Đặc tả yêu cầu chức năng & phi chức năng (SRS hoàn chỉnh) | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 2: Phân tích & thiết kế | Mô hình Use-case & Use-case description | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 2: Phân tích & thiết kế | Mô hình Activity & Sequence Diagram | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 2: Phân tích & thiết kế | Class Diagram & Thiết kế CSDL (MongoDB Schema, ERD) | Bùi Thành Tú (chính), Bá Hoài Sơn |
+| Bước 2: Phân tích & thiết kế | Thiết kế kiến trúc hệ thống & Wireframe/UI prototype | Bá Hoài Sơn (chính), Bùi Thành Tú |
+| Bước 3: Xây dựng Backend (API) | Khởi tạo NodeJS, MongoDB. Thiết kế API Specs (Swagger/Postman) & Mock Data cho Frontend | Bùi Thành Tú |
+| Bước 3: Xây dựng Backend (API) | Xác thực & phân quyền (JWT, bcrypt, Middleware Auth/Role) | Bùi Thành Tú |
+| Bước 3: Xây dựng Backend (API) | API CRUD: Sản phẩm, Danh mục. API Bộ lọc động phức tạp (Aggregation) | Bùi Thành Tú |
+| Bước 3: Xây dựng Backend (API) | API Giỏ hàng, Đơn hàng & Tích hợp VNPay/Momo | Bùi Thành Tú |
+| Bước 3: Xây dựng Backend (API) | API Đánh giá, Bảo hành, Khuyến mãi & Thống kê Dashboard | Bùi Thành Tú |
+| Bước 3: Xây dựng Backend (API) | Tích hợp Socket.io (Thông báo/Chat), Cloudinary, Nodemailer | Bùi Thành Tú |
+| Bước 4: Xây dựng UI Frontend | Khởi tạo React, Router, UI Lib. Dựng UI khung & tích hợp Mock API | Bá Hoài Sơn |
+| Bước 4: Xây dựng UI Frontend | UI Khách hàng: Trang chủ, Danh sách SP & Xử lý Bộ lọc động trên URL | Bá Hoài Sơn |
+| Bước 4: Xây dựng UI Frontend | UI Khách hàng: Chi tiết SP, Đánh giá & Giỏ hàng, Checkout Flow | Bá Hoài Sơn |
+| Bước 4: Xây dựng UI Frontend | UI Tài khoản, Auth, Tích hợp Socket.io (Nhận thông báo real-time/Chat) | Bá Hoài Sơn |
+| Bước 4: Xây dựng UI Frontend | UI Quản trị (Admin): Dashboard biểu đồ, Quản lý SP, Đơn hàng, Bảo hành | Bá Hoài Sơn |
+| Bước 4: Xây dựng UI Frontend | Thay thế Mock API bằng API thật. Tối ưu UX/UI, Responsive | Bá Hoài Sơn |
+| Bước 5: Triển khai (Deployment) | Cấu hình MongoDB Atlas & Deploy Backend lên Server (Render/VPS) | Bùi Thành Tú |
+| Bước 5: Triển khai (Deployment) | Deploy Frontend lên Vercel/Netlify & Cấu hình Domain | Bá Hoài Sơn |
+| Bước 6: Testing (Kiểm thử) | Lập kế hoạch test & Thiết kế Test Cases, Test API (Postman) | Bùi Thành Tú |
+| Bước 6: Testing (Kiểm thử) | Kiểm thử UI/UX, Luồng End-to-End (E2E) & Test trên Server Live | Bá Hoài Sơn |
+| Bước 6: Testing (Kiểm thử) | Bug tracking & Fix bug toàn hệ thống | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 7: Viết báo cáo | Viết Báo cáo - Chương 1, 2, 3 (Mở đầu, Cơ sở lý thuyết, Phân tích thiết kế) | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 7: Viết báo cáo | Viết Báo cáo - Chương 4 (Cài đặt) & Chương 5, 6 (Kiểm thử, Kết luận) | Bùi Thành Tú, Bá Hoài Sơn |
+| Bước 7: Viết báo cáo | Chuẩn bị Slide thuyết trình, Video kịch bản demo & Câu hỏi phản biện | Bùi Thành Tú, Bá Hoài Sơn |
+
+*(Bùi Thành Tú phụ trách chính Backend, Bá Hoài Sơn phụ trách chính Frontend. Trong quá trình thực hiện, hai thành viên vẫn phối hợp trao đổi, hỗ trợ chéo lẫn nhau khi cần để đảm bảo tiến độ chung của đồ án — bảng trên thể hiện vai trò/đầu mối phụ trách chính của từng người.)*
+
+---
+
 ## Tổng quan kế hoạch
 
 | Bước | Nội dung | Kết quả bàn giao chính | Thời gian dự kiến |

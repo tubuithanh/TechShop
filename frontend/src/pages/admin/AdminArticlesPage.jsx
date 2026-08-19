@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Container, Row, Col, Table, Button, Form, Modal, Badge } from 'react-bootstrap';
 import { postService } from '../../services/postService';
 
 const emptyForm = { title: '', shortDescription: '', content: '', category: 'tin_tuc', featuredImage: '', isPublished: true };
@@ -48,108 +49,128 @@ export default function AdminArticlesPage() {
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Quản lý tin tức / bài viết (CMS)</h1>
-        <button
+    <Container fluid>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1 className="fs-4 fw-bold mb-0">Quản lý tin tức / bài viết (CMS)</h1>
+        <Button
+          variant="primary"
           onClick={() => {
             setForm(emptyForm);
             setEditingId(null);
-            setShowForm(!showForm);
+            setShowForm(true);
           }}
-          className="bg-red-600 text-white px-4 py-2 rounded text-sm"
         >
-          {showForm ? 'Đóng form' : '+ Viết bài mới'}
-        </button>
+          + Viết bài mới
+        </Button>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg p-4 shadow-sm mb-6 space-y-3">
-          <input
-            required
-            placeholder="Tiêu đề bài viết"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="w-full border rounded px-3 py-2 text-sm"
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="border rounded px-3 py-2 text-sm"
-            >
-              <option value="tin_tuc">Tin tức</option>
-              <option value="tu_van">Tư vấn</option>
-              <option value="danh_gia">Đánh giá</option>
-              <option value="thu_thuat">Thủ thuật</option>
-            </select>
-            <input
-              placeholder="Link ảnh bìa (URL)"
-              value={form.featuredImage}
-              onChange={(e) => setForm({ ...form, featuredImage: e.target.value })}
-              className="border rounded px-3 py-2 text-sm"
-            />
-          </div>
-          <textarea
-            placeholder="Tóm tắt ngắn"
-            value={form.shortDescription}
-            onChange={(e) => setForm({ ...form, shortDescription: e.target.value })}
-            className="w-full border rounded px-3 py-2 text-sm"
-            rows={2}
-          />
-          <textarea
-            required
-            placeholder="Nội dung bài viết"
-            value={form.content}
-            onChange={(e) => setForm({ ...form, content: e.target.value })}
-            className="w-full border rounded px-3 py-2 text-sm"
-            rows={6}
-          />
-          <label className="flex items-center gap-2 text-sm">
-            <input
+      <Modal show={showForm} onHide={() => setShowForm(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{editingId ? 'Cập nhật bài viết' : 'Viết bài mới'}</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleSubmit}>
+          <Modal.Body>
+            <Form.Group className="mb-3">
+              <Form.Label>Tiêu đề bài viết</Form.Label>
+              <Form.Control required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </Form.Group>
+            <Row className="g-3 mb-3">
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Danh mục</Form.Label>
+                  <Form.Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                    <option value="tin_tuc">Tin tức</option>
+                    <option value="tu_van">Tư vấn</option>
+                    <option value="danh_gia">Đánh giá</option>
+                    <option value="thu_thuat">Thủ thuật</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Link ảnh bìa (URL)</Form.Label>
+                  <Form.Control
+                    value={form.featuredImage}
+                    onChange={(e) => setForm({ ...form, featuredImage: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            <Form.Group className="mb-3">
+              <Form.Label>Tóm tắt ngắn</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                value={form.shortDescription}
+                onChange={(e) => setForm({ ...form, shortDescription: e.target.value })}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Nội dung bài viết</Form.Label>
+              <Form.Control
+                required
+                as="textarea"
+                rows={6}
+                value={form.content}
+                onChange={(e) => setForm({ ...form, content: e.target.value })}
+              />
+            </Form.Group>
+            <Form.Check
               type="checkbox"
+              id="isPublished"
+              label="Xuất bản ngay"
               checked={form.isPublished}
               onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}
             />
-            Xuất bản ngay
-          </label>
-          <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded text-sm">
-            {editingId ? 'Cập nhật bài viết' : 'Đăng bài'}
-          </button>
-        </form>
-      )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={() => setShowForm(false)}>
+              Hủy
+            </Button>
+            <Button type="submit" variant="success">
+              {editingId ? 'Cập nhật bài viết' : 'Đăng bài'}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-3 shadow-sm">
+        <Table striped hover responsive className="mb-0 align-middle">
           <thead>
-            <tr className="text-left text-gray-500 border-b">
-              <th className="p-3">Tiêu đề</th>
-              <th className="p-3">Danh mục</th>
-              <th className="p-3">Lượt xem</th>
-              <th className="p-3">Trạng thái</th>
-              <th className="p-3">Thao tác</th>
+            <tr className="text-muted">
+              <th>Tiêu đề</th>
+              <th>Danh mục</th>
+              <th>Lượt xem</th>
+              <th>Trạng thái</th>
+              <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {posts.map((a) => (
-              <tr key={a._id} className="border-b">
-                <td className="p-3">{a.title}</td>
-                <td className="p-3">{a.category}</td>
-                <td className="p-3">{a.viewCount}</td>
-                <td className="p-3">{a.isPublished ? 'Đã xuất bản' : 'Bản nháp'}</td>
-                <td className="p-3 space-x-2">
-                  <button onClick={() => handleEdit(a)} className="text-blue-600">
-                    Sửa
-                  </button>
-                  <button onClick={() => handleDelete(a._id)} className="text-red-600">
-                    Xóa
-                  </button>
+              <tr key={a._id}>
+                <td>{a.title}</td>
+                <td>{a.category}</td>
+                <td>{a.viewCount}</td>
+                <td>
+                  <Badge bg={a.isPublished ? 'success' : 'secondary'}>
+                    {a.isPublished ? 'Đã xuất bản' : 'Bản nháp'}
+                  </Badge>
+                </td>
+                <td>
+                  <div className="d-flex gap-2">
+                    <Button size="sm" variant="outline-primary" onClick={() => handleEdit(a)}>
+                      Sửa
+                    </Button>
+                    <Button size="sm" variant="outline-danger" onClick={() => handleDelete(a._id)}>
+                      Xóa
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
-    </div>
+    </Container>
   );
 }

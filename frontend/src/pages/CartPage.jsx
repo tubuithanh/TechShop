@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
+import { placeholderImage } from '../utils/placeholderImage';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -18,68 +20,75 @@ export default function CartPage() {
 
   if (!user) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-        <p className="mb-4">Vui lòng đăng nhập để xem giỏ hàng của bạn.</p>
-        <Link to="/login" className="text-red-600 underline">
+      <Container style={{ maxWidth: '48rem' }} className="py-5 text-center">
+        <p className="mb-3">Vui lòng đăng nhập để xem giỏ hàng của bạn.</p>
+        <Link to="/login" className="text-primary text-decoration-underline">
           Đăng nhập ngay
         </Link>
-      </div>
+      </Container>
     );
   }
 
   if (!cart.items || cart.items.length === 0) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-        <p className="mb-4">Giỏ hàng của bạn đang trống.</p>
-        <Link to="/products" className="text-red-600 underline">
+      <Container style={{ maxWidth: '48rem' }} className="py-5 text-center">
+        <p className="mb-3">Giỏ hàng của bạn đang trống.</p>
+        <Link to="/products" className="text-primary text-decoration-underline">
           Tiếp tục mua sắm
         </Link>
-      </div>
+      </Container>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold mb-4">Giỏ hàng của bạn</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 space-y-3">
+    <Container style={{ maxWidth: '64rem' }} className="py-4">
+      <h1 className="fs-4 fw-bold mb-4">Giỏ hàng của bạn</h1>
+      <Row className="g-4">
+        <Col md={8} className="d-flex flex-column gap-3">
           {cart.items.map((item) => (
-            <div key={item._id} className="flex items-center gap-4 border rounded-lg p-3">
-              <img src={item.image || 'https://via.placeholder.com/80'} alt={item.name} className="w-20 h-20 object-contain" />
-              <div className="flex-1">
-                <div className="font-medium text-sm">{item.name}</div>
-                <div className="text-red-600 font-bold">{formatVND(item.unitPrice)}</div>
-              </div>
-              <div className="flex items-center border rounded">
-                <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="px-2 py-1">
-                  -
-                </button>
-                <span className="px-3">{item.quantity}</span>
-                <button onClick={() => updateQuantity(item._id, item.quantity + 1)} className="px-2 py-1">
-                  +
-                </button>
-              </div>
-              <button onClick={() => removeFromCart(item._id)} className="text-red-500 text-sm">
-                Xóa
-              </button>
-            </div>
+            <Card key={item._id}>
+              <Card.Body className="d-flex align-items-center gap-3 p-3">
+                <img
+                  src={item.image || placeholderImage(80, 80)}
+                  alt={item.name}
+                  style={{ width: '5rem', height: '5rem', objectFit: 'contain' }}
+                />
+                <div className="flex-grow-1">
+                  <div className="fw-medium small">{item.name}</div>
+                  <div className="text-primary fw-bold">{formatVND(item.unitPrice)}</div>
+                </div>
+                <div className="d-flex align-items-center border rounded">
+                  <Button variant="light" size="sm" onClick={() => updateQuantity(item._id, item.quantity - 1)}>
+                    -
+                  </Button>
+                  <span className="px-3">{item.quantity}</span>
+                  <Button variant="light" size="sm" onClick={() => updateQuantity(item._id, item.quantity + 1)}>
+                    +
+                  </Button>
+                </div>
+                <Button variant="link" size="sm" className="text-danger" onClick={() => removeFromCart(item._id)}>
+                  Xóa
+                </Button>
+              </Card.Body>
+            </Card>
           ))}
-        </div>
+        </Col>
 
-        <div className="border rounded-lg p-4 h-fit">
-          <div className="flex justify-between mb-2">
-            <span>Tạm tính</span>
-            <span className="font-bold">{formatVND(totalAmount)}</span>
-          </div>
-          <p className="text-xs text-gray-500 mb-4">Phí vận chuyển sẽ được tính ở bước thanh toán</p>
-          <button
-            onClick={() => navigate('/checkout')}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 rounded"
-          >
-            Tiến hành thanh toán
-          </button>
-        </div>
-      </div>
-    </div>
+        <Col md={4}>
+          <Card>
+            <Card.Body>
+              <div className="d-flex justify-content-between mb-2">
+                <span>Tạm tính</span>
+                <span className="fw-bold">{formatVND(totalAmount)}</span>
+              </div>
+              <p className="small text-muted mb-3">Phí vận chuyển sẽ được tính ở bước thanh toán</p>
+              <Button variant="primary" className="w-100 fw-medium py-2" onClick={() => navigate('/checkout')}>
+                Tiến hành thanh toán
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+    </Container>
   );
 }

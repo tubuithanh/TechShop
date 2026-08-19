@@ -46,9 +46,9 @@ import AdminAuditLogPage from './pages/admin/AdminAuditLogPage';
 
 function StorefrontLayout({ children }) {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="d-flex flex-column min-vh-100 bg-light">
       <Header />
-      <div className="flex-1">{children}</div>
+      <div className="flex-grow-1">{children}</div>
       <Footer />
       <ChatWidget />
     </div>

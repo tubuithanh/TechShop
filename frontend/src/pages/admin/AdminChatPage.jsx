@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import { Container, Row, Col, Form, Button, ListGroup } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
 import { getAccessToken } from '../../services/api';
 import { chatService } from '../../services/chatService';
@@ -12,6 +13,7 @@ export default function AdminChatPage() {
   const [input, setInput] = useState('');
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
+  const activeConvRef = useRef(null);
 
   useEffect(() => {
     chatService.getConversations().then(setConversations);
@@ -19,7 +21,8 @@ export default function AdminChatPage() {
     const socket = io('/', { auth: { token: getAccessToken() } });
     socketRef.current = socket;
     socket.on('chat:message', (msg) => {
-      if (msg.conversationId === activeConv) {
+      // Đọc từ ref thay vì closure của activeConv để luôn thấy hội thoại đang mở mới nhất
+      if (msg.conversationId === activeConvRef.current) {
         setMessages((prev) => [...prev, msg]);
       }
       chatService.getConversations().then(setConversations);
@@ -34,6 +37,7 @@ export default function AdminChatPage() {
 
   const openConversation = async (conversationId) => {
     setActiveConv(conversationId);
+    activeConvRef.current = conversationId;
     const history = await chatService.getHistory(conversationId);
     setMessages(history);
   };
@@ -50,32 +54,39 @@ export default function AdminChatPage() {
   };
 
   return (
-    <div>
-      <h1 className="text-xl font-bold mb-4">Chat với khách hàng</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white rounded-lg shadow-sm overflow-hidden" style={{ height: 500 }}>
-        <div className="border-r overflow-y-auto">
-          {conversations.map((c) => (
-            <button
-              key={c._id}
-              onClick={() => openConversation(c._id)}
-              className={`w-full text-left p-3 border-b text-sm ${activeConv === c._id ? 'bg-red-50' : ''}`}
-            >
-              <div className="font-medium truncate">Khách hàng #{c._id.slice(-6)}</div>
-              <div className="text-xs text-gray-500 truncate">{c.lastMessage}</div>
-            </button>
-          ))}
-          {conversations.length === 0 && <div className="p-4 text-sm text-gray-400">Chưa có hội thoại nào</div>}
-        </div>
+    <Container fluid>
+      <h1 className="fs-4 fw-bold mb-4">Chat với khách hàng</h1>
+      <Row className="bg-white rounded-3 shadow-sm g-0" style={{ height: 500 }}>
+        <Col md={4} className="border-end d-flex flex-column overflow-auto">
+          <ListGroup variant="flush">
+            {conversations.map((c) => (
+              <ListGroup.Item
+                key={c._id}
+                action
+                active={activeConv === c._id}
+                onClick={() => openConversation(c._id)}
+                className="py-3"
+              >
+                <div className="fw-medium text-truncate">Khách hàng #{c._id.slice(-6)}</div>
+                <div className="small text-muted text-truncate">{c.lastMessage}</div>
+              </ListGroup.Item>
+            ))}
+          </ListGroup>
+          {conversations.length === 0 && <div className="p-4 small text-muted">Chưa có hội thoại nào</div>}
+        </Col>
 
-        <div className="col-span-2 flex flex-col">
+        <Col md={8} className="d-flex flex-column">
           {activeConv ? (
             <>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column gap-2">
                 {messages.map((m, idx) => {
                   const isMine = m.sender?._id === user._id;
                   return (
-                    <div key={m._id || idx} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[70%] rounded-lg px-3 py-2 text-sm ${isMine ? 'bg-red-600 text-white' : 'bg-gray-100'}`}>
+                    <div key={m._id || idx} className={`d-flex ${isMine ? 'justify-content-end' : 'justify-content-start'}`}>
+                      <div
+                        className={`rounded-3 px-3 py-2 small ${isMine ? 'bg-primary text-white' : 'bg-light'}`}
+                        style={{ maxWidth: '70%' }}
+                      >
                         {m.content}
                       </div>
                     </div>
@@ -83,25 +94,20 @@ export default function AdminChatPage() {
                 })}
                 <div ref={bottomRef} />
               </div>
-              <form onSubmit={handleSend} className="border-t p-3 flex gap-2">
-                <input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Nhập phản hồi..."
-                  className="flex-1 border rounded px-3 py-2 text-sm"
-                />
-                <button type="submit" className="bg-red-600 text-white px-4 rounded text-sm">
+              <Form onSubmit={handleSend} className="border-top p-3 d-flex gap-2">
+                <Form.Control value={input} onChange={(e) => setInput(e.target.value)} placeholder="Nhập phản hồi..." />
+                <Button type="submit" variant="primary">
                   Gửi
-                </button>
-              </form>
+                </Button>
+              </Form>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+            <div className="flex-grow-1 d-flex align-items-center justify-content-center text-muted small">
               Chọn một hội thoại để bắt đầu trả lời
             </div>
           )}
-        </div>
-      </div>
-    </div>
+        </Col>
+      </Row>
+    </Container>
   );
 }

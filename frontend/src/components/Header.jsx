@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { Navbar, Nav, NavDropdown, Container, Form, Button, Badge } from 'react-bootstrap';
 import { useAuth } from '../store/AuthContext';
 import { useCart } from '../store/CartContext';
 
@@ -15,91 +16,99 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-red-600 text-white sticky top-0 z-50 shadow">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
-        <Link to="/" className="text-xl font-bold whitespace-nowrap">
+    <Navbar bg="primary" variant="dark" sticky="top" className="shadow-sm py-3">
+      <Container fluid="xl" className="flex-nowrap gap-3">
+        <Navbar.Brand as={Link} to="/" className="fw-bold fs-4 text-nowrap">
           TechShop
-        </Link>
+        </Navbar.Brand>
 
-        <form onSubmit={handleSearch} className="flex-1 flex">
-          <input
+        <Form className="d-flex flex-grow-1" onSubmit={handleSearch}>
+          <Form.Control
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             type="text"
             placeholder="Bạn cần tìm gì hôm nay?"
-            className="w-full rounded-l px-3 py-2 text-gray-900 outline-none"
+            className="rounded-end-0"
           />
-          <button type="submit" className="bg-red-800 px-4 rounded-r hover:bg-red-900">
+          <Button type="submit" variant="dark" className="rounded-start-0">
             Tìm
-          </button>
-        </form>
+          </Button>
+        </Form>
 
-        <Link to="/compare" className="hidden sm:block hover:underline whitespace-nowrap">
-          So sánh
-        </Link>
-        <Link to="/stores" className="hidden sm:block hover:underline whitespace-nowrap">
-          Cửa hàng
-        </Link>
-        <Link to="/promotions" className="hidden sm:block hover:underline whitespace-nowrap">
-          Khuyến mãi
-        </Link>
-        <Link to="/tin-tuc" className="hidden sm:block hover:underline whitespace-nowrap">
-          Tin tức
-        </Link>
+        <Nav className="d-none d-sm-flex align-items-center gap-3 text-nowrap">
+          <Nav.Link as={Link} to="/compare" className="text-white">
+            So sánh
+          </Nav.Link>
+          <Nav.Link as={Link} to="/stores" className="text-white">
+            Cửa hàng
+          </Nav.Link>
+          <Nav.Link as={Link} to="/promotions" className="text-white">
+            Khuyến mãi
+          </Nav.Link>
+          <Nav.Link as={Link} to="/tin-tuc" className="text-white">
+            Tin tức
+          </Nav.Link>
+        </Nav>
 
-        <Link to="/cart" className="relative whitespace-nowrap">
+        <Nav.Link as={Link} to="/cart" className="position-relative text-white text-nowrap">
           Giỏ hàng
           {totalItems > 0 && (
-            <span className="absolute -top-2 -right-3 bg-yellow-400 text-red-700 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            <Badge bg="warning" text="dark" pill className="position-absolute top-0 start-100 translate-middle">
               {totalItems}
-            </span>
+            </Badge>
           )}
-        </Link>
+        </Nav.Link>
 
         {user ? (
-          <div className="relative group">
-            <button className="whitespace-nowrap">👤 {(user.displayName || user.name || '').split(' ').pop()}</button>
-            <div className="absolute right-0 hidden group-hover:block bg-white text-gray-800 rounded shadow-lg w-48 py-2">
-              <Link to="/account/profile" className="block px-4 py-2 hover:bg-gray-100">
-                Thông tin tài khoản
-              </Link>
-              <Link to="/account/addresses" className="block px-4 py-2 hover:bg-gray-100">
-                Sổ địa chỉ
-              </Link>
-              <Link to="/account/wishlist" className="block px-4 py-2 hover:bg-gray-100">
-                Sản phẩm yêu thích
-              </Link>
-              <Link to="/account/orders" className="block px-4 py-2 hover:bg-gray-100">
-                Đơn hàng của tôi
-              </Link>
-              <Link to="/account/warranties" className="block px-4 py-2 hover:bg-gray-100">
-                Bảo hành
-              </Link>
-              <Link to="/account/notifications" className="block px-4 py-2 hover:bg-gray-100">
-                Thông báo
-              </Link>
-              {['admin', 'staff'].includes(user.role) && (
-                <Link to="/admin" className="block px-4 py-2 hover:bg-gray-100 border-t">
+          <NavDropdown
+            align="end"
+            title={`👤 ${(user.displayName || user.name || '').split(' ').pop()}`}
+            id="user-menu"
+            className="text-nowrap"
+          >
+            <NavDropdown.Item as={Link} to="/account/profile">
+              Thông tin tài khoản
+            </NavDropdown.Item>
+            <NavDropdown.Item as={Link} to="/account/addresses">
+              Sổ địa chỉ
+            </NavDropdown.Item>
+            <NavDropdown.Item as={Link} to="/account/wishlist">
+              Sản phẩm yêu thích
+            </NavDropdown.Item>
+            <NavDropdown.Item as={Link} to="/account/orders">
+              Đơn hàng của tôi
+            </NavDropdown.Item>
+            <NavDropdown.Item as={Link} to="/account/warranties">
+              Bảo hành
+            </NavDropdown.Item>
+            <NavDropdown.Item as={Link} to="/account/notifications">
+              Thông báo
+            </NavDropdown.Item>
+            {['admin', 'staff'].includes(user.role) && (
+              <>
+                <NavDropdown.Divider />
+                <NavDropdown.Item as={Link} to="/admin">
                   Trang quản trị
-                </Link>
-              )}
-              <button
-                onClick={async () => {
-                  await logout();
-                  navigate('/');
-                }}
-                className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600 border-t"
-              >
-                Đăng xuất
-              </button>
-            </div>
-          </div>
+                </NavDropdown.Item>
+              </>
+            )}
+            <NavDropdown.Divider />
+            <NavDropdown.Item
+              onClick={async () => {
+                await logout();
+                navigate('/');
+              }}
+              className="text-danger"
+            >
+              Đăng xuất
+            </NavDropdown.Item>
+          </NavDropdown>
         ) : (
-          <Link to="/login" className="whitespace-nowrap">
+          <Nav.Link as={Link} to="/login" className="text-white text-nowrap">
             Đăng nhập
-          </Link>
+          </Nav.Link>
         )}
-      </div>
-    </header>
+      </Container>
+    </Navbar>
   );
 }

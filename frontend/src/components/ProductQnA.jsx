@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Form, Button, Card } from 'react-bootstrap';
 import { useAuth } from '../store/AuthContext';
 import { productService } from '../services/productService';
 
@@ -26,59 +27,69 @@ export default function ProductQnA({ productId, questions, setQuestions }) {
   return (
     <div>
       {user ? (
-        <form onSubmit={handleAskQuestion} className="flex gap-2 mb-6 max-w-lg">
-          <input
+        <Form onSubmit={handleAskQuestion} className="d-flex gap-2 mb-4" style={{ maxWidth: '32rem' }}>
+          <Form.Control
             value={newQuestion}
             onChange={(e) => setNewQuestion(e.target.value)}
             placeholder="Đặt câu hỏi về sản phẩm này..."
-            className="flex-1 border rounded px-3 py-2 text-sm"
+            size="sm"
           />
-          <button type="submit" className="bg-red-600 text-white px-4 py-2 rounded text-sm whitespace-nowrap">
+          <Button type="submit" variant="primary" size="sm" className="text-nowrap">
             Gửi câu hỏi
-          </button>
-        </form>
+          </Button>
+        </Form>
       ) : (
-        <p className="text-sm text-gray-500 mb-6">Vui lòng đăng nhập để đặt câu hỏi về sản phẩm.</p>
+        <p className="small text-muted mb-4">Vui lòng đăng nhập để đặt câu hỏi về sản phẩm.</p>
       )}
 
-      <div className="space-y-4">
+      <div className="d-flex flex-column gap-3">
         {questions.map((q) => (
-          <div key={q._id} className="border rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-medium text-sm">{q.userId?.displayName || 'Ẩn danh'}</span>
-              <span className="text-xs text-gray-400">{new Date(q.createdAt).toLocaleDateString('vi-VN')}</span>
-            </div>
-            <p className="text-sm mb-2">❓ {q.content}</p>
-
-            {q.answers?.length > 0 && (
-              <div className="pl-4 border-l-2 border-gray-100 space-y-2 mb-2">
-                {q.answers.map((a, idx) => (
-                  <div key={idx} className="text-sm">
-                    <span className={`font-medium ${a.isFromShop ? 'text-red-600' : ''}`}>
-                      {a.isFromShop ? '🏪 Shop trả lời' : 'Khách hàng'}:
-                    </span>{' '}
-                    {a.content}
-                  </div>
-                ))}
+          <Card key={q._id}>
+            <Card.Body className="p-3">
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <span className="fw-medium small">{q.userId?.displayName || 'Ẩn danh'}</span>
+                <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                  {new Date(q.createdAt).toLocaleDateString('vi-VN')}
+                </span>
               </div>
-            )}
+              <p className="small mb-2">❓ {q.content}</p>
 
-            {user && (
-              <div className="flex gap-2 mt-2">
-                <input
-                  value={answerDrafts[q._id] || ''}
-                  onChange={(e) => setAnswerDrafts({ ...answerDrafts, [q._id]: e.target.value })}
-                  placeholder="Trả lời câu hỏi này..."
-                  className="flex-1 border rounded px-2 py-1 text-xs"
-                />
-                <button onClick={() => handleAnswer(q._id)} className="text-xs text-red-600 whitespace-nowrap">
-                  Trả lời
-                </button>
-              </div>
-            )}
-          </div>
+              {q.answers?.length > 0 && (
+                <div className="ps-3 border-start d-flex flex-column gap-2 mb-2">
+                  {q.answers.map((a, idx) => (
+                    <div key={idx} className="small">
+                      <span className={`fw-medium ${a.isFromShop ? 'text-primary' : ''}`}>
+                        {a.isFromShop ? '🏪 Shop trả lời' : 'Khách hàng'}:
+                      </span>{' '}
+                      {a.content}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {user && (
+                <div className="d-flex gap-2 mt-2">
+                  <Form.Control
+                    value={answerDrafts[q._id] || ''}
+                    onChange={(e) => setAnswerDrafts({ ...answerDrafts, [q._id]: e.target.value })}
+                    placeholder="Trả lời câu hỏi này..."
+                    size="sm"
+                    style={{ fontSize: '0.75rem' }}
+                  />
+                  <Button
+                    onClick={() => handleAnswer(q._id)}
+                    variant="link"
+                    size="sm"
+                    className="text-primary text-nowrap p-0"
+                  >
+                    Trả lời
+                  </Button>
+                </div>
+              )}
+            </Card.Body>
+          </Card>
         ))}
-        {questions.length === 0 && <div className="text-sm text-gray-400">Chưa có câu hỏi nào cho sản phẩm này</div>}
+        {questions.length === 0 && <div className="small text-muted">Chưa có câu hỏi nào cho sản phẩm này</div>}
       </div>
     </div>
   );

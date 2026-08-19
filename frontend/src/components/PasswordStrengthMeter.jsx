@@ -1,5 +1,5 @@
 function getStrength(password) {
-  if (!password) return { score: 0, label: '', color: 'bg-gray-200' };
+  if (!password) return { score: 0, label: '', color: 'bg-light' };
   let score = 0;
   if (password.length >= 6) score++;
   if (password.length >= 8) score++;
@@ -7,9 +7,9 @@ function getStrength(password) {
   if (/[0-9]/.test(password)) score++;
   if (/[^A-Za-z0-9]/.test(password)) score++;
 
-  if (score <= 1) return { score: 1, label: 'Yếu', color: 'bg-red-500' };
-  if (score <= 3) return { score: 2, label: 'Trung bình', color: 'bg-yellow-500' };
-  return { score: 3, label: 'Mạnh', color: 'bg-green-500' };
+  if (score <= 1) return { score: 1, label: 'Yếu', color: 'bg-danger' };
+  if (score <= 3) return { score: 2, label: 'Trung bình', color: 'bg-warning' };
+  return { score: 3, label: 'Mạnh', color: 'bg-success' };
 }
 
 export default function PasswordStrengthMeter({ password }) {
@@ -18,12 +18,14 @@ export default function PasswordStrengthMeter({ password }) {
 
   return (
     <div className="mt-1">
-      <div className="flex gap-1 h-1.5">
+      <div className="d-flex gap-1" style={{ height: '0.375rem' }}>
         {[1, 2, 3].map((i) => (
-          <div key={i} className={`flex-1 rounded ${i <= strength.score ? strength.color : 'bg-gray-200'}`} />
+          <div key={i} className={`flex-fill rounded ${i <= strength.score ? strength.color : 'bg-light'}`} />
         ))}
       </div>
-      <div className="text-xs mt-1 text-gray-500">Độ mạnh mật khẩu: {strength.label}</div>
+      <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+        Độ mạnh mật khẩu: {strength.label}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Container, Row, Col, Breadcrumb, Badge, Form, Button, Spinner } from 'react-bootstrap';
 import { useAuth } from '../store/AuthContext';
 import { postService } from '../services/postService';
 import ProductCard from '../components/ProductCard';
@@ -24,64 +25,74 @@ export default function PostDetailPage() {
     setComment('');
   };
 
-  if (!post) return <div className="text-center py-16">Đang tải...</div>;
+  if (!post)
+    return (
+      <div className="text-center py-5">
+        <Spinner animation="border" />
+      </div>
+    );
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <nav className="text-xs text-gray-500 mb-4">
-        <Link to="/tin-tuc" className="hover:text-red-600">
+    <Container fluid="xl" style={{ maxWidth: '48rem' }} className="py-4">
+      <Breadcrumb className="mb-4" style={{ fontSize: '0.75rem' }}>
+        <Breadcrumb.Item linkAs={Link} linkProps={{ to: '/tin-tuc' }}>
           Tin tức & Cẩm nang
-        </Link>{' '}
-        / {categoryLabel[post.category]}
-      </nav>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item active>{categoryLabel[post.category]}</Breadcrumb.Item>
+      </Breadcrumb>
 
-      <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">{categoryLabel[post.category]}</span>
-      <h1 className="text-2xl font-bold mt-2 mb-2">{post.title}</h1>
-      <div className="text-sm text-gray-500 mb-4">
+      <Badge bg="primary" className="bg-opacity-10 text-primary fw-normal">
+        {categoryLabel[post.category]}
+      </Badge>
+      <h1 className="fs-2 fw-bold mt-2 mb-2">{post.title}</h1>
+      <div className="small text-muted mb-4">
         {post.nameAuthor} · {new Date(post.createdAt).toLocaleDateString('vi-VN')} · {post.viewCount} lượt xem
       </div>
 
-      {post.featuredImage && <img src={post.featuredImage} alt={post.title} className="w-full rounded-lg mb-6" />}
+      {post.featuredImage && <img src={post.featuredImage} alt={post.title} className="w-100 rounded-3 mb-4" />}
 
-      <div className="text-sm leading-relaxed whitespace-pre-line text-gray-800">{post.content}</div>
+      <div className="small" style={{ lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+        {post.content}
+      </div>
 
       {post.relatedProductIds?.length > 0 && (
-        <div className="mt-10">
-          <h3 className="font-bold mb-3">Sản phẩm liên quan trong bài viết</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="mt-5">
+          <h3 className="fw-bold mb-3">Sản phẩm liên quan trong bài viết</h3>
+          <Row className="g-3">
             {post.relatedProductIds.map((p) => (
-              <ProductCard key={p._id} product={p} />
+              <Col key={p._id} xs={6} md={4}>
+                <ProductCard product={p} />
+              </Col>
             ))}
-          </div>
+          </Row>
         </div>
       )}
 
-      <div className="mt-10 border-t pt-6">
-        <h3 className="font-bold mb-3">Bình luận ({post.comments?.length || 0})</h3>
+      <div className="mt-5 border-top pt-4">
+        <h3 className="fw-bold mb-3">Bình luận ({post.comments?.length || 0})</h3>
         {user ? (
-          <form onSubmit={handleComment} className="flex gap-2 mb-4">
-            <input
+          <Form onSubmit={handleComment} className="d-flex gap-2 mb-4">
+            <Form.Control
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Viết bình luận..."
-              className="flex-1 border rounded px-3 py-2 text-sm"
             />
-            <button type="submit" className="bg-red-600 text-white px-4 rounded text-sm">
+            <Button type="submit" variant="primary">
               Gửi
-            </button>
-          </form>
+            </Button>
+          </Form>
         ) : (
-          <p className="text-sm text-gray-500 mb-4">Đăng nhập để bình luận.</p>
+          <p className="small text-muted mb-4">Đăng nhập để bình luận.</p>
         )}
-        <div className="space-y-3">
+        <div className="d-flex flex-column gap-3">
           {(post.comments || []).map((c) => (
-            <div key={c._id} className="border-b pb-2">
-              <div className="text-sm font-medium">{c.displayName}</div>
-              <div className="text-sm text-gray-700">{c.message}</div>
+            <div key={c._id} className="border-bottom pb-2">
+              <div className="small fw-medium">{c.displayName}</div>
+              <div className="small">{c.message}</div>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </Container>
   );
 }

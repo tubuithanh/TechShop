@@ -14,26 +14,29 @@ function inferAction(method, path) {
  * vì audit log chỉ áp dụng cho hành vi quản trị hệ thống theo thiết kế collection "admins".
  */
 function auditLogger(req, res, next) {
-  const isAdminActor = req.account && req.accountRole && req.accountRole !== 'customer';
-  const shouldLog = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && isAdminActor;
-
-  if (shouldLog) {
-    res.on('finish', () => {
-      if (res.statusCode < 400) {
-        AuditLog.create({
-          adminId: req.account._id,
-          adminName: req.account.name,
-          adminRole: req.accountRole,
-          action: inferAction(req.method, req.originalUrl),
-          method: req.method,
-          path: req.originalUrl,
-          targetId: req.params?.id || req.params?.productId || req.params?.orderId || null,
-          ip: req.ip,
-          metadata: { statusCode: res.statusCode }
-        }).catch((err) => console.error('[AuditLog] Lỗi ghi log:', err.message));
-      }
-    });
+  // Middleware này được gắn TRƯỚC khi các router (và middleware `protect` bên trong
+  // từng router) chạy, nên req.account/req.accountRole chưa có giá trị tại thời điểm này.
+  // Vì vậy phải hoãn việc đọc req.account đến sự kiện 'finish' (lúc đó `protect` đã chạy xong).
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return next();
   }
+
+  res.on('finish', () => {
+    const isAdminActor = req.account && req.accountRole && req.accountRole !== 'customer';
+    if (isAdminActor && res.statusCode < 400) {
+      AuditLog.create({
+        adminId: req.account._id,
+        adminName: req.account.name,
+        adminRole: req.accountRole,
+        action: inferAction(req.method, req.originalUrl),
+        method: req.method,
+        path: req.originalUrl,
+        targetId: req.params?.id || req.params?.productId || req.params?.orderId || null,
+        ip: req.ip,
+        metadata: { statusCode: res.statusCode }
+      }).catch((err) => console.error('[AuditLog] Lỗi ghi log:', err.message));
+    }
+  });
   next();
 }
 

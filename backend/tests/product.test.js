@@ -3,19 +3,21 @@ const request = require('supertest');
 const app = require('../app');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
+const Store = require('../models/Store');
+const StoreInventory = require('../models/StoreInventory');
+const { registerUser } = require('./helpers');
 
-async function seedProduct() {
+async function seedProduct(stock = 10) {
   const category = await Category.create({ name: 'Điện thoại', slug: 'dien-thoai' });
   const product = await Product.create({
-    name: 'Sản phẩm test',
+    title: 'Sản phẩm test',
     slug: 'san-pham-test',
-    brand: 'TestBrand',
-    category: category._id,
-    basePrice: 1000000,
-    stock: 10,
-    images: []
+    categoryId: category._id,
+    price: 1000000
   });
-  return { category, product };
+  const store = await Store.create({ name: 'Cửa hàng test' });
+  await StoreInventory.create({ storeId: store._id, productId: product._id, stock });
+  return { category, product, store };
 }
 
 describe('Product API', () => {
@@ -37,7 +39,7 @@ describe('Product API', () => {
     const { product } = await seedProduct();
     const res = await request(app).get(`/api/products/${product.slug}`);
     expect(res.statusCode).toBe(200);
-    expect(res.body.data.name).toBe('Sản phẩm test');
+    expect(res.body.data.title).toBe('Sản phẩm test');
   });
 
   test('TC-11: Trả về 404 khi sản phẩm không tồn tại', async () => {
@@ -46,18 +48,14 @@ describe('Product API', () => {
   });
 
   test('TC-12: Không cho phép tạo sản phẩm khi chưa đăng nhập (401)', async () => {
-    const res = await request(app).post('/api/products').send({ name: 'Test' });
+    const res = await request(app).post('/api/products').send({ title: 'Test' });
     expect(res.statusCode).toBe(401);
   });
 });
 
 describe('Cart API (yêu cầu đăng nhập)', () => {
   async function getAuthToken() {
-    const res = await request(app).post('/api/auth/register').send({
-      name: 'Cart Tester',
-      email: 'carttest@example.com',
-      password: '123456'
-    });
+    const res = await registerUser({ email: 'carttest@example.com' });
     return res.body.accessToken;
   }
 
@@ -76,7 +74,7 @@ describe('Cart API (yêu cầu đăng nhập)', () => {
   });
 
   test('TC-14: Không cho thêm vào giỏ hàng khi vượt quá tồn kho', async () => {
-    const { product } = await seedProduct(); // stock = 10
+    const { product } = await seedProduct(10); // stock = 10
     const token = await getAuthToken();
 
     const res = await request(app)

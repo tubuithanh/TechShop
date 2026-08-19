@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Card, Button } from 'react-bootstrap';
 
 function formatVND(value) {
   return Math.round(value).toLocaleString('vi-VN') + 'đ';
@@ -19,41 +20,47 @@ export default function InstallmentCalculator({ price }) {
   const monthlyPayment = (price * (1 + selectedTerm.interestRate)) / selectedTerm.months;
 
   return (
-    <div className="border rounded-lg p-3 mt-3">
-      <button onClick={() => setOpen(!open)} className="flex items-center justify-between w-full text-sm font-medium">
-        <span>🧮 Tính toán trả góp 0% - 12 tháng</span>
-        <span>{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="mt-3">
-          <div className="flex flex-wrap gap-2 mb-3">
-            {TERMS.map((t) => (
-              <button
-                key={t.months}
-                onClick={() => setSelectedTerm(t)}
-                className={`text-xs border rounded px-3 py-1.5 ${
-                  selectedTerm.months === t.months ? 'border-red-600 text-red-600' : 'border-gray-300'
-                }`}
-              >
-                {t.months} tháng {t.interestRate === 0 ? '(0%)' : `(${(t.interestRate * 100).toFixed(1)}%/tháng)`}
-              </button>
-            ))}
-          </div>
-          <div className="bg-gray-50 rounded p-3 text-sm">
-            <div className="flex justify-between">
-              <span>Trả trước (dự kiến)</span>
-              <span>0đ</span>
+    <Card className="mt-3">
+      <Card.Body className="p-3">
+        <Button
+          variant="link"
+          onClick={() => setOpen(!open)}
+          className="d-flex align-items-center justify-content-between w-100 small fw-medium p-0 text-dark text-decoration-none"
+        >
+          <span>🧮 Tính toán trả góp 3 - 12 tháng</span>
+          <span>{open ? '▲' : '▼'}</span>
+        </Button>
+        {open && (
+          <div className="mt-3">
+            <div className="d-flex flex-wrap gap-2 mb-3">
+              {TERMS.map((t) => (
+                <Button
+                  key={t.months}
+                  size="sm"
+                  variant={selectedTerm.months === t.months ? 'outline-primary' : 'outline-secondary'}
+                  onClick={() => setSelectedTerm(t)}
+                  className="small"
+                >
+                  {t.months} tháng {t.interestRate === 0 ? '(0%)' : `(${(t.interestRate * 100).toFixed(1)}%/tháng)`}
+                </Button>
+              ))}
             </div>
-            <div className="flex justify-between font-bold text-red-600 mt-1">
-              <span>Trả góp hàng tháng</span>
-              <span>~{formatVND(monthlyPayment)}/tháng</span>
+            <div className="bg-light rounded p-3 small">
+              <div className="d-flex justify-content-between">
+                <span>Trả trước (dự kiến)</span>
+                <span>0đ</span>
+              </div>
+              <div className="d-flex justify-content-between fw-bold text-primary mt-1">
+                <span>Trả góp hàng tháng</span>
+                <span>~{formatVND(monthlyPayment)}/tháng</span>
+              </div>
             </div>
+            <p className="text-muted mt-2 mb-0" style={{ fontSize: '0.75rem' }}>
+              * Số liệu chỉ mang tính minh họa cho đồ án, chưa bao gồm phí thẩm định của đối tác tài chính thực tế.
+            </p>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            * Số liệu chỉ mang tính minh họa cho đồ án, chưa bao gồm phí thẩm định của đối tác tài chính thực tế.
-          </p>
-        </div>
-      )}
-    </div>
+        )}
+      </Card.Body>
+    </Card>
   );
 }

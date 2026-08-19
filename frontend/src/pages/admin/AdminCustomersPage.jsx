@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Badge, Button, Card, Form, Table } from 'react-bootstrap';
 import { userService } from '../../services/userService';
 
 export default function AdminCustomersPage() {
@@ -18,17 +19,18 @@ export default function AdminCustomersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-4">Quản lý khách hàng</h1>
-      <input
+      <h1 className="fs-4 fw-bold mb-4">Quản lý khách hàng</h1>
+      <Form.Control
         placeholder="Tìm theo tên, email, số điện thoại..."
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
-        className="border rounded px-3 py-2 text-sm mb-4 w-full max-w-sm"
+        className="mb-4"
+        style={{ maxWidth: '24rem' }}
       />
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
+      <Card className="shadow-sm">
+        <Table striped hover responsive className="mb-0">
           <thead>
-            <tr className="text-left text-gray-500 border-b">
+            <tr className="text-muted">
               <th className="p-3">Họ tên</th>
               <th className="p-3">Email</th>
               <th className="p-3">SĐT</th>
@@ -38,25 +40,25 @@ export default function AdminCustomersPage() {
           </thead>
           <tbody>
             {customers.map((c) => (
-              <tr key={c._id} className="border-b">
+              <tr key={c._id}>
                 <td className="p-3">{c.displayName}</td>
                 <td className="p-3">{c.email}</td>
                 <td className="p-3">{c.phoneNumber}</td>
                 <td className="p-3">
-                  <span className={c.isActive ? 'text-green-600' : 'text-red-600'}>
+                  <Badge bg={c.isActive ? 'success' : 'danger'}>
                     {c.isActive ? 'Đang hoạt động' : 'Đã khóa'}
-                  </span>
+                  </Badge>
                 </td>
                 <td className="p-3">
-                  <button onClick={() => handleToggleActive(c._id)} className="text-blue-600">
+                  <Button variant="outline-primary" size="sm" onClick={() => handleToggleActive(c._id)}>
                     {c.isActive ? 'Khóa tài khoản' : 'Mở khóa'}
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </Card>
     </div>
   );
 }

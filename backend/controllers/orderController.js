@@ -28,22 +28,13 @@ const createOrder = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Giỏ hàng đang trống' });
   }
 
-  // Kiểm tra tồn kho THEO ĐÚNG CỬA HÀNG đã chọn trước khi tạo đơn
-  for (const item of cart.items) {
-    const inventory = await StoreInventory.findOne({ productId: item.productId, storeId });
-    if (!inventory || inventory.stock < item.quantity) {
-      return res.status(400).json({
-        message: `Sản phẩm "${item.name}" không đủ tồn kho tại cửa hàng đã chọn`
-      });
-    }
-  }
-
   const itemsTotal = cart.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
   const shippingFee = deliveryMethod === 'store_pickup' ? 0 : SHIPPING_FEE_DEFAULT;
 
+  let voucher = null;
   let discountAmount = 0;
   if (voucherCode) {
-    const voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
+    voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
     if (!voucher || !voucher.isValidNow()) {
       return res.status(400).json({ message: 'Mã giảm giá không hợp lệ hoặc đã hết hạn' });
     }
@@ -53,42 +44,77 @@ const createOrder = asyncHandler(async (req, res) => {
     discountAmount =
       voucher.discountType === 'percent'
         ? Math.min((itemsTotal * voucher.discountValue) / 100, voucher.maxDiscountAmount || Infinity)
-        : voucher.discountValue;
-    voucher.usedCount += 1;
-    await voucher.save();
+        : Math.min(voucher.discountValue, itemsTotal + shippingFee);
   }
 
   const grandTotal = Math.max(itemsTotal + shippingFee - discountAmount, 0);
 
-  const order = await Order.create({
-    orderCode: generateOrderCode(),
-    userId: req.account._id,
-    storeId,
-    items: cart.items.map((i) => ({
-      productId: i.productId,
-      quantity: i.quantity,
-      unitPrice: i.unitPrice,
-      name: i.name,
-      image: i.image
-    })),
-    deliveryAddress,
-    deliveryMethod,
-    paymentMode,
-    itemsTotal,
-    shippingFee,
-    discountAmount,
-    voucherCode: voucherCode || null,
-    grandTotal,
-    note,
-    statusHistory: [{ status: 'pending', note: 'Đơn hàng được tạo', changedBy: req.account._id }]
-  });
-
-  // Trừ tồn kho ĐÚNG THEO CỬA HÀNG đã bán (mô hình multi-store)
+  // Trừ tồn kho ĐÚNG THEO CỬA HÀNG đã bán, dùng update có điều kiện (stock >= quantity)
+  // để tránh race condition khi nhiều đơn cùng tranh chấp đơn vị tồn kho cuối cùng.
+  // Nếu một sản phẩm không đủ hàng, hoàn lại các sản phẩm đã trừ trước đó rồi báo lỗi.
+  const decremented = [];
   for (const item of cart.items) {
-    await StoreInventory.findOneAndUpdate(
-      { productId: item.productId, storeId },
-      { $inc: { stock: -item.quantity }, lastUpdated: new Date() }
+    const updated = await StoreInventory.findOneAndUpdate(
+      { productId: item.productId, storeId, stock: { $gte: item.quantity } },
+      { $inc: { stock: -item.quantity }, lastUpdated: new Date() },
+      { new: true }
     );
+    if (!updated) {
+      for (const d of decremented) {
+        await StoreInventory.findOneAndUpdate(
+          { productId: d.productId, storeId },
+          { $inc: { stock: d.quantity }, lastUpdated: new Date() }
+        );
+      }
+      return res.status(400).json({
+        message: `Sản phẩm "${item.name}" không đủ tồn kho tại cửa hàng đã chọn`
+      });
+    }
+    decremented.push(item);
+  }
+
+  let order;
+  try {
+    order = await Order.create({
+      orderCode: generateOrderCode(),
+      userId: req.account._id,
+      storeId,
+      items: cart.items.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        name: i.name,
+        image: i.image
+      })),
+      deliveryAddress,
+      deliveryMethod,
+      paymentMode,
+      itemsTotal,
+      shippingFee,
+      discountAmount,
+      voucherCode: voucherCode || null,
+      grandTotal,
+      note,
+      statusHistory: [{ status: 'pending', note: 'Đơn hàng được tạo', changedBy: req.account._id }]
+    });
+  } catch (err) {
+    // Tạo đơn thất bại: hoàn lại tồn kho đã trừ ở trên trước khi báo lỗi
+    for (const d of decremented) {
+      await StoreInventory.findOneAndUpdate(
+        { productId: d.productId, storeId },
+        { $inc: { stock: d.quantity }, lastUpdated: new Date() }
+      );
+    }
+    throw err;
+  }
+
+  // Chỉ trừ lượt dùng voucher sau khi đơn hàng đã tạo thành công
+  if (voucher) {
+    voucher.usedCount += 1;
+    await voucher.save();
+  }
+
+  for (const item of cart.items) {
     await Product.findByIdAndUpdate(item.productId, { $inc: { soldCount: item.quantity } });
   }
 
@@ -183,6 +209,18 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   }
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+
+  // Hoàn lại tồn kho khi đơn chuyển sang hủy/trả hàng (nếu trước đó chưa được hoàn)
+  const restockStatuses = ['cancelled', 'returned'];
+  const alreadyRestocked = restockStatuses.includes(order.status);
+  if (restockStatuses.includes(status) && !alreadyRestocked) {
+    for (const item of order.items) {
+      await StoreInventory.findOneAndUpdate(
+        { productId: item.productId, storeId: order.storeId },
+        { $inc: { stock: item.quantity }, lastUpdated: new Date() }
+      );
+    }
+  }
 
   order.status = status;
   order.statusHistory.push({ status, note, changedBy: req.account._id });

@@ -5,7 +5,7 @@
  */
 require('dotenv').config();
 const mongoose = require('mongoose');
-const slugify = require('slugify');
+const { generateProducts } = require('./generateProducts');
 
 const User = require('../models/User');
 const Admin = require('../models/Admin');
@@ -69,16 +69,35 @@ async function run() {
   });
   console.log('[Seed] Đã tạo customer:', customer.email);
 
-  // ----- Brands -----
-  const brandApple = await Brand.create({ name: 'Apple', image: '' });
-  const brandSamsung = await Brand.create({ name: 'Samsung', image: '' });
-  const brandXiaomi = await Brand.create({ name: 'Xiaomi', image: '' });
-  const brandAsus = await Brand.create({ name: 'ASUS', image: '' });
+  // ----- Brands (đủ thương hiệu cho mọi danh mục sản phẩm mẫu) -----
+  const BRAND_NAMES = [
+    'Apple', 'Samsung', 'Xiaomi', 'ASUS', 'OPPO', 'Vivo', 'Realme', 'Nokia',
+    'Dell', 'HP', 'Lenovo', 'Acer', 'MSI', 'LG', 'Sony', 'JBL', 'Marshall',
+    'Anker', 'Baseus', 'Logitech', 'Amazfit', 'Garmin'
+  ];
+  const brandDocs = await Brand.insertMany(BRAND_NAMES.map((name) => ({ name, image: '' })));
+  const brandIdByName = {};
+  brandDocs.forEach((b) => (brandIdByName[b.name] = b._id));
+  console.log(`[Seed] Đã tạo ${brandDocs.length} thương hiệu`);
 
   // ----- Categories -----
-  const catPhone = await Category.create({ name: 'Điện thoại', slug: 'dien-thoai' });
-  const catLaptop = await Category.create({ name: 'Laptop', slug: 'laptop' });
-  const catAccessory = await Category.create({ name: 'Phụ kiện', slug: 'phu-kien' });
+  const CATEGORY_LIST = [
+    { name: 'Điện thoại', slug: 'dien-thoai' },
+    { name: 'Laptop', slug: 'laptop' },
+    { name: 'Máy tính bảng', slug: 'may-tinh-bang' },
+    { name: 'Đồng hồ thông minh', slug: 'dong-ho-thong-minh' },
+    { name: 'Tai nghe - Loa', slug: 'tai-nghe-loa' },
+    { name: 'Màn hình', slug: 'man-hinh' },
+    { name: 'Phụ kiện', slug: 'phu-kien' }
+  ];
+  const categoryDocs = await Category.insertMany(CATEGORY_LIST);
+  const categoryIdBySlug = {};
+  const categoryLabelBySlug = {};
+  categoryDocs.forEach((c) => {
+    categoryIdBySlug[c.slug] = c._id;
+    categoryLabelBySlug[c.slug] = c.name;
+  });
+  console.log(`[Seed] Đã tạo ${categoryDocs.length} danh mục`);
 
   // ----- Stores (đa chi nhánh) -----
   const store1 = await Store.create({
@@ -113,107 +132,21 @@ async function run() {
   });
   console.log('[Seed] Đã tạo 3 cửa hàng (multi-store)');
 
-  // ----- Products -----
-  const productsData = [
-    {
-      title: 'iPhone 15 Pro Max',
-      brandId: brandApple._id,
-      categoryId: catPhone._id,
-      shortDescription: 'Chip A17 Pro, khung Titan cao cấp',
-      description: 'iPhone 15 Pro Max với chip A17 Pro, khung Titan cao cấp, camera 48MP chuyên nghiệp.',
-      specifications: { 'Màn hình': '6.7 inch OLED', CPU: 'A17 Pro', Pin: '4422 mAh', Camera: '48MP' },
-      featuredImage: 'https://via.placeholder.com/600x600?text=iPhone+15+Pro+Max',
-      imageURLs: ['https://via.placeholder.com/600x600?text=iPhone+15+Pro+Max'],
-      price: 34990000,
-      salePrice: 29990000,
-      isFeatured: true,
-      tags: ['Hàng mới', 'Trả góp 0%'],
-      warrantyMonths: 12
-    },
-    {
-      title: 'Samsung Galaxy S24 Ultra',
-      brandId: brandSamsung._id,
-      categoryId: catPhone._id,
-      shortDescription: 'Tích hợp AI, bút S Pen, camera 200MP',
-      description: 'Galaxy S24 Ultra tích hợp AI, bút S Pen, camera 200MP sắc nét.',
-      specifications: { 'Màn hình': '6.8 inch Dynamic AMOLED', CPU: 'Snapdragon 8 Gen 3', Pin: '5000 mAh', Camera: '200MP' },
-      featuredImage: 'https://via.placeholder.com/600x600?text=Galaxy+S24+Ultra',
-      imageURLs: ['https://via.placeholder.com/600x600?text=Galaxy+S24+Ultra'],
-      price: 31990000,
-      salePrice: 27990000,
-      isFeatured: true,
-      tags: ['Giảm sốc'],
-      warrantyMonths: 12
-    },
-    {
-      title: 'Xiaomi Redmi Note 13 Pro',
-      brandId: brandXiaomi._id,
-      categoryId: catPhone._id,
-      shortDescription: 'Pin trâu, camera 200MP, giá tốt',
-      description: 'Redmi Note 13 Pro pin trâu, camera 200MP, giá tốt cho sinh viên.',
-      specifications: { 'Màn hình': '6.67 inch AMOLED', CPU: 'Snapdragon 7s Gen 2', Pin: '5100 mAh', Camera: '200MP' },
-      featuredImage: 'https://via.placeholder.com/600x600?text=Redmi+Note+13+Pro',
-      imageURLs: ['https://via.placeholder.com/600x600?text=Redmi+Note+13+Pro'],
-      price: 8490000,
-      salePrice: 6990000,
-      isFeatured: false,
-      tags: ['Hàng mới', 'Sinh viên'],
-      warrantyMonths: 18
-    },
-    {
-      title: 'MacBook Air M3 13 inch',
-      brandId: brandApple._id,
-      categoryId: catLaptop._id,
-      shortDescription: 'Mỏng nhẹ, hiệu năng mạnh mẽ',
-      description: 'MacBook Air M3 mỏng nhẹ, hiệu năng mạnh mẽ cho công việc và học tập.',
-      specifications: { CPU: 'Apple M3', RAM: '8GB', 'Ổ cứng': '256GB SSD', 'Màn hình': '13.6 inch Liquid Retina' },
-      featuredImage: 'https://via.placeholder.com/600x600?text=MacBook+Air+M3',
-      imageURLs: ['https://via.placeholder.com/600x600?text=MacBook+Air+M3'],
-      price: 29990000,
-      salePrice: 27990000,
-      isFeatured: true,
-      tags: ['Trả góp 0%'],
-      warrantyMonths: 12
-    },
-    {
-      title: 'Laptop ASUS Vivobook 15',
-      brandId: brandAsus._id,
-      categoryId: catLaptop._id,
-      shortDescription: 'Laptop văn phòng phổ thông',
-      description: 'Laptop văn phòng phổ thông, cấu hình ổn định, giá hợp lý.',
-      specifications: { CPU: 'Intel Core i5-1235U', RAM: '16GB', 'Ổ cứng': '512GB SSD', 'Màn hình': '15.6 inch FHD' },
-      featuredImage: 'https://via.placeholder.com/600x600?text=Asus+Vivobook+15',
-      imageURLs: ['https://via.placeholder.com/600x600?text=Asus+Vivobook+15'],
-      price: 18990000,
-      salePrice: 15990000,
-      isFeatured: false,
-      tags: ['Giảm sốc', 'Sinh viên'],
-      warrantyMonths: 24
-    },
-    {
-      title: 'Tai nghe AirPods Pro 2',
-      brandId: brandApple._id,
-      categoryId: catAccessory._id,
-      shortDescription: 'Chống ồn chủ động, âm thanh không gian',
-      description: 'Tai nghe chống ồn chủ động, âm thanh không gian sống động.',
-      specifications: { 'Chống ồn': 'Có (ANC)', Pin: '6 giờ nghe nhạc', 'Kết nối': 'Bluetooth 5.3' },
-      featuredImage: 'https://via.placeholder.com/600x600?text=AirPods+Pro+2',
-      imageURLs: ['https://via.placeholder.com/600x600?text=AirPods+Pro+2'],
-      price: 6190000,
-      salePrice: 5490000,
-      isFeatured: false,
-      tags: ['Hàng mới'],
-      warrantyMonths: 12
-    }
-  ];
-
-  const createdProducts = [];
-  for (const p of productsData) {
-    const slug = slugify(p.title, { lower: true, locale: 'vi' }) + '-' + Math.floor(Math.random() * 10000);
-    const product = await Product.create({ ...p, slug });
-    createdProducts.push(product);
-  }
+  // ----- Products (1000 sản phẩm mẫu, đa danh mục/thương hiệu, nhiều ảnh + thông số chi tiết) -----
+  const productDefs = generateProducts({ brandIdByName, categoryIdBySlug, categoryLabelBySlug });
+  const productsToInsert = productDefs.map(({ _brandName, _categorySlug, ...rest }) => rest);
+  const createdProducts = await Product.insertMany(productsToInsert);
   console.log(`[Seed] Đã tạo ${createdProducts.length} sản phẩm`);
+
+  // Tra cứu nhanh theo (thương hiệu, danh mục) để gán vào collection/bài viết bên dưới,
+  // dựa vào việc insertMany giữ nguyên thứ tự của mảng đầu vào.
+  function findProductIndex(brandName, categorySlug) {
+    return productDefs.findIndex((p) => p._brandName === brandName && p._categorySlug === categorySlug);
+  }
+  const idxAppleFirstPhone = findProductIndex('Apple', 'dien-thoai');
+  const idxSamsungFirstPhone = findProductIndex('Samsung', 'dien-thoai');
+  const idxXiaomiFirstPhone = findProductIndex('Xiaomi', 'dien-thoai');
+  const idxAsusFirstLaptop = findProductIndex('ASUS', 'laptop');
 
   // ----- Store Inventories (tồn kho riêng theo từng cửa hàng - mô hình multi-store) -----
   const stores = [store1, store2, store3];
@@ -233,18 +166,25 @@ async function run() {
   console.log(`[Seed] Đã tạo ${inventoryDocs.length} bản ghi tồn kho (${createdProducts.length} sản phẩm × ${stores.length} cửa hàng)`);
 
   // ----- Collections (bộ sưu tập sản phẩm) -----
+  const featuredProductIds = createdProducts.filter((p) => p.isFeatured).slice(0, 12).map((p) => p._id);
   await ProductCollection.create([
     {
-      title: 'Flagship 2024',
-      subTitle: 'Những chiếc điện thoại cao cấp nhất năm',
+      title: 'Flagship nổi bật',
+      subTitle: 'Những sản phẩm cao cấp được yêu thích nhất',
       image: '',
-      productIds: [createdProducts[0]._id, createdProducts[1]._id]
+      productIds: [createdProducts[idxAppleFirstPhone]._id, createdProducts[idxSamsungFirstPhone]._id]
     },
     {
       title: 'Giá tốt cho sinh viên',
       subTitle: 'Cấu hình ổn, giá hợp lý',
       image: '',
-      productIds: [createdProducts[2]._id, createdProducts[4]._id]
+      productIds: [createdProducts[idxXiaomiFirstPhone]._id, createdProducts[idxAsusFirstLaptop]._id]
+    },
+    {
+      title: 'Được yêu thích nhất',
+      subTitle: 'Tổng hợp sản phẩm nổi bật do TechShop tuyển chọn',
+      image: '',
+      productIds: featuredProductIds
     }
   ]);
   console.log('[Seed] Đã tạo bộ sưu tập sản phẩm mẫu');
@@ -283,8 +223,8 @@ async function run() {
       nameAuthor: admin.name,
       shortDescription: 'So sánh chi tiết hai flagship hàng đầu 2024.',
       content:
-        'Cả hai sản phẩm đều là flagship cao cấp với camera mạnh mẽ, hiệu năng vượt trội. iPhone 15 Pro Max nổi bật với hệ sinh thái Apple mượt mà, trong khi Galaxy S24 Ultra ghi điểm nhờ bút S Pen và tính năng AI.',
-      relatedProductIds: [createdProducts[0]._id, createdProducts[1]._id],
+        'Cả hai sản phẩm đều là flagship cao cấp với camera mạnh mẽ, hiệu năng vượt trội. iPhone nổi bật với hệ sinh thái Apple mượt mà, trong khi Samsung Galaxy ghi điểm nhờ bút S Pen và tính năng AI.',
+      relatedProductIds: [createdProducts[idxAppleFirstPhone]._id, createdProducts[idxSamsungFirstPhone]._id],
       isPublished: true,
       isFeatured: true
     },

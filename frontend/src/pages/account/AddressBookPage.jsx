@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Card, Button, Form, Stack } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
 import { userService } from '../../services/userService';
 
@@ -41,78 +42,91 @@ export default function AddressBookPage() {
   };
 
   return (
-    <div className="bg-white border rounded-lg p-5">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold">Sổ địa chỉ</h2>
-        <button
-          onClick={() => {
-            setForm(emptyForm);
-            setEditingId(null);
-            setShowForm(!showForm);
-          }}
-          className="text-sm bg-red-600 text-white px-3 py-1.5 rounded"
-        >
-          {showForm ? 'Đóng' : '+ Thêm địa chỉ'}
-        </button>
-      </div>
+    <Card>
+      <Card.Body>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h2 className="fw-bold fs-5 mb-0">Sổ địa chỉ</h2>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => {
+              setForm(emptyForm);
+              setEditingId(null);
+              setShowForm(!showForm);
+            }}
+          >
+            {showForm ? 'Đóng' : '+ Thêm địa chỉ'}
+          </Button>
+        </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="border rounded p-4 mb-4 space-y-2 max-w-md">
-          <input
-            required
-            placeholder="Địa chỉ (số nhà, đường)"
-            value={form.addressLine1}
-            onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
-            className="w-full border rounded px-3 py-2 text-sm"
-          />
-          <input
-            placeholder="Phường/Xã, Quận/Huyện"
-            value={form.addressLine2}
-            onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
-            className="w-full border rounded px-3 py-2 text-sm"
-          />
-          <input
-            placeholder="Tỉnh/Thành phố"
-            value={form.city}
-            onChange={(e) => setForm({ ...form, city: e.target.value })}
-            className="w-full border rounded px-3 py-2 text-sm"
-          />
-          <input
-            placeholder="Ghi chú giao hàng (tùy chọn)"
-            value={form.orderNote}
-            onChange={(e) => setForm({ ...form, orderNote: e.target.value })}
-            className="w-full border rounded px-3 py-2 text-sm"
-          />
-          <button type="submit" className="bg-gray-800 text-white px-4 py-2 rounded text-sm">
-            {editingId ? 'Cập nhật' : 'Lưu địa chỉ'}
-          </button>
-        </form>
-      )}
-
-      <div className="space-y-3">
-        {(user?.addresses || []).map((addr) => (
-          <div key={addr._id} className="border rounded p-3 text-sm flex justify-between items-start">
-            <div>
-              <div className="text-gray-800">{addr.addressLine1}</div>
-              <div className="text-gray-500">
-                {addr.addressLine2}, {addr.city}
-              </div>
-              {addr.orderNote && <div className="text-xs text-gray-400 mt-1">Ghi chú: {addr.orderNote}</div>}
-            </div>
-            <div className="space-x-2 whitespace-nowrap">
-              <button onClick={() => handleEdit(addr)} className="text-blue-600">
-                Sửa
-              </button>
-              <button onClick={() => handleDelete(addr._id)} className="text-red-600">
-                Xóa
-              </button>
-            </div>
-          </div>
-        ))}
-        {(!user?.addresses || user.addresses.length === 0) && (
-          <div className="text-sm text-gray-400">Chưa có địa chỉ nào được lưu</div>
+        {showForm && (
+          <Form onSubmit={handleSubmit} className="border rounded p-3 mb-4" style={{ maxWidth: '28rem' }}>
+            <Form.Control
+              required
+              placeholder="Địa chỉ (số nhà, đường)"
+              value={form.addressLine1}
+              onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
+              className="mb-2"
+              size="sm"
+            />
+            <Form.Control
+              placeholder="Phường/Xã, Quận/Huyện"
+              value={form.addressLine2}
+              onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
+              className="mb-2"
+              size="sm"
+            />
+            <Form.Control
+              placeholder="Tỉnh/Thành phố"
+              value={form.city}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+              className="mb-2"
+              size="sm"
+            />
+            <Form.Control
+              placeholder="Ghi chú giao hàng (tùy chọn)"
+              value={form.orderNote}
+              onChange={(e) => setForm({ ...form, orderNote: e.target.value })}
+              className="mb-2"
+              size="sm"
+            />
+            <Button type="submit" variant="dark" size="sm">
+              {editingId ? 'Cập nhật' : 'Lưu địa chỉ'}
+            </Button>
+          </Form>
         )}
-      </div>
-    </div>
+
+        <Stack gap={3}>
+          {(user?.addresses || []).map((addr) => (
+            <Card key={addr._id} body className="small">
+              <div className="d-flex justify-content-between align-items-start">
+                <div>
+                  <div>{addr.addressLine1}</div>
+                  <div className="text-muted">
+                    {addr.addressLine2}, {addr.city}
+                  </div>
+                  {addr.orderNote && (
+                    <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+                      Ghi chú: {addr.orderNote}
+                    </div>
+                  )}
+                </div>
+                <div className="text-nowrap">
+                  <Button variant="link" size="sm" className="p-0 me-3" onClick={() => handleEdit(addr)}>
+                    Sửa
+                  </Button>
+                  <Button variant="link" size="sm" className="p-0 text-danger" onClick={() => handleDelete(addr._id)}>
+                    Xóa
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {(!user?.addresses || user.addresses.length === 0) && (
+            <div className="small text-muted">Chưa có địa chỉ nào được lưu</div>
+          )}
+        </Stack>
+      </Card.Body>
+    </Card>
   );
 }

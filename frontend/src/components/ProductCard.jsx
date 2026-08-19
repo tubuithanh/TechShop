@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { Card, Badge } from 'react-bootstrap';
+import { placeholderImage } from '../utils/placeholderImage';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -12,41 +14,50 @@ export default function ProductCard({ product }) {
       : 0;
 
   return (
-    <Link
+    <Card
+      as={Link}
       to={`/products/${product.slug}`}
-      className="border rounded-lg p-3 bg-white hover:shadow-lg transition block relative"
+      className="h-100 position-relative text-decoration-none text-reset hover-lift border-0 shadow-sm"
     >
       {discountPercent > 0 && (
-        <span className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded">
+        <Badge bg="primary" className="position-absolute top-0 start-0 m-2 z-1">
           -{discountPercent}%
-        </span>
+        </Badge>
       )}
-      <img
-        src={product.featuredImage || 'https://via.placeholder.com/300x300?text=No+Image'}
-        alt={product.title}
-        className="w-full h-40 object-contain mb-2"
-      />
-      <h3 className="text-sm font-medium line-clamp-2 h-10">{product.title}</h3>
-      <div className="mt-1">
-        <span className="text-red-600 font-bold">{formatVND(displayPrice)}</span>
-        {product.salePrice && product.salePrice < product.price && (
-          <span className="text-gray-400 text-xs line-through ml-2">{formatVND(product.price)}</span>
-        )}
+      <div className="img-zoom">
+        <Card.Img
+          variant="top"
+          src={product.featuredImage || placeholderImage(300, 300)}
+          alt={product.title}
+          className="p-3"
+          style={{ height: '10rem', objectFit: 'contain' }}
+        />
       </div>
-      {product.ratingCount > 0 && (
-        <div className="text-xs text-yellow-500 mt-1">
-          ★ {product.ratingAverage} ({product.ratingCount} đánh giá)
+      <Card.Body className="pt-0">
+        <Card.Title as="h3" className="fs-6 fw-medium line-clamp-2" style={{ height: '2.5rem' }}>
+          {product.title}
+        </Card.Title>
+        <div className="mt-1">
+          <span className="text-primary fw-bold">{formatVND(displayPrice)}</span>
+          {product.salePrice && product.salePrice < product.price && (
+            <span className="text-muted small text-decoration-line-through ms-2">{formatVND(product.price)}</span>
+          )}
         </div>
-      )}
-      {product.tags?.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1">
-          {product.tags.map((t) => (
-            <span key={t} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-              {t}
-            </span>
-          ))}
-        </div>
-      )}
-    </Link>
+        {product.ratingCount > 0 && (
+          <div className="text-warning mt-1" style={{ fontSize: '0.75rem' }}>
+            ★ {product.ratingAverage} ({product.ratingCount} đánh giá)
+          </div>
+        )}
+        {product.tags?.length > 0 && (
+          <div className="d-flex flex-wrap gap-1 mt-1">
+            {product.tags.map((t) => (
+              <Badge key={t} bg="light" text="dark" className="fw-normal" style={{ fontSize: '0.625rem' }}>
+                {t}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </Card.Body>
+    </Card>
   );
 }

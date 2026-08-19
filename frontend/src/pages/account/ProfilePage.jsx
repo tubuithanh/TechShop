@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Card, Form, Button, Alert, Stack } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
 import { userService } from '../../services/userService';
 import { authService } from '../../services/authService';
@@ -35,68 +36,76 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="bg-white border rounded-lg p-5">
-        <h2 className="font-bold mb-4">Thông tin tài khoản</h2>
-        <form onSubmit={handleUpdateProfile} className="space-y-3 max-w-md">
-          <div>
-            <label className="text-sm text-gray-500">Email (không thể thay đổi)</label>
-            <input disabled value={user?.email} className="w-full border rounded px-3 py-2 mt-1 bg-gray-50" />
-          </div>
-          <div>
-            <label className="text-sm text-gray-500">Họ và tên</label>
-            <input
-              value={form.displayName}
-              onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-              className="w-full border rounded px-3 py-2 mt-1"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-gray-500">Số điện thoại</label>
-            <input
-              value={form.phoneNumber}
-              onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-              className="w-full border rounded px-3 py-2 mt-1"
-            />
-          </div>
-          {message && <div className="text-sm text-green-600">{message}</div>}
-          <button type="submit" className="bg-red-600 text-white px-4 py-2 rounded text-sm">
-            Lưu thay đổi
-          </button>
-        </form>
-      </div>
+    <Stack gap={4}>
+      <Card>
+        <Card.Body>
+          <h2 className="fw-bold fs-5 mb-4">Thông tin tài khoản</h2>
+          <Form onSubmit={handleUpdateProfile} style={{ maxWidth: '28rem' }}>
+            <Form.Group className="mb-3">
+              <Form.Label className="small text-muted">Email (không thể thay đổi)</Form.Label>
+              <Form.Control disabled value={user?.email} className="bg-light" />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="small text-muted">Họ và tên</Form.Label>
+              <Form.Control
+                value={form.displayName}
+                onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="small text-muted">Số điện thoại</Form.Label>
+              <Form.Control
+                value={form.phoneNumber}
+                onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+              />
+            </Form.Group>
+            {message && (
+              <Alert variant="success" className="small py-2">
+                {message}
+              </Alert>
+            )}
+            <Button type="submit" variant="primary" size="sm">
+              Lưu thay đổi
+            </Button>
+          </Form>
+        </Card.Body>
+      </Card>
 
-      <div className="bg-white border rounded-lg p-5">
-        <h2 className="font-bold mb-4">Đổi mật khẩu</h2>
-        <form onSubmit={handleChangePassword} className="space-y-3 max-w-md">
-          <div>
-            <label className="text-sm text-gray-500">Mật khẩu hiện tại</label>
-            <input
-              type="password"
-              required
-              value={pwForm.oldPassword}
-              onChange={(e) => setPwForm({ ...pwForm, oldPassword: e.target.value })}
-              className="w-full border rounded px-3 py-2 mt-1"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-gray-500">Mật khẩu mới</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={pwForm.newPassword}
-              onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
-              className="w-full border rounded px-3 py-2 mt-1"
-            />
-            <PasswordStrengthMeter password={pwForm.newPassword} />
-          </div>
-          {pwMessage && <div className="text-sm text-green-600">{pwMessage}</div>}
-          <button type="submit" className="bg-gray-800 text-white px-4 py-2 rounded text-sm">
-            Đổi mật khẩu
-          </button>
-        </form>
-      </div>
-    </div>
+      <Card>
+        <Card.Body>
+          <h2 className="fw-bold fs-5 mb-4">Đổi mật khẩu</h2>
+          <Form onSubmit={handleChangePassword} style={{ maxWidth: '28rem' }}>
+            <Form.Group className="mb-3">
+              <Form.Label className="small text-muted">Mật khẩu hiện tại</Form.Label>
+              <Form.Control
+                type="password"
+                required
+                value={pwForm.oldPassword}
+                onChange={(e) => setPwForm({ ...pwForm, oldPassword: e.target.value })}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="small text-muted">Mật khẩu mới</Form.Label>
+              <Form.Control
+                type="password"
+                required
+                minLength={6}
+                value={pwForm.newPassword}
+                onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
+              />
+              <PasswordStrengthMeter password={pwForm.newPassword} />
+            </Form.Group>
+            {pwMessage && (
+              <Alert variant="success" className="small py-2">
+                {pwMessage}
+              </Alert>
+            )}
+            <Button type="submit" variant="dark" size="sm">
+              Đổi mật khẩu
+            </Button>
+          </Form>
+        </Card.Body>
+      </Card>
+    </Stack>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Container, Row, Col, Form, Button, Card, Alert } from 'react-bootstrap';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
 import { orderService } from '../services/orderService';
@@ -82,153 +83,166 @@ export default function CheckoutPage() {
   };
 
   if (!cart.items || cart.items.length === 0) {
-    return <div className="text-center py-16">Giỏ hàng trống, không thể thanh toán.</div>;
+    return <div className="text-center py-5">Giỏ hàng trống, không thể thanh toán.</div>;
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold mb-6">Thanh toán đơn hàng</h1>
+    <Container style={{ maxWidth: '56rem' }} className="py-4">
+      <h1 className="fs-4 fw-bold mb-4">Thanh toán đơn hàng</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <h2 className="font-medium mb-3">Chọn cửa hàng xử lý đơn hàng</h2>
-          <select
+      <Row className="g-4">
+        <Col md={6}>
+          <h2 className="fw-medium mb-3 fs-6">Chọn cửa hàng xử lý đơn hàng</h2>
+          <Form.Select
             value={selectedStoreId}
             onChange={(e) => setSelectedStoreId(e.target.value)}
-            className="w-full border rounded px-3 py-2 mb-4"
+            className="mb-4"
           >
             {stores.map((s) => (
               <option key={s._id} value={s._id}>
                 {s.name} — {s.city}
               </option>
             ))}
-          </select>
+          </Form.Select>
 
-          <h2 className="font-medium mb-3">Địa chỉ nhận hàng</h2>
-          <div className="space-y-2">
-            <input
+          <h2 className="fw-medium mb-3 fs-6">Địa chỉ nhận hàng</h2>
+          <div className="d-flex flex-column gap-2">
+            <Form.Control
               placeholder="Họ và tên"
               value={address.fullName}
               onChange={(e) => setAddress({ ...address, fullName: e.target.value })}
-              className="w-full border rounded px-3 py-2"
             />
-            <input
+            <Form.Control
               placeholder="Số điện thoại"
               value={address.phone}
               onChange={(e) => setAddress({ ...address, phone: e.target.value })}
-              className="w-full border rounded px-3 py-2"
             />
-            <input
+            <Form.Control
               placeholder="Địa chỉ (số nhà, đường)"
               value={address.addressLine1}
               onChange={(e) => setAddress({ ...address, addressLine1: e.target.value })}
-              className="w-full border rounded px-3 py-2"
             />
-            <input
+            <Form.Control
               placeholder="Phường/Xã, Quận/Huyện"
               value={address.addressLine2}
               onChange={(e) => setAddress({ ...address, addressLine2: e.target.value })}
-              className="w-full border rounded px-3 py-2"
             />
-            <input
+            <Form.Control
               placeholder="Tỉnh/Thành phố"
               value={address.city}
               onChange={(e) => setAddress({ ...address, city: e.target.value })}
-              className="w-full border rounded px-3 py-2"
             />
           </div>
 
-          <h2 className="font-medium mt-6 mb-3">Hình thức nhận hàng</h2>
-          <div className="space-y-2 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={deliveryMethod === 'home_delivery'}
-                onChange={() => setDeliveryMethod('home_delivery')}
-              />
-              Giao hàng tận nơi (30.000đ)
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={deliveryMethod === 'store_pickup'}
-                onChange={() => setDeliveryMethod('store_pickup')}
-              />
-              Nhận tại cửa hàng đã chọn (miễn phí)
-            </label>
+          <h2 className="fw-medium mt-4 mb-3 fs-6">Hình thức nhận hàng</h2>
+          <div className="d-flex flex-column gap-2 small">
+            <Form.Check
+              type="radio"
+              id="delivery-home"
+              name="deliveryMethod"
+              label="Giao hàng tận nơi (30.000đ)"
+              checked={deliveryMethod === 'home_delivery'}
+              onChange={() => setDeliveryMethod('home_delivery')}
+            />
+            <Form.Check
+              type="radio"
+              id="delivery-pickup"
+              name="deliveryMethod"
+              label="Nhận tại cửa hàng đã chọn (miễn phí)"
+              checked={deliveryMethod === 'store_pickup'}
+              onChange={() => setDeliveryMethod('store_pickup')}
+            />
           </div>
 
-          <h2 className="font-medium mt-6 mb-3">Phương thức thanh toán</h2>
-          <div className="space-y-2 text-sm">
-            <label className="flex items-center gap-2">
-              <input type="radio" checked={paymentMode === 'cod'} onChange={() => setPaymentMode('cod')} />
-              Thanh toán khi nhận hàng (COD)
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="radio" checked={paymentMode === 'vnpay'} onChange={() => setPaymentMode('vnpay')} />
-              Thanh toán qua VNPay (demo/sandbox)
-            </label>
+          <h2 className="fw-medium mt-4 mb-3 fs-6">Phương thức thanh toán</h2>
+          <div className="d-flex flex-column gap-2 small">
+            <Form.Check
+              type="radio"
+              id="payment-cod"
+              name="paymentMode"
+              label="Thanh toán khi nhận hàng (COD)"
+              checked={paymentMode === 'cod'}
+              onChange={() => setPaymentMode('cod')}
+            />
+            <Form.Check
+              type="radio"
+              id="payment-vnpay"
+              name="paymentMode"
+              label="Thanh toán qua VNPay (demo/sandbox)"
+              checked={paymentMode === 'vnpay'}
+              onChange={() => setPaymentMode('vnpay')}
+            />
           </div>
-        </div>
+        </Col>
 
-        <div>
-          <h2 className="font-medium mb-3">Đơn hàng của bạn</h2>
-          <div className="border rounded-lg divide-y mb-4">
-            {cart.items.map((item) => (
-              <div key={item._id} className="flex justify-between p-3 text-sm">
+        <Col md={6}>
+          <h2 className="fw-medium mb-3 fs-6">Đơn hàng của bạn</h2>
+          <Card className="mb-4">
+            {cart.items.map((item, idx) => (
+              <div
+                key={item._id}
+                className={`d-flex justify-content-between p-3 small ${idx > 0 ? 'border-top' : ''}`}
+              >
                 <span>
                   {item.name} x{item.quantity}
                 </span>
                 <span>{formatVND(item.unitPrice * item.quantity)}</span>
               </div>
             ))}
-          </div>
+          </Card>
 
-          <div className="flex gap-2 mb-4">
-            <input
+          <div className="d-flex gap-2 mb-4">
+            <Form.Control
               placeholder="Nhập mã giảm giá"
               value={voucherCode}
               onChange={(e) => setVoucherCode(e.target.value)}
-              className="flex-1 border rounded px-3 py-2 text-sm"
+              size="sm"
             />
-            <button onClick={applyVoucher} className="bg-gray-800 text-white px-4 rounded text-sm">
+            <Button variant="dark" size="sm" onClick={applyVoucher} className="text-nowrap">
               Áp dụng
-            </button>
+            </Button>
           </div>
-          {voucherMsg && <div className="text-xs mb-3 text-gray-600">{voucherMsg}</div>}
+          {voucherMsg && <div className="small text-muted mb-3">{voucherMsg}</div>}
 
-          <div className="border rounded-lg p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Tạm tính</span>
-              <span>{formatVND(totalAmount)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Phí vận chuyển</span>
-              <span>{formatVND(shippingFee)}</span>
-            </div>
-            {discount > 0 && (
-              <div className="flex justify-between text-green-600">
-                <span>Giảm giá</span>
-                <span>-{formatVND(discount)}</span>
+          <Card>
+            <Card.Body className="d-flex flex-column gap-2 small">
+              <div className="d-flex justify-content-between">
+                <span>Tạm tính</span>
+                <span>{formatVND(totalAmount)}</span>
               </div>
-            )}
-            <div className="flex justify-between font-bold text-base border-t pt-2">
-              <span>Tổng cộng</span>
-              <span className="text-red-600">{formatVND(grandTotal)}</span>
-            </div>
-          </div>
+              <div className="d-flex justify-content-between">
+                <span>Phí vận chuyển</span>
+                <span>{formatVND(shippingFee)}</span>
+              </div>
+              {discount > 0 && (
+                <div className="d-flex justify-content-between text-success">
+                  <span>Giảm giá</span>
+                  <span>-{formatVND(discount)}</span>
+                </div>
+              )}
+              <div className="d-flex justify-content-between fw-bold fs-6 border-top pt-2">
+                <span>Tổng cộng</span>
+                <span className="text-primary">{formatVND(grandTotal)}</span>
+              </div>
+            </Card.Body>
+          </Card>
 
-          {error && <div className="text-red-600 text-sm mt-3">{error}</div>}
+          {error && (
+            <Alert variant="danger" className="small mt-3 py-2 mb-0">
+              {error}
+            </Alert>
+          )}
 
-          <button
-            onClick={handlePlaceOrder}
+          <Button
+            variant="primary"
+            className="w-100 fw-medium py-2 mt-3"
             disabled={submitting}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 rounded mt-4 disabled:opacity-50"
+            onClick={handlePlaceOrder}
           >
             {submitting ? 'Đang xử lý...' : 'Đặt hàng'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </Col>
+      </Row>
+    </Container>
   );
 }

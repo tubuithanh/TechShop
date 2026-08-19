@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Button, Card, Col, Form, Row, Table, Alert } from 'react-bootstrap';
 import api from '../../services/api';
 import { productService } from '../../services/productService';
+import { placeholderImage } from '../../utils/placeholderImage';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -13,7 +15,7 @@ const emptyForm = {
   price: '',
   salePrice: '',
   description: '',
-  featuredImage: 'https://via.placeholder.com/400x400?text=San+pham',
+  featuredImage: placeholderImage(400, 400, 'San pham'),
   imageURLs: []
 };
 
@@ -75,92 +77,110 @@ export default function AdminProductsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Quản lý sản phẩm</h1>
-        <button
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1 className="fs-4 fw-bold mb-0">Quản lý sản phẩm</h1>
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => {
             setForm(emptyForm);
             setEditingId(null);
             setShowForm(!showForm);
           }}
-          className="bg-red-600 text-white px-4 py-2 rounded text-sm"
         >
           {showForm ? 'Đóng form' : '+ Thêm sản phẩm'}
-        </button>
+        </Button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg p-4 shadow-sm mb-6 grid grid-cols-2 gap-3">
-          <input
-            required
-            placeholder="Tên sản phẩm"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="border rounded px-3 py-2 text-sm"
-          />
-          <select
-            required
-            value={form.brandId}
-            onChange={(e) => setForm({ ...form, brandId: e.target.value })}
-            className="border rounded px-3 py-2 text-sm"
-          >
-            <option value="">-- Chọn thương hiệu --</option>
-            {brands.map((b) => (
-              <option key={b._id} value={b._id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <select
-            required
-            value={form.categoryId}
-            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-            className="border rounded px-3 py-2 text-sm"
-          >
-            <option value="">-- Chọn danh mục --</option>
-            {categories.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <input
-            required
-            type="number"
-            placeholder="Giá gốc"
-            value={form.price}
-            onChange={(e) => setForm({ ...form, price: e.target.value })}
-            className="border rounded px-3 py-2 text-sm"
-          />
-          <input
-            type="number"
-            placeholder="Giá khuyến mãi (tùy chọn)"
-            value={form.salePrice}
-            onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
-            className="border rounded px-3 py-2 text-sm"
-          />
-          <input
-            placeholder="Link ảnh sản phẩm"
-            value={form.featuredImage}
-            onChange={(e) => setForm({ ...form, featuredImage: e.target.value })}
-            className="border rounded px-3 py-2 text-sm"
-          />
-          <textarea
-            placeholder="Mô tả sản phẩm"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            className="border rounded px-3 py-2 text-sm col-span-2"
-          />
-          <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded text-sm col-span-2">
-            {editingId ? 'Cập nhật sản phẩm' : 'Tạo sản phẩm'}
-          </button>
-        </form>
+        <Card className="shadow-sm mb-4">
+          <Card.Body>
+            <Form onSubmit={handleSubmit}>
+              <Row className="g-3">
+                <Col md={6}>
+                  <Form.Control
+                    required
+                    placeholder="Tên sản phẩm"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  />
+                </Col>
+                <Col md={6}>
+                  <Form.Select
+                    required
+                    value={form.brandId}
+                    onChange={(e) => setForm({ ...form, brandId: e.target.value })}
+                  >
+                    <option value="">-- Chọn thương hiệu --</option>
+                    {brands.map((b) => (
+                      <option key={b._id} value={b._id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+                <Col md={6}>
+                  <Form.Select
+                    required
+                    value={form.categoryId}
+                    onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  >
+                    <option value="">-- Chọn danh mục --</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+                <Col md={6}>
+                  <Form.Control
+                    required
+                    type="number"
+                    placeholder="Giá gốc"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  />
+                </Col>
+                <Col md={6}>
+                  <Form.Control
+                    type="number"
+                    placeholder="Giá khuyến mãi (tùy chọn)"
+                    value={form.salePrice}
+                    onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
+                  />
+                </Col>
+                <Col md={6}>
+                  <Form.Control
+                    placeholder="Link ảnh sản phẩm"
+                    value={form.featuredImage}
+                    onChange={(e) => setForm({ ...form, featuredImage: e.target.value })}
+                  />
+                </Col>
+                <Col xs={12}>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    placeholder="Mô tả sản phẩm"
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  />
+                </Col>
+                <Col xs={12}>
+                  <Button type="submit" variant="success" size="sm">
+                    {editingId ? 'Cập nhật sản phẩm' : 'Tạo sản phẩm'}
+                  </Button>
+                </Col>
+              </Row>
+            </Form>
+          </Card.Body>
+        </Card>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
+      <Card className="shadow-sm">
+        <Table striped hover responsive className="mb-0">
           <thead>
-            <tr className="text-left text-gray-500 border-b">
+            <tr className="text-muted">
               <th className="p-3">Sản phẩm</th>
               <th className="p-3">Thương hiệu</th>
               <th className="p-3">Giá</th>
@@ -170,29 +190,29 @@ export default function AdminProductsPage() {
           </thead>
           <tbody>
             {products.map((p) => (
-              <tr key={p._id} className="border-b">
+              <tr key={p._id}>
                 <td className="p-3">{p.title}</td>
                 <td className="p-3">{p.brandId?.name}</td>
                 <td className="p-3">{formatVND(p.salePrice || p.price)}</td>
                 <td className="p-3">{p.soldCount}</td>
-                <td className="p-3 space-x-2">
-                  <button onClick={() => handleEdit(p)} className="text-blue-600">
+                <td className="p-3 d-flex gap-2">
+                  <Button variant="outline-primary" size="sm" onClick={() => handleEdit(p)}>
                     Sửa
-                  </button>
-                  <button onClick={() => handleDelete(p._id)} className="text-red-600">
+                  </Button>
+                  <Button variant="outline-danger" size="sm" onClick={() => handleDelete(p._id)}>
                     Xóa
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </Card>
 
-      <div className="mt-4 text-sm text-gray-500 bg-yellow-50 border border-yellow-200 rounded p-3">
+      <Alert variant="warning" className="mt-4 small">
         💡 Tồn kho được quản lý riêng theo từng cửa hàng (mô hình multi-store). Vào mục
         <strong> "Quản lý tồn kho theo cửa hàng"</strong> để thiết lập số lượng cho từng chi nhánh sau khi tạo sản phẩm.
-      </div>
+      </Alert>
     </div>
   );
 }

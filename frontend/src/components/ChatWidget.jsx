@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import { Card, Form, Button } from 'react-bootstrap';
 import { useAuth } from '../store/AuthContext';
 import api, { getAccessToken } from '../services/api';
 import { chatService } from '../services/chatService';
@@ -46,10 +47,10 @@ export default function ChatWidget() {
 
   const handleSend = (e) => {
     e.preventDefault();
-    if (!input.trim() || !socketRef.current) return;
+    if (!input.trim() || !socketRef.current || !staffId) return;
     socketRef.current.emit('chat:message', {
       conversationId: user._id,
-      toUserId: staffId || SUPPORT_STAFF_PLACEHOLDER,
+      toUserId: staffId,
       content: input
     });
     setInput('');
@@ -58,29 +59,28 @@ export default function ChatWidget() {
   if (!shouldShow) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="position-fixed" style={{ bottom: '1.5rem', right: '1.5rem', zIndex: 1050 }}>
       {open && (
-        <div className="w-80 h-96 bg-white rounded-lg shadow-2xl border flex flex-col mb-3">
-          <div className="bg-red-600 text-white px-4 py-3 rounded-t-lg flex justify-between items-center">
-            <span className="font-medium text-sm">💬 Hỗ trợ khách hàng</span>
-            <button onClick={() => setOpen(false)} className="text-white">
+        <Card className="shadow-lg mb-3" style={{ width: '20rem', height: '24rem' }}>
+          <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
+            <span className="fw-medium small">💬 Hỗ trợ khách hàng</span>
+            <Button variant="link" onClick={() => setOpen(false)} className="text-white p-0 text-decoration-none">
               ✕
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            </Button>
+          </Card.Header>
+          <Card.Body className="d-flex flex-column gap-2 p-3 overflow-auto">
             {messages.length === 0 && (
-              <div className="text-xs text-gray-400 text-center mt-6">
+              <div className="text-muted text-center mt-4" style={{ fontSize: '0.75rem' }}>
                 Chào bạn! Hãy để lại tin nhắn, nhân viên TechShop sẽ phản hồi sớm nhất.
               </div>
             )}
             {messages.map((m, idx) => {
               const isMine = m.sender?._id === user._id || m.sender === user._id;
               return (
-                <div key={m._id || idx} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                <div key={m._id || idx} className={`d-flex ${isMine ? 'justify-content-end' : 'justify-content-start'}`}>
                   <div
-                    className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                      isMine ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-800'
-                    }`}
+                    className={`rounded px-3 py-2 small ${isMine ? 'bg-primary text-white' : 'bg-light text-dark'}`}
+                    style={{ maxWidth: '75%' }}
                   >
                     {m.content}
                   </div>
@@ -88,26 +88,30 @@ export default function ChatWidget() {
               );
             })}
             <div ref={bottomRef} />
-          </div>
-          <form onSubmit={handleSend} className="border-t p-2 flex gap-2">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Nhập tin nhắn..."
-              className="flex-1 border rounded px-3 py-1.5 text-sm"
-            />
-            <button type="submit" className="bg-red-600 text-white px-3 rounded text-sm">
-              Gửi
-            </button>
-          </form>
-        </div>
+          </Card.Body>
+          <Card.Footer className="p-2">
+            <Form onSubmit={handleSend} className="d-flex gap-2">
+              <Form.Control
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Nhập tin nhắn..."
+                size="sm"
+              />
+              <Button type="submit" variant="primary" size="sm">
+                Gửi
+              </Button>
+            </Form>
+          </Card.Footer>
+        </Card>
       )}
-      <button
+      <Button
+        variant="primary"
         onClick={() => setOpen(!open)}
-        className="w-14 h-14 bg-red-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-red-700"
+        className="rounded-circle d-flex align-items-center justify-content-center fs-4 shadow"
+        style={{ width: '3.5rem', height: '3.5rem' }}
       >
         {open ? '✕' : '💬'}
-      </button>
+      </Button>
     </div>
   );
 }

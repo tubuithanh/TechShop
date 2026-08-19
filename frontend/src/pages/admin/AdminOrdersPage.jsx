@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Card, Form, Table } from 'react-bootstrap';
 import { orderService } from '../../services/orderService';
 
 const statusOptions = ['pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled', 'returned'];
@@ -33,12 +34,13 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-4">Quản lý đơn hàng</h1>
+      <h1 className="fs-4 fw-bold mb-4">Quản lý đơn hàng</h1>
 
-      <select
+      <Form.Select
         value={filterStatus}
         onChange={(e) => setFilterStatus(e.target.value)}
-        className="border rounded px-3 py-2 text-sm mb-4"
+        className="mb-4"
+        style={{ maxWidth: '20rem' }}
       >
         <option value="">Tất cả trạng thái</option>
         {statusOptions.map((s) => (
@@ -46,12 +48,12 @@ export default function AdminOrdersPage() {
             {statusLabel[s]}
           </option>
         ))}
-      </select>
+      </Form.Select>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
+      <Card className="shadow-sm">
+        <Table striped hover responsive className="mb-0">
           <thead>
-            <tr className="text-left text-gray-500 border-b">
+            <tr className="text-muted">
               <th className="p-3">Mã đơn</th>
               <th className="p-3">Khách hàng</th>
               <th className="p-3">Cửa hàng</th>
@@ -62,33 +64,33 @@ export default function AdminOrdersPage() {
           </thead>
           <tbody>
             {orders.map((o) => (
-              <tr key={o._id} className="border-b">
+              <tr key={o._id}>
                 <td className="p-3">{o.orderCode}</td>
                 <td className="p-3">
                   {o.userId?.displayName}
-                  <div className="text-xs text-gray-400">{o.userId?.phoneNumber}</div>
+                  <div className="small text-muted">{o.userId?.phoneNumber}</div>
                 </td>
                 <td className="p-3">{o.storeId?.name}</td>
                 <td className="p-3">{formatVND(o.grandTotal)}</td>
                 <td className="p-3">{statusLabel[o.status]}</td>
                 <td className="p-3">
-                  <select
+                  <Form.Select
+                    size="sm"
                     value={o.status}
                     onChange={(e) => handleChangeStatus(o._id, e.target.value)}
-                    className="border rounded px-2 py-1 text-xs"
                   >
                     {statusOptions.map((s) => (
                       <option key={s} value={s}>
                         {statusLabel[s]}
                       </option>
                     ))}
-                  </select>
+                  </Form.Select>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </Card>
     </div>
   );
 }

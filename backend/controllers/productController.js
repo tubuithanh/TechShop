@@ -16,23 +16,49 @@ const getProducts = asyncHandler(async (req, res) => {
     if (minPrice) filter.price.$gte = Number(minPrice);
     if (maxPrice) filter.price.$lte = Number(maxPrice);
   }
-  if (cursor) filter._id = { $lt: cursor };
 
-  const sortMap = {
-    newest: { _id: -1 },
-    price_asc: { price: 1 },
-    price_desc: { price: -1 },
-    best_selling: { soldCount: -1 },
-    top_rated: { ratingAverage: -1 }
+  // Trường sắp xếp chính của từng chế độ sort, kèm _id làm tiêu chí phụ để đảm bảo
+  // thứ tự ổn định (nhiều sản phẩm có thể trùng price/soldCount/ratingAverage)
+  const sortFieldMap = {
+    newest: null, // chỉ sort theo _id
+    price_asc: { field: 'price', dir: 1 },
+    price_desc: { field: 'price', dir: -1 },
+    best_selling: { field: 'soldCount', dir: -1 },
+    top_rated: { field: 'ratingAverage', dir: -1 }
   };
+  const sortConfig = sortFieldMap[sort] !== undefined ? sortFieldMap[sort] : sortFieldMap.newest;
+  const sortMap = sortConfig
+    ? { [sortConfig.field]: sortConfig.dir, _id: -1 }
+    : { _id: -1 };
+
+  if (cursor) {
+    try {
+      const { v, id } = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8'));
+      if (sortConfig) {
+        const cmpOp = sortConfig.dir === 1 ? '$gt' : '$lt';
+        filter.$or = [
+          { [sortConfig.field]: { [cmpOp]: v } },
+          { [sortConfig.field]: v, _id: { $lt: id } }
+        ];
+      } else {
+        filter._id = { $lt: id };
+      }
+    } catch {
+      // cursor không hợp lệ, bỏ qua và trả về từ đầu danh sách
+    }
+  }
 
   const products = await Product.find(filter)
     .populate('categoryId', 'name slug')
     .populate('brandId', 'name image')
-    .sort(sortMap[sort] || sortMap.newest)
+    .sort(sortMap)
     .limit(Number(limit));
 
-  const nextCursor = products.length === Number(limit) ? products[products.length - 1]._id : null;
+  const last = products[products.length - 1];
+  const nextCursor =
+    products.length === Number(limit) && last
+      ? Buffer.from(JSON.stringify({ v: sortConfig ? last[sortConfig.field] : undefined, id: last._id })).toString('base64')
+      : null;
   res.json({ data: products, nextCursor });
 });
 
@@ -69,7 +95,7 @@ const compareProducts = asyncHandler(async (req, res) => {
   if (!Array.isArray(ids) || ids.length < 2) {
     return res.status(400).json({ message: 'Cần chọn tối thiểu 2 sản phẩm để so sánh' });
   }
-  const products = await Product.find({ _id: { $in: ids } });
+  const products = await Product.find({ _id: { $in: ids }, isActive: true });
   res.json({ data: products });
 });
 

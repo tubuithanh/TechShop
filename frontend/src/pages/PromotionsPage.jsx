@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Container, Row, Col, Card, Button, Spinner } from 'react-bootstrap';
 import api from '../services/api';
 
 function formatVND(value) {
@@ -24,41 +25,41 @@ export default function PromotionsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold mb-2">Khuyến mãi & Ưu đãi</h1>
-      <p className="text-sm text-gray-500 mb-6">Sao chép mã và áp dụng ngay tại bước thanh toán</p>
+    <Container fluid="xl" style={{ maxWidth: '56rem' }} className="py-4">
+      <h1 className="fs-3 fw-bold mb-2">Khuyến mãi & Ưu đãi</h1>
+      <p className="small text-muted mb-4">Sao chép mã và áp dụng ngay tại bước thanh toán</p>
 
       {loading ? (
-        <div className="text-center py-10">Đang tải...</div>
-      ) : vouchers.length === 0 ? (
-        <div className="text-center py-10 text-gray-400">Hiện chưa có chương trình khuyến mãi nào</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {vouchers.map((v) => (
-            <div
-              key={v.code}
-              className="border-2 border-dashed border-red-300 rounded-lg p-4 flex justify-between items-center bg-red-50"
-            >
-              <div>
-                <div className="font-bold text-red-600 text-lg">{v.code}</div>
-                <div className="text-sm text-gray-700">{v.description}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {v.discountType === 'percent'
-                    ? `Giảm ${v.discountValue}%${v.maxDiscountAmount ? ` (tối đa ${formatVND(v.maxDiscountAmount)})` : ''}`
-                    : `Giảm ${formatVND(v.discountValue)}`}
-                  {v.minOrderValue > 0 && ` — Đơn tối thiểu ${formatVND(v.minOrderValue)}`}
-                </div>
-              </div>
-              <button
-                onClick={() => handleCopy(v.code)}
-                className="bg-red-600 text-white text-sm px-3 py-1.5 rounded whitespace-nowrap"
-              >
-                {copiedCode === v.code ? 'Đã sao chép!' : 'Sao chép mã'}
-              </button>
-            </div>
-          ))}
+        <div className="text-center py-5">
+          <Spinner animation="border" />
         </div>
+      ) : vouchers.length === 0 ? (
+        <div className="text-center py-5 text-muted">Hiện chưa có chương trình khuyến mãi nào</div>
+      ) : (
+        <Row className="g-3">
+          {vouchers.map((v) => (
+            <Col key={v.code} xs={12} md={6}>
+              <Card className="border-2 border-primary bg-primary bg-opacity-10 h-100" style={{ borderStyle: 'dashed' }}>
+                <Card.Body className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div className="fw-bold text-primary fs-5">{v.code}</div>
+                    <div className="small">{v.description}</div>
+                    <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+                      {v.discountType === 'percent'
+                        ? `Giảm ${v.discountValue}%${v.maxDiscountAmount ? ` (tối đa ${formatVND(v.maxDiscountAmount)})` : ''}`
+                        : `Giảm ${formatVND(v.discountValue)}`}
+                      {v.minOrderValue > 0 && ` — Đơn tối thiểu ${formatVND(v.minOrderValue)}`}
+                    </div>
+                  </div>
+                  <Button variant="primary" size="sm" className="text-nowrap" onClick={() => handleCopy(v.code)}>
+                    {copiedCode === v.code ? 'Đã sao chép!' : 'Sao chép mã'}
+                  </Button>
+                </Card.Body>
+              </Card>
+            </Col>
+          ))}
+        </Row>
       )}
-    </div>
+    </Container>
   );
 }

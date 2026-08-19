@@ -21,8 +21,13 @@ const addItem = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Sản phẩm không tồn tại hoặc đã ngừng kinh doanh' });
   }
 
-  // Kiểm tra tồn kho: nếu có chọn storeId thì kiểm tra đúng cửa hàng đó,
-  // ngược lại kiểm tra tổng tồn kho toàn hệ thống (mô hình multi-store)
+  const price = product.salePrice || product.price;
+  const cart = await getOrCreateCart(req.account._id);
+  const existing = cart.items.find((i) => i.productId.toString() === productId);
+  const totalQuantityAfterAdd = (existing?.quantity || 0) + Number(quantity);
+
+  // Kiểm tra tồn kho theo TỔNG số lượng sau khi thêm (kể cả số lượng đã có sẵn trong giỏ):
+  // nếu có chọn storeId thì kiểm tra đúng cửa hàng đó, ngược lại kiểm tra tổng tồn kho toàn hệ thống
   let availableStock;
   if (storeId) {
     const inv = await StoreInventory.findOne({ productId, storeId });
@@ -31,13 +36,10 @@ const addItem = asyncHandler(async (req, res) => {
     const inventories = await StoreInventory.find({ productId });
     availableStock = inventories.reduce((sum, inv) => sum + inv.stock, 0);
   }
-  if (availableStock < quantity) {
+  if (availableStock < totalQuantityAfterAdd) {
     return res.status(400).json({ message: 'Sản phẩm không đủ số lượng tồn kho' });
   }
 
-  const price = product.salePrice || product.price;
-  const cart = await getOrCreateCart(req.account._id);
-  const existing = cart.items.find((i) => i.productId.toString() === productId);
   if (existing) {
     existing.quantity += Number(quantity);
   } else {
@@ -62,6 +64,11 @@ const updateItem = asyncHandler(async (req, res) => {
   if (quantity <= 0) {
     item.deleteOne();
   } else {
+    const inventories = await StoreInventory.find({ productId: item.productId });
+    const availableStock = inventories.reduce((sum, inv) => sum + inv.stock, 0);
+    if (availableStock < quantity) {
+      return res.status(400).json({ message: 'Sản phẩm không đủ số lượng tồn kho' });
+    }
     item.quantity = quantity;
   }
   await cart.save();

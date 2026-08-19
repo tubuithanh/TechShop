@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Container, Row, Col, Card, Nav, Spinner } from 'react-bootstrap';
 import { storeService } from '../services/storeService';
 
 export default function StoreLocatorPage() {
@@ -12,60 +13,84 @@ export default function StoreLocatorPage() {
   }, []);
 
   useEffect(() => {
+    let ignore = false;
     setLoading(true);
-    storeService.getStores(selectedCity).then(setStores).finally(() => setLoading(false));
+    storeService
+      .getStores(selectedCity)
+      .then((data) => {
+        if (!ignore) setStores(data);
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
   }, [selectedCity]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold mb-2">Hệ thống cửa hàng</h1>
-      <p className="text-sm text-gray-500 mb-4">Tìm cửa hàng TechShop gần bạn nhất để trải nghiệm và nhận hàng</p>
+    <Container fluid="xl" style={{ maxWidth: '64rem' }} className="py-4">
+      <h1 className="fs-3 fw-bold mb-2">Hệ thống cửa hàng</h1>
+      <p className="small text-muted mb-4">Tìm cửa hàng TechShop gần bạn nhất để trải nghiệm và nhận hàng</p>
 
-      <div className="flex gap-2 mb-6 flex-wrap">
-        <button
-          onClick={() => setSelectedCity('')}
-          className={`text-sm border rounded-full px-4 py-1.5 ${!selectedCity ? 'bg-red-600 text-white border-red-600' : 'border-gray-300'}`}
-        >
-          Tất cả
-        </button>
-        {cities.map((c) => (
-          <button
-            key={c}
-            onClick={() => setSelectedCity(c)}
-            className={`text-sm border rounded-full px-4 py-1.5 ${
-              selectedCity === c ? 'bg-red-600 text-white border-red-600' : 'border-gray-300'
-            }`}
+      <Nav variant="pills" className="gap-2 mb-4 flex-wrap">
+        <Nav.Item>
+          <Nav.Link
+            onClick={() => setSelectedCity('')}
+            active={!selectedCity}
+            className="small rounded-pill border"
           >
-            {c}
-          </button>
+            Tất cả
+          </Nav.Link>
+        </Nav.Item>
+        {cities.map((c) => (
+          <Nav.Item key={c}>
+            <Nav.Link
+              onClick={() => setSelectedCity(c)}
+              active={selectedCity === c}
+              className="small rounded-pill border"
+            >
+              {c}
+            </Nav.Link>
+          </Nav.Item>
         ))}
-      </div>
+      </Nav>
 
       {loading ? (
-        <div className="text-center py-10">Đang tải...</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {stores.map((s) => (
-            <div key={s._id} className="border rounded-lg p-4">
-              <h3 className="font-bold mb-1">{s.name}</h3>
-              <p className="text-sm text-gray-600 mb-1">📍 {s.address}</p>
-              <p className="text-sm text-gray-600 mb-1">📞 {s.phoneNumber}</p>
-              <p className="text-sm text-gray-600">🕒 {s.openHours}</p>
-              {s.lat && s.lng && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block mt-2 text-sm text-red-600 underline"
-                >
-                  Chỉ đường trên Google Maps →
-                </a>
-              )}
-            </div>
-          ))}
-          {stores.length === 0 && <div className="text-gray-400 col-span-2 text-center py-10">Không có cửa hàng phù hợp</div>}
+        <div className="text-center py-5">
+          <Spinner animation="border" />
         </div>
+      ) : (
+        <Row className="g-4">
+          {stores.map((s) => (
+            <Col key={s._id} xs={12} md={6}>
+              <Card className="h-100">
+                <Card.Body>
+                  <Card.Title className="fw-bold mb-2">{s.name}</Card.Title>
+                  <p className="small text-muted mb-1">📍 {s.address}</p>
+                  <p className="small text-muted mb-1">📞 {s.phoneNumber}</p>
+                  <p className="small text-muted mb-0">🕒 {s.openHours}</p>
+                  {s.lat && s.lng && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="d-inline-block mt-2 small text-primary"
+                    >
+                      Chỉ đường trên Google Maps →
+                    </a>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          ))}
+          {stores.length === 0 && (
+            <Col xs={12} className="text-muted text-center py-5">
+              Không có cửa hàng phù hợp
+            </Col>
+          )}
+        </Row>
       )}
-    </div>
+    </Container>
   );
 }

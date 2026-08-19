@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup } from 'react-bootstrap';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
 import { useCart } from '../store/CartContext';
@@ -7,6 +8,7 @@ import { useAuth } from '../store/AuthContext';
 import ProductCard from '../components/ProductCard';
 import InstallmentCalculator from '../components/InstallmentCalculator';
 import ProductQnA from '../components/ProductQnA';
+import { placeholderImage } from '../utils/placeholderImage';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -68,7 +70,12 @@ export default function ProductDetailPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  if (!product) return <div className="text-center py-20">Đang tải...</div>;
+  if (!product)
+    return (
+      <div className="text-center py-5">
+        <Spinner animation="border" />
+      </div>
+    );
 
   const displayPrice = product.salePrice || product.price;
   const images = product.imageURLs?.length ? product.imageURLs : [product.featuredImage];
@@ -106,220 +113,235 @@ export default function ProductDetailPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 pb-24">
-      <nav className="text-xs text-gray-500 mb-4 flex items-center gap-1 flex-wrap">
-        <Link to="/" className="hover:text-red-600">
+    <Container fluid="xl" className="py-4 pb-5">
+      <Breadcrumb style={{ fontSize: '0.75rem' }} className="mb-4">
+        <Breadcrumb.Item linkAs={Link} linkProps={{ to: '/' }}>
           Trang chủ
-        </Link>
-        <span>/</span>
-        <Link to={`/products?categoryId=${product.categoryId?._id}`} className="hover:text-red-600">
+        </Breadcrumb.Item>
+        <Breadcrumb.Item linkAs={Link} linkProps={{ to: `/products?categoryId=${product.categoryId?._id}` }}>
           {product.categoryId?.name}
-        </Link>
-        <span>/</span>
-        <span className="text-gray-800">{product.title}</span>
-      </nav>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item active>{product.title}</Breadcrumb.Item>
+      </Breadcrumb>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <div className="border rounded-lg overflow-hidden mb-2 relative">
+      <Row className="g-4 g-md-5">
+        <Col xs={12} md={6}>
+          <div className="border rounded-3 overflow-hidden mb-2 position-relative">
             <img
-              src={images?.[activeImage] || 'https://via.placeholder.com/500x500'}
+              src={images?.[activeImage] || placeholderImage(500, 500)}
               alt={product.title}
-              className="w-full aspect-square object-contain"
+              className="w-100"
+              style={{ aspectRatio: '1 / 1', objectFit: 'contain' }}
             />
-            <button
+            <Button
               onClick={handleToggleWishlist}
-              className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center shadow ${
-                isWishlisted ? 'bg-red-600 text-white' : 'bg-white text-gray-400'
-              }`}
+              variant={isWishlisted ? 'primary' : 'light'}
+              className="position-absolute top-0 end-0 mt-3 me-3 rounded-circle d-flex align-items-center justify-content-center p-0 shadow-sm"
+              style={{ width: '2.25rem', height: '2.25rem' }}
               title="Thêm vào yêu thích"
             >
               {isWishlisted ? '♥' : '♡'}
-            </button>
+            </Button>
           </div>
           {images?.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="d-flex gap-2 overflow-auto">
               {images.map((img, idx) => (
-                <button
+                <Button
                   key={idx}
+                  variant="light"
                   onClick={() => setActiveImage(idx)}
-                  className={`w-16 h-16 flex-shrink-0 border rounded overflow-hidden ${
-                    activeImage === idx ? 'border-red-600 border-2' : 'border-gray-200'
+                  className={`flex-shrink-0 border rounded p-0 overflow-hidden ${
+                    activeImage === idx ? 'border-primary border-2' : ''
                   }`}
+                  style={{ width: '4rem', height: '4rem' }}
                 >
-                  <img src={img} alt="" className="w-full h-full object-contain" />
-                </button>
+                  <img src={img} alt="" className="w-100 h-100" style={{ objectFit: 'contain' }} />
+                </Button>
               ))}
             </div>
           )}
-        </div>
+        </Col>
 
-        <div>
-          <h1 className="text-xl font-bold mb-2">{product.title}</h1>
-          <div className="text-sm text-gray-500 mb-2">Thương hiệu: {product.brandId?.name}</div>
+        <Col xs={12} md={6}>
+          <h1 className="fs-4 fw-bold mb-2">{product.title}</h1>
+          <div className="small text-muted mb-2">Thương hiệu: {product.brandId?.name}</div>
 
           {product.ratingCount > 0 && (
-            <button onClick={() => setActiveTab('reviews')} className="text-yellow-500 text-sm mb-3 block">
+            <Button
+              variant="link"
+              onClick={() => setActiveTab('reviews')}
+              className="text-warning small mb-3 d-block p-0 text-decoration-none"
+            >
               ★ {product.ratingAverage} ({product.ratingCount} đánh giá) · Đã bán {product.soldCount}
-            </button>
+            </Button>
           )}
 
           <div className="mb-4">
-            <span className="text-2xl text-red-600 font-bold">{formatVND(displayPrice)}</span>
+            <span className="fs-3 text-primary fw-bold">{formatVND(displayPrice)}</span>
             {product.salePrice && product.salePrice < product.price && (
-              <span className="text-gray-400 line-through ml-3">{formatVND(product.price)}</span>
+              <span className="text-muted text-decoration-line-through ms-3">{formatVND(product.price)}</span>
             )}
           </div>
 
           {/* Chọn cửa hàng - mô hình multi-store: tồn kho khác nhau theo từng chi nhánh */}
           <div className="mb-4">
-            <div className="text-sm font-medium mb-1">Chọn cửa hàng để xem tồn kho</div>
-            <select
-              value={selectedStoreId}
-              onChange={(e) => setSelectedStoreId(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm"
-            >
+            <div className="small fw-medium mb-1">Chọn cửa hàng để xem tồn kho</div>
+            <Form.Select value={selectedStoreId} onChange={(e) => setSelectedStoreId(e.target.value)} className="small">
               {product.inventories?.map((inv) => (
                 <option key={inv._id} value={inv.storeId?._id}>
                   {inv.storeId?.name} ({inv.storeId?.city}) — {inv.stock > 0 ? `Còn ${inv.stock} sản phẩm` : 'Hết hàng'}
                 </option>
               ))}
-            </select>
-            <div className="text-xs text-gray-500 mt-1">Tổng tồn kho toàn hệ thống: {product.totalStock} sản phẩm</div>
-          </div>
-
-          <div className="text-sm mb-3">
-            {currentStock > 0 ? (
-              <span className="text-green-600">✓ Còn hàng tại cửa hàng đã chọn ({currentStock} sản phẩm)</span>
-            ) : (
-              <span className="text-red-500">Hết hàng tại cửa hàng này, vui lòng chọn cửa hàng khác</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-sm">Số lượng:</span>
-            <div className="flex items-center border rounded">
-              <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="px-3 py-1">
-                -
-              </button>
-              <span className="px-4">{quantity}</span>
-              <button onClick={() => setQuantity(Math.min(currentStock || 1, quantity + 1))} className="px-3 py-1">
-                +
-              </button>
+            </Form.Select>
+            <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+              Tổng tồn kho toàn hệ thống: {product.totalStock} sản phẩm
             </div>
           </div>
 
-          <div className="flex gap-3 mb-2">
-            <button
+          <div className="small mb-3">
+            {currentStock > 0 ? (
+              <span className="text-success">✓ Còn hàng tại cửa hàng đã chọn ({currentStock} sản phẩm)</span>
+            ) : (
+              <span className="text-danger">Hết hàng tại cửa hàng này, vui lòng chọn cửa hàng khác</span>
+            )}
+          </div>
+
+          <div className="d-flex align-items-center gap-3 mb-4">
+            <span className="small">Số lượng:</span>
+            <InputGroup style={{ width: 'auto' }}>
+              <Button variant="outline-secondary" onClick={() => setQuantity(Math.max(1, quantity - 1))}>
+                -
+              </Button>
+              <InputGroup.Text className="px-4">{quantity}</InputGroup.Text>
+              <Button
+                variant="outline-secondary"
+                onClick={() => setQuantity(Math.min(currentStock || 1, quantity + 1))}
+              >
+                +
+              </Button>
+            </InputGroup>
+          </div>
+
+          <div className="d-flex gap-3 mb-2">
+            <Button
               onClick={handleAddToCart}
               disabled={currentStock === 0}
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3 rounded disabled:opacity-50"
+              variant="primary"
+              className="flex-fill fw-medium py-3"
             >
               {currentStock === 0 ? 'Hết hàng tại cửa hàng này' : 'Thêm vào giỏ hàng'}
-            </button>
+            </Button>
           </div>
-          {message && <div className="text-green-600 text-sm mb-2">{message}</div>}
+          {message && (
+            <Alert variant="success" className="py-1 px-2 small mb-2">
+              {message}
+            </Alert>
+          )}
 
           <InstallmentCalculator price={displayPrice} />
 
-          <div className="bg-gray-50 rounded p-3 text-sm text-gray-600 mt-3">
+          <div className="bg-light rounded p-3 small text-muted mt-3">
             🛡️ Bảo hành chính hãng {product.warrantyMonths} tháng. Miễn phí đổi trả trong 30 ngày nếu lỗi nhà sản
             xuất.
           </div>
-        </div>
-      </div>
+        </Col>
+      </Row>
 
-      <div className="mt-10 border-b flex gap-6 text-sm overflow-x-auto">
+      <Nav variant="tabs" className="mt-5 flex-nowrap overflow-auto" activeKey={activeTab} onSelect={(k) => setActiveTab(k)}>
         {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`pb-3 whitespace-nowrap border-b-2 ${
-              activeTab === tab.id ? 'border-red-600 text-red-600 font-medium' : 'border-transparent text-gray-500'
-            }`}
-          >
-            {tab.label}
-            {tab.id === 'reviews' && ` (${reviews.length})`}
-            {tab.id === 'qna' && ` (${questions.length})`}
-          </button>
+          <Nav.Item key={tab.id}>
+            <Nav.Link eventKey={tab.id} className="text-nowrap small">
+              {tab.label}
+              {tab.id === 'reviews' && ` (${reviews.length})`}
+              {tab.id === 'qna' && ` (${questions.length})`}
+            </Nav.Link>
+          </Nav.Item>
         ))}
-      </div>
+      </Nav>
 
-      <div className="py-6">
+      <div className="py-4">
         {activeTab === 'description' && (
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+          <p className="small" style={{ lineHeight: 1.7, whiteSpace: 'pre-line' }}>
             {product.description || 'Chưa có mô tả chi tiết cho sản phẩm này.'}
           </p>
         )}
 
         {activeTab === 'specs' && (
-          <table className="w-full text-sm max-w-2xl">
+          <Table className="small" style={{ maxWidth: '42rem' }}>
             <tbody>
               {Object.entries(product.specifications || {}).map(([key, val]) => (
-                <tr key={key} className="border-b">
-                  <td className="py-2 text-gray-500 w-1/3">{key}</td>
-                  <td className="py-2">{val}</td>
+                <tr key={key}>
+                  <td className="text-muted" style={{ width: '33%' }}>
+                    {key}
+                  </td>
+                  <td>{val}</td>
                 </tr>
               ))}
               {Object.keys(product.specifications || {}).length === 0 && (
                 <tr>
-                  <td className="py-2 text-gray-400">Chưa cập nhật thông số kỹ thuật</td>
+                  <td className="text-muted">Chưa cập nhật thông số kỹ thuật</td>
                 </tr>
               )}
             </tbody>
-          </table>
+          </Table>
         )}
 
         {activeTab === 'reviews' && (
           <div>
             {user && (
-              <form onSubmit={handleSubmitReview} className="border rounded-lg p-4 mb-4 max-w-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm">Chấm điểm:</span>
+              <Form onSubmit={handleSubmitReview} className="border rounded-3 p-4 mb-4" style={{ maxWidth: '32rem' }}>
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <span className="small">Chấm điểm:</span>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <button
+                    <Button
                       type="button"
+                      variant="link"
                       key={star}
                       onClick={() => setNewReview({ ...newReview, rating: star })}
-                      className={star <= newReview.rating ? 'text-yellow-500' : 'text-gray-300'}
+                      className={`p-0 text-decoration-none ${star <= newReview.rating ? 'text-warning' : 'text-secondary'}`}
                     >
                       ★
-                    </button>
+                    </Button>
                   ))}
                 </div>
-                <textarea
+                <Form.Control
+                  as="textarea"
                   value={newReview.message}
                   onChange={(e) => setNewReview({ ...newReview, message: e.target.value })}
                   placeholder="Chia sẻ cảm nhận của bạn về sản phẩm..."
-                  className="w-full border rounded p-2 text-sm mb-2"
+                  className="small mb-2"
                   rows={3}
                 />
-                <button type="submit" className="bg-red-600 text-white px-4 py-1.5 rounded text-sm">
+                <Button type="submit" variant="primary" size="sm">
                   Gửi đánh giá
-                </button>
-              </form>
+                </Button>
+              </Form>
             )}
 
-            <div className="space-y-4">
+            <div className="d-flex flex-column gap-4">
               {reviews.map((r) => (
-                <div key={r._id} className="border-b pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{r.displayName || r.userId?.displayName || 'Ẩn danh'}</span>
-                    <span className="text-yellow-500 text-xs">{'★'.repeat(r.rating)}</span>
+                <div key={r._id} className="border-bottom pb-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="fw-medium small">{r.displayName || r.userId?.displayName || 'Ẩn danh'}</span>
+                    <span className="text-warning" style={{ fontSize: '0.75rem' }}>
+                      {'★'.repeat(r.rating)}
+                    </span>
                     {r.isVerifiedPurchase && (
-                      <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Đã mua hàng</span>
+                      <Badge bg="success" className="bg-opacity-10 text-success fw-normal" style={{ fontSize: '0.75rem' }}>
+                        Đã mua hàng
+                      </Badge>
                     )}
                   </div>
-                  <p className="text-sm text-gray-700 mt-1">{r.message}</p>
+                  <p className="small mt-1">{r.message}</p>
                   {r.reply?.content && (
-                    <div className="bg-gray-50 rounded p-2 mt-2 text-xs">
-                      <span className="font-medium text-red-600">Phản hồi từ TechShop: </span>
+                    <div className="bg-light rounded p-2 mt-2" style={{ fontSize: '0.75rem' }}>
+                      <span className="fw-medium text-primary">Phản hồi từ TechShop: </span>
                       {r.reply.content}
                     </div>
                   )}
                 </div>
               ))}
-              {reviews.length === 0 && <div className="text-sm text-gray-400">Chưa có đánh giá nào</div>}
+              {reviews.length === 0 && <div className="small text-muted">Chưa có đánh giá nào</div>}
             </div>
           </div>
         )}
@@ -330,34 +352,37 @@ export default function ProductDetailPage() {
       </div>
 
       {related.length > 0 && (
-        <div className="mt-8">
-          <h3 className="font-bold mb-3">Sản phẩm liên quan</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="mt-5">
+          <h3 className="fw-bold mb-3 fs-5">Sản phẩm liên quan</h3>
+          <Row className="g-3">
             {related.map((p) => (
-              <ProductCard key={p._id} product={p} />
+              <Col key={p._id} xs={6} md={3}>
+                <ProductCard product={p} />
+              </Col>
             ))}
-          </div>
+          </Row>
         </div>
       )}
 
       {showStickyBar && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg py-3 px-4 z-40">
-          <div className="max-w-7xl mx-auto flex items-center gap-4">
-            <img src={images?.[0]} alt="" className="w-10 h-10 object-contain hidden sm:block" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{product.title}</div>
-              <div className="text-red-600 font-bold">{formatVND(displayPrice)}</div>
+        <div className="position-fixed bottom-0 start-0 end-0 bg-white border-top shadow-lg py-3 px-4" style={{ zIndex: 1030 }}>
+          <Container fluid="xl" className="d-flex align-items-center gap-4">
+            <img src={images?.[0]} alt="" className="d-none d-sm-block" style={{ width: '2.5rem', height: '2.5rem', objectFit: 'contain' }} />
+            <div className="flex-fill text-truncate">
+              <div className="small fw-medium text-truncate">{product.title}</div>
+              <div className="text-primary fw-bold">{formatVND(displayPrice)}</div>
             </div>
-            <button
+            <Button
               onClick={handleAddToCart}
               disabled={currentStock === 0}
-              className="bg-red-600 hover:bg-red-700 text-white font-medium px-6 py-2.5 rounded disabled:opacity-50 whitespace-nowrap"
+              variant="primary"
+              className="fw-medium px-4 py-2 text-nowrap"
             >
               Thêm vào giỏ
-            </button>
-          </div>
+            </Button>
+          </Container>
         </div>
       )}
-    </div>
+    </Container>
   );
 }

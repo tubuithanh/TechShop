@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { cartService } from '../services/cartService';
 import { useAuth } from './AuthContext';
 
@@ -19,6 +19,16 @@ export function CartProvider({ children }) {
       setLoading(false);
     }
   }, [user]);
+
+  // Nạp lại giỏ hàng khi đăng nhập; xóa giỏ hàng khỏi state khi đăng xuất
+  // để tránh hiện số lượng giỏ hàng của người dùng trước đó.
+  useEffect(() => {
+    if (user) {
+      refreshCart();
+    } else {
+      setCart({ items: [] });
+    }
+  }, [user, refreshCart]);
 
   // storeId: cửa hàng khách chọn để mua (mô hình multi-store) - có thể null nếu chưa chọn
   const addToCart = async (productId, quantity = 1, storeId = null) => {

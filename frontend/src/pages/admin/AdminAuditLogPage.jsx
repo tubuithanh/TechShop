@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
+import { Container, Table, Button, Badge } from 'react-bootstrap';
 import { auditLogService } from '../../services/auditLogService';
+
+function actionBadgeVariant(action) {
+  if (!action) return 'secondary';
+  if (action.startsWith('TAO_MOI')) return 'success';
+  if (action.startsWith('CAP_NHAT')) return 'primary';
+  if (action.startsWith('XOA')) return 'danger';
+  return 'secondary';
+}
 
 export default function AdminAuditLogPage() {
   const [logs, setLogs] = useState([]);
@@ -14,65 +23,59 @@ export default function AdminAuditLogPage() {
   }, [page]);
 
   return (
-    <div>
-      <h1 className="text-xl font-bold mb-2">Nhật ký thao tác quản trị (Audit Log)</h1>
-      <p className="text-sm text-gray-500 mb-4">
+    <Container fluid>
+      <h1 className="fs-4 fw-bold mb-2">Nhật ký thao tác quản trị (Audit Log)</h1>
+      <p className="small text-muted mb-4">
         Ghi lại mọi thao tác thêm/sửa/xóa do quản trị viên và nhân viên thực hiện, phục vụ truy vết khi có sự cố.
       </p>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-3 shadow-sm">
+        <Table striped hover responsive className="mb-0 align-middle">
           <thead>
-            <tr className="text-left text-gray-500 border-b">
-              <th className="p-3">Thời gian</th>
-              <th className="p-3">Người thực hiện</th>
-              <th className="p-3">Vai trò</th>
-              <th className="p-3">Hành động</th>
-              <th className="p-3">Đường dẫn</th>
-              <th className="p-3">IP</th>
+            <tr className="text-muted">
+              <th>Thời gian</th>
+              <th>Người thực hiện</th>
+              <th>Vai trò</th>
+              <th>Hành động</th>
+              <th>Đường dẫn</th>
+              <th>IP</th>
             </tr>
           </thead>
           <tbody>
             {logs.map((log) => (
-              <tr key={log._id} className="border-b">
-                <td className="p-3 whitespace-nowrap">{new Date(log.createdAt).toLocaleString('vi-VN')}</td>
-                <td className="p-3">{log.userName}</td>
-                <td className="p-3">{log.userRole}</td>
-                <td className="p-3">{log.action}</td>
-                <td className="p-3 text-xs text-gray-500">{log.path}</td>
-                <td className="p-3 text-xs text-gray-400">{log.ip}</td>
+              <tr key={log._id}>
+                <td className="text-nowrap">{new Date(log.createdAt).toLocaleString('vi-VN')}</td>
+                <td>{log.userName}</td>
+                <td>{log.userRole}</td>
+                <td>
+                  <Badge bg={actionBadgeVariant(log.action)}>{log.action}</Badge>
+                </td>
+                <td className="small text-muted">{log.path}</td>
+                <td className="small text-muted">{log.ip}</td>
               </tr>
             ))}
             {logs.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-gray-400">
+                <td colSpan={6} className="p-4 text-center text-muted">
                   Chưa có nhật ký nào
                 </td>
               </tr>
             )}
           </tbody>
-        </table>
+        </Table>
       </div>
 
-      <div className="flex justify-center gap-2 mt-4 text-sm">
-        <button
-          disabled={page <= 1}
-          onClick={() => setPage(page - 1)}
-          className="border rounded px-3 py-1 disabled:opacity-50"
-        >
+      <div className="d-flex justify-content-center align-items-center gap-2 mt-4">
+        <Button variant="outline-secondary" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
           Trước
-        </button>
-        <span className="px-2 py-1">
+        </Button>
+        <span className="small px-2">
           Trang {page}/{totalPages || 1}
         </span>
-        <button
-          disabled={page >= totalPages}
-          onClick={() => setPage(page + 1)}
-          className="border rounded px-3 py-1 disabled:opacity-50"
-        >
+        <Button variant="outline-secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
           Sau
-        </button>
+        </Button>
       </div>
-    </div>
+    </Container>
   );
 }

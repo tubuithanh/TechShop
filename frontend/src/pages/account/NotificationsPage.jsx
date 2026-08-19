@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Card, Button, ListGroup, Spinner } from 'react-bootstrap';
 import { notificationService } from '../../services/notificationService';
 
 const typeIcon = { order: '📦', promotion: '🎁', warranty: '🛠️', system: '🔔' };
@@ -26,35 +27,48 @@ export default function NotificationsPage() {
     }
   };
 
-  if (loading) return <div className="text-center py-10">Đang tải...</div>;
+  if (loading)
+    return (
+      <div className="text-center py-4">
+        <Spinner animation="border" />
+      </div>
+    );
 
   return (
-    <div className="bg-white border rounded-lg p-5">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold">Thông báo</h2>
-        <button onClick={handleMarkAllRead} className="text-sm text-red-600">
-          Đánh dấu tất cả đã đọc
-        </button>
-      </div>
-      <div className="divide-y">
-        {notifications.map((n) => (
-          <Link
-            key={n._id}
-            to={n.link || '#'}
-            onClick={() => handleClickNoti(n)}
-            className={`flex gap-3 py-3 ${!n.isRead ? 'bg-red-50 -mx-5 px-5' : ''}`}
-          >
-            <span className="text-xl">{typeIcon[n.type] || '🔔'}</span>
-            <div className="flex-1">
-              <div className="text-sm font-medium">{n.title}</div>
-              <div className="text-sm text-gray-600">{n.message}</div>
-              <div className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString('vi-VN')}</div>
-            </div>
-            {!n.isRead && <span className="w-2 h-2 rounded-full bg-red-600 mt-1" />}
-          </Link>
-        ))}
-        {notifications.length === 0 && <div className="text-sm text-gray-400 py-4">Không có thông báo nào</div>}
-      </div>
-    </div>
+    <Card>
+      <Card.Body>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h2 className="fw-bold fs-5 mb-0">Thông báo</h2>
+          <Button variant="link" size="sm" className="p-0" onClick={handleMarkAllRead}>
+            Đánh dấu tất cả đã đọc
+          </Button>
+        </div>
+        <ListGroup variant="flush">
+          {notifications.map((n) => (
+            <ListGroup.Item
+              key={n._id}
+              as={Link}
+              to={n.link || '#'}
+              onClick={() => handleClickNoti(n)}
+              action
+              className={`d-flex gap-3 align-items-start ${!n.isRead ? 'bg-primary-subtle' : ''}`}
+            >
+              <span className="fs-4">{typeIcon[n.type] || '🔔'}</span>
+              <div className="flex-grow-1">
+                <div className="small fw-medium">{n.title}</div>
+                <div className="small text-muted">{n.message}</div>
+                <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+                  {new Date(n.createdAt).toLocaleString('vi-VN')}
+                </div>
+              </div>
+              {!n.isRead && (
+                <span className="rounded-circle bg-primary mt-1" style={{ width: '0.5rem', height: '0.5rem' }} />
+              )}
+            </ListGroup.Item>
+          ))}
+          {notifications.length === 0 && <div className="small text-muted py-4">Không có thông báo nào</div>}
+        </ListGroup>
+      </Card.Body>
+    </Card>
   );
 }

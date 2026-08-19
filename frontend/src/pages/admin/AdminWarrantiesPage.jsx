@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Card, Form, Table } from 'react-bootstrap';
 import api from '../../services/api';
 
 const statusOptions = ['received', 'checking', 'repairing', 'waiting_parts', 'done', 'returned'];
@@ -27,11 +28,11 @@ export default function AdminWarrantiesPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-4">Quản lý yêu cầu bảo hành</h1>
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
+      <h1 className="fs-4 fw-bold mb-4">Quản lý yêu cầu bảo hành</h1>
+      <Card className="shadow-sm">
+        <Table striped hover responsive className="mb-0">
           <thead>
-            <tr className="text-left text-gray-500 border-b">
+            <tr className="text-muted">
               <th className="p-3">Mã phiếu</th>
               <th className="p-3">Khách hàng</th>
               <th className="p-3">Sản phẩm</th>
@@ -41,32 +42,34 @@ export default function AdminWarrantiesPage() {
           </thead>
           <tbody>
             {warranties.map((w) => (
-              <tr key={w._id} className="border-b">
+              <tr key={w._id}>
                 <td className="p-3">{w.ticketCode}</td>
                 <td className="p-3">
                   {w.userId?.displayName}
-                  <div className="text-xs text-gray-400">{w.userId?.phoneNumber}</div>
+                  <div className="small text-muted">{w.userId?.phoneNumber}</div>
                 </td>
                 <td className="p-3">{w.productId?.title}</td>
-                <td className="p-3 max-w-xs truncate">{w.issueDescription}</td>
+                <td className="p-3 text-truncate" style={{ maxWidth: '20rem' }}>
+                  {w.issueDescription}
+                </td>
                 <td className="p-3">
-                  <select
+                  <Form.Select
+                    size="sm"
                     value={w.status}
                     onChange={(e) => handleChangeStatus(w._id, e.target.value)}
-                    className="border rounded px-2 py-1 text-xs"
                   >
                     {statusOptions.map((s) => (
                       <option key={s} value={s}>
                         {statusLabel[s]}
                       </option>
                     ))}
-                  </select>
+                  </Form.Select>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </Card>
     </div>
   );
 }
