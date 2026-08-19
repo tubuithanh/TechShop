@@ -3,15 +3,19 @@ const asyncHandler = require('../utils/asyncHandler');
 
 // @route GET /api/store-inventories?storeId=&productId=
 const getInventories = asyncHandler(async (req, res) => {
-  const { storeId, productId } = req.query;
+  const { storeId, productId, page = 1, limit = 20 } = req.query;
   const filter = {};
   if (storeId) filter.storeId = storeId;
   if (productId) filter.productId = productId;
 
   const inventories = await StoreInventory.find(filter)
     .populate('storeId', 'name city address')
-    .populate('productId', 'title featuredImage price');
-  res.json({ data: inventories });
+    .populate('productId', 'title featuredImage price')
+    .sort({ lastUpdated: -1 })
+    .skip((page - 1) * limit)
+    .limit(Number(limit));
+  const total = await StoreInventory.countDocuments(filter);
+  res.json({ data: inventories, total, page: Number(page), totalPages: Math.ceil(total / limit) });
 });
 
 // @route GET /api/store-inventories/check?productId=&storeId= - kiểm tra tồn kho cụ thể

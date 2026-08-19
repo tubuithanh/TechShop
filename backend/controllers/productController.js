@@ -4,10 +4,14 @@ const StoreInventory = require('../models/StoreInventory');
 const asyncHandler = require('../utils/asyncHandler');
 
 // @route GET /api/products
+// (params `page` + `limit`: phân trang kiểu số trang, dùng cho trang quản trị;
+//  param `cursor` + `limit`: phân trang kiểu cursor, dùng cho trang danh sách sản phẩm phía khách hàng.
+//  param `includeInactive=true`: cho phép trang quản trị thấy cả sản phẩm đã ẩn (isActive=false))
 const getProducts = asyncHandler(async (req, res) => {
-  const { keyword, categoryId, brandId, minPrice, maxPrice, sort = 'newest', cursor, limit = 12 } = req.query;
+  const { keyword, categoryId, brandId, minPrice, maxPrice, sort = 'newest', cursor, page, limit = 12, includeInactive } =
+    req.query;
 
-  const filter = { isActive: true };
+  const filter = includeInactive === 'true' ? {} : { isActive: true };
   if (keyword) filter.$text = { $search: keyword };
   if (categoryId) filter.categoryId = categoryId;
   if (brandId) filter.brandId = { $in: brandId.split(',') };
@@ -31,7 +35,11 @@ const getProducts = asyncHandler(async (req, res) => {
     ? { [sortConfig.field]: sortConfig.dir, _id: -1 }
     : { _id: -1 };
 
-  if (cursor) {
+  // Đếm tổng số sản phẩm khớp bộ lọc THỰC (chưa cộng thêm điều kiện cursor) để trả về
+  // total/totalPages cho giao diện phân trang kiểu số trang (trang quản trị).
+  const total = await Product.countDocuments(filter);
+
+  if (!page && cursor) {
     try {
       const { v, id } = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8'));
       if (sortConfig) {
@@ -48,18 +56,27 @@ const getProducts = asyncHandler(async (req, res) => {
     }
   }
 
-  const products = await Product.find(filter)
+  let query = Product.find(filter)
     .populate('categoryId', 'name slug')
     .populate('brandId', 'name image')
     .sort(sortMap)
     .limit(Number(limit));
+  if (page) query = query.skip((Number(page) - 1) * Number(limit));
+
+  const products = await query;
 
   const last = products[products.length - 1];
   const nextCursor =
-    products.length === Number(limit) && last
+    !page && products.length === Number(limit) && last
       ? Buffer.from(JSON.stringify({ v: sortConfig ? last[sortConfig.field] : undefined, id: last._id })).toString('base64')
       : null;
-  res.json({ data: products, nextCursor });
+  res.json({
+    data: products,
+    nextCursor,
+    total,
+    page: page ? Number(page) : undefined,
+    totalPages: page ? Math.ceil(total / Number(limit)) : undefined
+  });
 });
 
 // @route GET /api/products/:slug
@@ -103,7 +120,7 @@ const compareProducts = asyncHandler(async (req, res) => {
 
 const createProduct = asyncHandler(async (req, res) => {
   const body = req.body;
-  const slug = slugify(body.title, { lower: true, locale: 'vi' }) + '-' + Date.now().toString().slice(-5);
+  const slug = slugify(body.title, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g }) + '-' + Date.now().toString().slice(-5);
   const product = await Product.create({ ...body, slug });
   res.status(201).json({ data: product });
 });

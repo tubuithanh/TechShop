@@ -1,16 +1,29 @@
 import { useEffect, useState } from 'react';
 import { Container, Card, Badge, Form, Button, InputGroup } from 'react-bootstrap';
 import { reviewService } from '../../services/reviewService';
+import { useSettings } from '../../store/SettingsContext';
+import AdminPagination from '../../components/admin/AdminPagination';
 
 export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState([]);
   const [replyDrafts, setReplyDrafts] = useState({});
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const { settings } = useSettings();
+  const pageSize = settings.productsPerPage || 20;
 
-  const load = () => reviewService.getAllAdmin().then(setReviews);
+  const load = () =>
+    reviewService.getAllAdmin({ page, limit: pageSize }).then((res) => {
+      setReviews(res.data);
+      setTotalPages(res.totalPages || 1);
+      setTotal(res.total || 0);
+    });
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   const handleHide = async (id) => {
     if (!confirm('Ẩn đánh giá này khỏi trang sản phẩm?')) return;
@@ -72,6 +85,7 @@ export default function AdminReviewsPage() {
         ))}
         {reviews.length === 0 && <div className="small text-muted">Chưa có đánh giá nào</div>}
       </div>
+      <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
     </Container>
   );
 }

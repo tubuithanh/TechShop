@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Container, Table, Button, Badge } from 'react-bootstrap';
 import { auditLogService } from '../../services/auditLogService';
+import { useSettings } from '../../store/SettingsContext';
 
 function actionBadgeVariant(action) {
   if (!action) return 'secondary';
@@ -14,13 +15,15 @@ export default function AdminAuditLogPage() {
   const [logs, setLogs] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const { settings } = useSettings();
+  const pageSize = settings.productsPerPage || 20;
 
   useEffect(() => {
-    auditLogService.getLogs({ page }).then((res) => {
+    auditLogService.getLogs({ page, limit: pageSize }).then((res) => {
       setLogs(res.data);
       setTotalPages(res.totalPages);
     });
-  }, [page]);
+  }, [page, pageSize]);
 
   return (
     <Container fluid>

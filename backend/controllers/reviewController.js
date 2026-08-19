@@ -68,13 +68,16 @@ const replyReview = asyncHandler(async (req, res) => {
 });
 
 const getAllReviewsAdmin = asyncHandler(async (req, res) => {
-  const { status } = req.query;
+  const { status, page = 1, limit = 20 } = req.query;
   const filter = status ? { status } : {};
   const reviews = await Review.find(filter)
     .populate('userId', 'displayName email')
     .populate('productId', 'title slug')
-    .sort({ createdAt: -1 });
-  res.json({ data: reviews });
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(Number(limit));
+  const total = await Review.countDocuments(filter);
+  res.json({ data: reviews, total, page: Number(page), totalPages: Math.ceil(total / limit) });
 });
 
 module.exports = { getProductReviews, createReview, hideReview, replyReview, getAllReviewsAdmin };

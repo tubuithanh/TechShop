@@ -7,6 +7,6 @@ export const storeInventoryService = {
   },
   async getInventories(params = {}) {
     const { data } = await api.get('/store-inventories', { params });
-    return data.data;
+    return data;
   }
 };

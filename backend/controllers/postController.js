@@ -40,13 +40,18 @@ const addComment = asyncHandler(async (req, res) => {
 // ---------- ADMIN (CMS) ----------
 
 const getPostsAdmin = asyncHandler(async (req, res) => {
-  const posts = await Post.find().sort({ createdAt: -1 });
-  res.json({ data: posts });
+  const { page = 1, limit = 20 } = req.query;
+  const posts = await Post.find()
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(Number(limit));
+  const total = await Post.countDocuments();
+  res.json({ data: posts, total, page: Number(page), totalPages: Math.ceil(total / limit) });
 });
 
 const createPost = asyncHandler(async (req, res) => {
   const { title } = req.body;
-  const slug = slugify(title, { lower: true, locale: 'vi' }) + '-' + Date.now().toString().slice(-5);
+  const slug = slugify(title, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g }) + '-' + Date.now().toString().slice(-5);
   const post = await Post.create({ ...req.body, slug, userId: req.account._id, nameAuthor: req.account.name });
   res.status(201).json({ data: post });
 });

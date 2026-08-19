@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Container, Row, Col, Form, Spinner, Nav } from 'react-bootstrap';
 import { productService } from '../services/productService';
 import ProductCard from '../components/ProductCard';
+import { useSettings } from '../store/SettingsContext';
 
 export default function ProductListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -10,6 +11,7 @@ export default function ProductListPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState(searchParams.get('sort') || 'newest');
+  const { settings } = useSettings();
 
   const keyword = searchParams.get('keyword') || '';
   const categoryId = searchParams.get('categoryId') || '';
@@ -23,7 +25,7 @@ export default function ProductListPage() {
     let ignore = false;
     setLoading(true);
     productService
-      .getProducts({ keyword, categoryId, brandId, sort, limit: 20 })
+      .getProducts({ keyword, categoryId, brandId, sort, limit: settings.productsPerPage })
       .then((res) => {
         if (!ignore) setProducts(res.data);
       })
@@ -33,7 +35,7 @@ export default function ProductListPage() {
     return () => {
       ignore = true;
     };
-  }, [keyword, categoryId, brandId, sort]);
+  }, [keyword, categoryId, brandId, sort, settings.productsPerPage]);
 
   const handleCategoryChange = (catId) => {
     const params = Object.fromEntries(searchParams.entries());

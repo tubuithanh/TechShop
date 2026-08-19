@@ -59,13 +59,16 @@ const submitWarrantyFeedback = asyncHandler(async (req, res) => {
 });
 
 const getAllWarranties = asyncHandler(async (req, res) => {
-  const { status } = req.query;
+  const { status, page = 1, limit = 20 } = req.query;
   const filter = status ? { status } : {};
   const warranties = await Warranty.find(filter)
     .populate('userId', 'displayName phoneNumber email')
     .populate('productId', 'title')
-    .sort({ createdAt: -1 });
-  res.json({ data: warranties });
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(Number(limit));
+  const total = await Warranty.countDocuments(filter);
+  res.json({ data: warranties, total, page: Number(page), totalPages: Math.ceil(total / limit) });
 });
 
 const updateWarrantyStatus = asyncHandler(async (req, res) => {

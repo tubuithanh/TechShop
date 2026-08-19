@@ -25,6 +25,7 @@ const postRoutes = require('./routes/postRoutes');
 const collectionRoutes = require('./routes/collectionRoutes');
 const auditLogRoutes = require('./routes/auditLogRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const settingRoutes = require('./routes/settingRoutes');
 
 const app = express();
 
@@ -77,6 +78,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/settings', settingRoutes);
 
 // ----- Xử lý lỗi -----
 app.use(notFound);

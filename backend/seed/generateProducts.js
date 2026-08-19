@@ -24,16 +24,6 @@ function roundPrice(value) {
 
 const TAG_POOL = ['Hàng mới', 'Giảm sốc', 'Trả góp 0%', 'Sinh viên', 'Bán chạy', 'Hàng chính hãng', 'Freeship', 'Quà tặng kèm'];
 
-const CATEGORY_COLOR = {
-  'dien-thoai': '2563eb',
-  laptop: '7c3aed',
-  'may-tinh-bang': '059669',
-  'dong-ho-thong-minh': 'd97706',
-  'tai-nghe-loa': 'db2777',
-  'man-hinh': '0891b2',
-  'phu-kien': '4b5563'
-};
-
 const SHORT_DESC_TEMPLATES = {
   'dien-thoai': [
     'Hiệu năng mạnh mẽ, camera sắc nét trong mọi điều kiện',
@@ -291,27 +281,98 @@ function wrapLines(text, maxCharsPerLine = 16, maxLines = 3) {
   return lines.slice(0, maxLines);
 }
 
-function makePlaceholderImage(text, bgHex, size = 800) {
-  const lines = wrapLines(text);
-  const fontSize = Math.round(size * 0.055);
-  const lineHeight = fontSize * 1.3;
-  const startY = size / 2 - ((lines.length - 1) * lineHeight) / 2;
-  const tspans = lines
-    .map((line, i) => `<tspan x="50%" y="${startY + i * lineHeight}">${escapeXml(line)}</tspan>`)
+// Bảng màu (nền gradient nhạt + màu hình khối) theo từng danh mục, dùng để vẽ minh họa sản phẩm
+const CATEGORY_PALETTE = {
+  'dien-thoai': { from: '#dbeafe', to: '#eff6ff', shape: '#2563eb', light: '#60a5fa' },
+  laptop: { from: '#ede9fe', to: '#f5f3ff', shape: '#7c3aed', light: '#a78bfa' },
+  'may-tinh-bang': { from: '#d1fae5', to: '#ecfdf5', shape: '#059669', light: '#34d399' },
+  'dong-ho-thong-minh': { from: '#fef3c7', to: '#fffbeb', shape: '#d97706', light: '#fbbf24' },
+  'tai-nghe-loa': { from: '#fce7f3', to: '#fdf2f8', shape: '#db2777', light: '#f472b6' },
+  'man-hinh': { from: '#cffafe', to: '#ecfeff', shape: '#0891b2', light: '#22d3ee' },
+  'phu-kien': { from: '#e5e7eb', to: '#f9fafb', shape: '#4b5563', light: '#9ca3af' }
+};
+
+// Hình khối SVG mô phỏng dáng thiết bị theo từng danh mục (hệ tọa độ 0-200), vẽ đơn giản
+// theo phong cách flat-icon để không phụ thuộc ảnh chụp thật nhưng vẫn gợi hình rõ ràng.
+function categoryIconShape(categorySlug, color, light) {
+  switch (categorySlug) {
+    case 'dien-thoai':
+      return (
+        `<rect x="72" y="30" width="56" height="110" rx="12" fill="${color}"/>` +
+        `<rect x="79" y="42" width="42" height="80" rx="3" fill="#ffffff" opacity="0.9"/>` +
+        `<circle cx="100" cy="132" r="3.5" fill="#ffffff" opacity="0.9"/>`
+      );
+    case 'laptop':
+      return (
+        `<rect x="55" y="42" width="90" height="58" rx="4" fill="${color}"/>` +
+        `<rect x="61" y="48" width="78" height="46" rx="2" fill="#ffffff" opacity="0.9"/>` +
+        `<path d="M40 106 h120 l-8 14 a6 6 0 0 1 -5 3 h-94 a6 6 0 0 1 -5 -3 z" fill="${light}"/>`
+      );
+    case 'may-tinh-bang':
+      return (
+        `<rect x="58" y="30" width="84" height="106" rx="10" fill="${color}"/>` +
+        `<rect x="65" y="40" width="70" height="82" rx="3" fill="#ffffff" opacity="0.9"/>` +
+        `<circle cx="100" cy="129" r="3" fill="#ffffff" opacity="0.9"/>`
+      );
+    case 'dong-ho-thong-minh':
+      return (
+        `<rect x="88" y="14" width="24" height="18" rx="4" fill="${light}"/>` +
+        `<rect x="88" y="128" width="24" height="18" rx="4" fill="${light}"/>` +
+        `<rect x="66" y="42" width="68" height="76" rx="16" fill="${color}"/>` +
+        `<circle cx="100" cy="80" r="24" fill="#ffffff" opacity="0.9"/>`
+      );
+    case 'tai-nghe-loa':
+      return (
+        `<path d="M50 88 a50 50 0 0 1 100 0" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>` +
+        `<rect x="38" y="80" width="26" height="42" rx="13" fill="${color}"/>` +
+        `<rect x="136" y="80" width="26" height="42" rx="13" fill="${color}"/>` +
+        `<circle cx="51" cy="101" r="7" fill="${light}"/>` +
+        `<circle cx="149" cy="101" r="7" fill="${light}"/>`
+      );
+    case 'man-hinh':
+      return (
+        `<rect x="40" y="32" width="120" height="76" rx="6" fill="${color}"/>` +
+        `<rect x="48" y="40" width="104" height="60" rx="2" fill="#ffffff" opacity="0.9"/>` +
+        `<rect x="90" y="108" width="20" height="18" fill="${light}"/>` +
+        `<rect x="65" y="126" width="70" height="8" rx="4" fill="${light}"/>`
+      );
+    case 'phu-kien':
+    default:
+      return (
+        `<rect x="70" y="50" width="60" height="72" rx="10" fill="${color}"/>` +
+        `<rect x="86" y="28" width="10" height="26" rx="4" fill="${light}"/>` +
+        `<rect x="104" y="28" width="10" height="26" rx="4" fill="${light}"/>` +
+        `<path d="M100 122 q0 26 0 34" stroke="${light}" stroke-width="8" fill="none" stroke-linecap="round"/>`
+      );
+  }
+}
+
+function makeProductIllustration(text, categorySlug, index, size = 800) {
+  const palette = CATEGORY_PALETTE[categorySlug] || CATEGORY_PALETTE['phu-kien'];
+  const shape = categoryIconShape(categorySlug, palette.shape, palette.light);
+  const angle = ((index % 5) - 2) * 6; // xoay nhẹ -12°..12° để 10 ảnh trông có góc chụp khác nhau
+  const lines = wrapLines(text, 20, 2);
+  const captionLines = lines
+    .map((line, i) => `<tspan x="100" dy="${i === 0 ? 0 : 11}">${escapeXml(line)}</tspan>`)
     .join('');
+  const gradId = `g${categorySlug.replace(/[^a-z]/g, '')}${index}`;
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
-    `<rect width="100%" height="100%" fill="#${bgHex}"/>` +
-    `<text text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="600">${tspans}</text>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 200 200">` +
+    `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0%" stop-color="${palette.from}"/><stop offset="100%" stop-color="${palette.to}"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="200" height="200" fill="url(#${gradId})"/>` +
+    `<circle cx="100" cy="80" r="58" fill="#ffffff" opacity="0.5"/>` +
+    `<g transform="rotate(${angle} 100 80)">${shape}</g>` +
+    `<text x="100" y="176" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="600" fill="#374151">${captionLines}</text>` +
     `</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 function buildImages(title, categorySlug) {
-  const bg = CATEGORY_COLOR[categorySlug] || '374151';
   const urls = [];
   for (let i = 1; i <= PRODUCT_IMAGE_COUNT; i++) {
-    urls.push(makePlaceholderImage(`${title} ${i}`, bg));
+    urls.push(makeProductIllustration(title, categorySlug, i));
   }
   return { featuredImage: urls[0], imageURLs: urls };
 }

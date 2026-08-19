@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Card, Form, Table } from 'react-bootstrap';
 import { orderService } from '../../services/orderService';
+import { useSettings } from '../../store/SettingsContext';
+import AdminPagination from '../../components/admin/AdminPagination';
 
 const statusOptions = ['pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled', 'returned'];
 const statusLabel = {
@@ -20,12 +22,28 @@ function formatVND(value) {
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [filterStatus, setFilterStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const { settings } = useSettings();
+  const pageSize = settings.productsPerPage || 20;
 
-  const loadOrders = () => orderService.getAllOrdersAdmin({ status: filterStatus }).then((res) => setOrders(res.data));
+  const loadOrders = () =>
+    orderService.getAllOrdersAdmin({ status: filterStatus, page, limit: pageSize }).then((res) => {
+      setOrders(res.data);
+      setTotalPages(res.totalPages || 1);
+      setTotal(res.total || 0);
+    });
 
   useEffect(() => {
     loadOrders();
-  }, [filterStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterStatus, page, pageSize]);
+
+  const handleFilterChange = (status) => {
+    setFilterStatus(status);
+    setPage(1);
+  };
 
   const handleChangeStatus = async (orderId, status) => {
     await orderService.updateOrderStatus(orderId, status, `Cập nhật trạng thái: ${statusLabel[status]}`);
@@ -38,7 +56,7 @@ export default function AdminOrdersPage() {
 
       <Form.Select
         value={filterStatus}
-        onChange={(e) => setFilterStatus(e.target.value)}
+        onChange={(e) => handleFilterChange(e.target.value)}
         className="mb-4"
         style={{ maxWidth: '20rem' }}
       >
@@ -90,6 +108,9 @@ export default function AdminOrdersPage() {
             ))}
           </tbody>
         </Table>
+        <Card.Body className="pt-0">
+          <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
+        </Card.Body>
       </Card>
     </div>
   );

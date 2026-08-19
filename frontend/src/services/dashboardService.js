@@ -16,5 +16,9 @@ export const dashboardService = {
   async getRevenueByStore() {
     const { data } = await api.get('/dashboard/revenue-by-store');
     return data.data;
+  },
+  async getOrderStatusStats() {
+    const { data } = await api.get('/dashboard/order-status-stats');
+    return data.data;
   }
 };

@@ -4,6 +4,8 @@ import { storeInventoryService } from '../../services/storeInventoryService';
 import { storeService } from '../../services/storeService';
 import { productService } from '../../services/productService';
 import api from '../../services/api';
+import { useSettings } from '../../store/SettingsContext';
+import AdminPagination from '../../components/admin/AdminPagination';
 
 export default function AdminInventoryPage() {
   const [inventories, setInventories] = useState([]);
@@ -11,21 +13,38 @@ export default function AdminInventoryPage() {
   const [products, setProducts] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [form, setForm] = useState({ productId: '', stock: 0, lowStockThreshold: 5 });
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const { settings } = useSettings();
+  const pageSize = settings.productsPerPage || 20;
 
   const loadInventories = (storeId) =>
-    storeInventoryService.getInventories(storeId ? { storeId } : {}).then(setInventories);
+    storeInventoryService.getInventories({ ...(storeId ? { storeId } : {}), page, limit: pageSize }).then((res) => {
+      setInventories(res.data);
+      setTotalPages(res.totalPages || 1);
+      setTotal(res.total || 0);
+    });
 
   useEffect(() => {
     storeService.getStores().then((data) => {
       setStores(data);
       if (data.length > 0) setSelectedStoreId(data[0]._id);
     });
-    productService.getProducts({ limit: 100 }).then((res) => setProducts(res.data));
+    // Danh sách chọn sản phẩm khi thiết lập tồn kho: giữ số lượng lớn hơn kích thước trang
+    // thông thường vì đây là ô chọn (dropdown), không phải danh sách cần phân trang.
+    productService.getProducts({ limit: 200 }).then((res) => setProducts(res.data));
   }, []);
 
   useEffect(() => {
     if (selectedStoreId) loadInventories(selectedStoreId);
-  }, [selectedStoreId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStoreId, page, pageSize]);
+
+  const handleStoreChange = (storeId) => {
+    setSelectedStoreId(storeId);
+    setPage(1);
+  };
 
   const handleUpsert = async (e) => {
     e.preventDefault();
@@ -48,7 +67,7 @@ export default function AdminInventoryPage() {
 
       <Form.Select
         value={selectedStoreId}
-        onChange={(e) => setSelectedStoreId(e.target.value)}
+        onChange={(e) => handleStoreChange(e.target.value)}
         className="mb-4"
         style={{ maxWidth: 320 }}
       >
@@ -161,6 +180,9 @@ export default function AdminInventoryPage() {
             )}
           </tbody>
         </Table>
+        <div className="p-3 pt-0">
+          <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
+        </div>
       </div>
     </Container>
   );

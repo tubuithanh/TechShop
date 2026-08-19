@@ -5,7 +5,13 @@
  */
 require('dotenv').config();
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const { generateProducts } = require('./generateProducts');
+const { generateCustomers } = require('./generateCustomers');
+const { generateOrders } = require('./generateOrders');
+const { generateReviews } = require('./generateReviews');
+const { generateWarranties } = require('./generateWarranties');
+const { generatePosts } = require('./generatePosts');
 
 const User = require('../models/User');
 const Admin = require('../models/Admin');
@@ -17,6 +23,9 @@ const StoreInventory = require('../models/StoreInventory');
 const ProductCollection = require('../models/ProductCollection');
 const Voucher = require('../models/Voucher');
 const Post = require('../models/Post');
+const Order = require('../models/Order');
+const Review = require('../models/Review');
+const Warranty = require('../models/Warranty');
 
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ecommerce_multistore_db');
@@ -32,7 +41,10 @@ async function run() {
     StoreInventory.deleteMany({}),
     ProductCollection.deleteMany({}),
     Voucher.deleteMany({}),
-    Post.deleteMany({})
+    Post.deleteMany({}),
+    Order.deleteMany({}),
+    Review.deleteMany({}),
+    Warranty.deleteMany({})
   ]);
 
   // ----- Admins (collection riêng biệt) -----
@@ -68,6 +80,15 @@ async function run() {
     ]
   });
   console.log('[Seed] Đã tạo customer:', customer.email);
+
+  // ----- 1000 khách hàng mẫu -----
+  // insertMany() không chạy middleware pre('save') của User (nơi tự băm mật khẩu), nên băm
+  // sẵn 1 lần rồi dùng chung cho toàn bộ 1000 khách hàng mẫu (đều đăng nhập được bằng "customer123").
+  const sampleCustomerPasswordHash = await bcrypt.hash('customer123', 8);
+  const customerDefs = generateCustomers(1000, sampleCustomerPasswordHash);
+  const sampleCustomers = await User.insertMany(customerDefs);
+  const allCustomers = [customer, ...sampleCustomers];
+  console.log(`[Seed] Đã tạo ${sampleCustomers.length} khách hàng mẫu`);
 
   // ----- Brands (đủ thương hiệu cho mọi danh mục sản phẩm mẫu) -----
   const BRAND_NAMES = [
@@ -165,6 +186,52 @@ async function run() {
   await StoreInventory.insertMany(inventoryDocs);
   console.log(`[Seed] Đã tạo ${inventoryDocs.length} bản ghi tồn kho (${createdProducts.length} sản phẩm × ${stores.length} cửa hàng)`);
 
+  // ----- 1000 đơn hàng mẫu -----
+  const orderDefs = generateOrders(1000, { customers: allCustomers, products: createdProducts, stores });
+  const createdOrders = await Order.insertMany(orderDefs);
+  console.log(`[Seed] Đã tạo ${createdOrders.length} đơn hàng`);
+
+  // ----- 1000 đánh giá sản phẩm mẫu -----
+  const reviewDefs = generateReviews(1000, { customers: allCustomers, products: createdProducts });
+  const createdReviews = await Review.insertMany(reviewDefs);
+  console.log(`[Seed] Đã tạo ${createdReviews.length} đánh giá sản phẩm`);
+
+  // ----- 1000 phiếu bảo hành mẫu (luôn gắn với 1 đơn hàng + sản phẩm có thật trong đơn) -----
+  const warrantyDefs = generateWarranties(1000, { orders: createdOrders, admins: [admin, staff] });
+  const createdWarranties = await Warranty.insertMany(warrantyDefs);
+  console.log(`[Seed] Đã tạo ${createdWarranties.length} phiếu bảo hành`);
+
+  // ----- Đồng bộ soldCount/ratingAverage/ratingCount trên Product theo đúng Order/Review vừa tạo -----
+  // (trước đây 3 trường này là số ngẫu nhiên độc lập, không khớp với dữ liệu đơn hàng/đánh giá thật)
+  const soldCountByProduct = new Map();
+  for (const order of createdOrders) {
+    for (const item of order.items) {
+      const key = String(item.productId);
+      soldCountByProduct.set(key, (soldCountByProduct.get(key) || 0) + item.quantity);
+    }
+  }
+  const ratingStatsByProduct = new Map();
+  for (const review of createdReviews) {
+    if (review.status !== 'visible') continue; // chỉ tính đánh giá đang hiển thị công khai
+    const key = String(review.productId);
+    const stat = ratingStatsByProduct.get(key) || { sum: 0, count: 0 };
+    stat.sum += review.rating;
+    stat.count += 1;
+    ratingStatsByProduct.set(key, stat);
+  }
+  const productStatsBulkOps = createdProducts.map((p) => {
+    const key = String(p._id);
+    const soldCount = soldCountByProduct.get(key) || 0;
+    const stat = ratingStatsByProduct.get(key);
+    const ratingCount = stat ? stat.count : 0;
+    const ratingAverage = stat ? Number((stat.sum / stat.count).toFixed(1)) : 0;
+    return {
+      updateOne: { filter: { _id: p._id }, update: { $set: { soldCount, ratingAverage, ratingCount } } }
+    };
+  });
+  await Product.bulkWrite(productStatsBulkOps);
+  console.log(`[Seed] Đã đồng bộ soldCount/ratingAverage/ratingCount cho ${productStatsBulkOps.length} sản phẩm theo đơn hàng & đánh giá thực tế`);
+
   // ----- Collections (bộ sưu tập sản phẩm) -----
   const featuredProductIds = createdProducts.filter((p) => p.isFeatured).slice(0, 12).map((p) => p._id);
   await ProductCollection.create([
@@ -240,12 +307,22 @@ async function run() {
       isPublished: true
     }
   ]);
-  console.log('[Seed] Đã tạo bài viết mẫu');
+
+  // ----- 1000 bài viết tin tức/cẩm nang mẫu -----
+  const postDefs = generatePosts(1000, {
+    admins: [admin, staff],
+    products: createdProducts,
+    categoryNames: categoryDocs.map((c) => c.name),
+    brandNames: brandDocs.map((b) => b.name)
+  });
+  const createdPosts = await Post.insertMany(postDefs);
+  console.log(`[Seed] Đã tạo ${createdPosts.length + 2} bài viết (2 mẫu cố định + ${createdPosts.length} sinh tự động)`);
 
   console.log('\n===== TÀI KHOẢN DEMO =====');
   console.log('Admin (collection admins):    admin@example.com    / admin123');
   console.log('Staff (collection admins):    staff@example.com    / staff123');
   console.log('Customer (collection users):  customer@example.com / customer123');
+  console.log('1000 khách hàng mẫu:           <email trong DB>     / customer123 (mật khẩu dùng chung)');
   console.log('===========================\n');
 
   await mongoose.disconnect();

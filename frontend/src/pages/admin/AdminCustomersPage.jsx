@@ -1,16 +1,34 @@
 import { useEffect, useState } from 'react';
 import { Badge, Button, Card, Form, Table } from 'react-bootstrap';
 import { userService } from '../../services/userService';
+import { useSettings } from '../../store/SettingsContext';
+import AdminPagination from '../../components/admin/AdminPagination';
 
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState([]);
   const [keyword, setKeyword] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const { settings } = useSettings();
+  const pageSize = settings.productsPerPage || 20;
 
-  const load = () => userService.getAllCustomers({ keyword }).then((res) => setCustomers(res.data));
+  const load = () =>
+    userService.getAllCustomers({ keyword, page, limit: pageSize }).then((res) => {
+      setCustomers(res.data);
+      setTotalPages(res.totalPages || 1);
+      setTotal(res.total || 0);
+    });
 
   useEffect(() => {
     load();
-  }, [keyword]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyword, page, pageSize]);
+
+  const handleKeywordChange = (value) => {
+    setKeyword(value);
+    setPage(1);
+  };
 
   const handleToggleActive = async (id) => {
     await userService.toggleCustomerActive(id);
@@ -23,7 +41,7 @@ export default function AdminCustomersPage() {
       <Form.Control
         placeholder="Tìm theo tên, email, số điện thoại..."
         value={keyword}
-        onChange={(e) => setKeyword(e.target.value)}
+        onChange={(e) => handleKeywordChange(e.target.value)}
         className="mb-4"
         style={{ maxWidth: '24rem' }}
       />
@@ -58,6 +76,9 @@ export default function AdminCustomersPage() {
             ))}
           </tbody>
         </Table>
+        <Card.Body className="pt-0">
+          <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
+        </Card.Body>
       </Card>
     </div>
   );

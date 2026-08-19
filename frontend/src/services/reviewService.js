@@ -1,9 +1,9 @@
 import api from './api';
 
 export const reviewService = {
-  async getAllAdmin(status) {
-    const { data } = await api.get('/reviews/admin/all', { params: status ? { status } : {} });
-    return data.data;
+  async getAllAdmin(params = {}) {
+    const { data } = await api.get('/reviews/admin/all', { params });
+    return data;
   },
   async hide(id) {
     const { data } = await api.put(`/reviews/${id}/hide`);

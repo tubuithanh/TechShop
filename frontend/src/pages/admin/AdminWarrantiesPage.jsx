@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Card, Form, Table } from 'react-bootstrap';
 import api from '../../services/api';
+import { useSettings } from '../../store/SettingsContext';
+import AdminPagination from '../../components/admin/AdminPagination';
 
 const statusOptions = ['received', 'checking', 'repairing', 'waiting_parts', 'done', 'returned'];
 const statusLabel = {
@@ -14,12 +16,23 @@ const statusLabel = {
 
 export default function AdminWarrantiesPage() {
   const [warranties, setWarranties] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const { settings } = useSettings();
+  const pageSize = settings.productsPerPage || 20;
 
-  const loadWarranties = () => api.get('/warranties/admin/all').then((res) => setWarranties(res.data.data));
+  const loadWarranties = () =>
+    api.get('/warranties/admin/all', { params: { page, limit: pageSize } }).then((res) => {
+      setWarranties(res.data.data);
+      setTotalPages(res.data.totalPages || 1);
+      setTotal(res.data.total || 0);
+    });
 
   useEffect(() => {
     loadWarranties();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   const handleChangeStatus = async (id, status) => {
     await api.put(`/warranties/${id}/status`, { status, note: `Cập nhật: ${statusLabel[status]}` });
@@ -69,6 +82,9 @@ export default function AdminWarrantiesPage() {
             ))}
           </tbody>
         </Table>
+        <Card.Body className="pt-0">
+          <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
+        </Card.Body>
       </Card>
     </div>
   );

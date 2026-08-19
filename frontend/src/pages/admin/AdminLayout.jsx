@@ -12,7 +12,8 @@ import {
   Newspaper,
   ChatDots,
   ClockHistory,
-  HouseDoor
+  HouseDoor,
+  Gear
 } from 'react-bootstrap-icons';
 
 const menu = [
@@ -26,7 +27,8 @@ const menu = [
   { path: '/admin/reviews', label: 'Quản lý đánh giá', icon: Star },
   { path: '/admin/articles', label: 'Quản lý tin tức (CMS)', icon: Newspaper },
   { path: '/admin/chat', label: 'Chat với khách hàng', icon: ChatDots },
-  { path: '/admin/audit-logs', label: 'Nhật ký thao tác', icon: ClockHistory }
+  { path: '/admin/audit-logs', label: 'Nhật ký thao tác', icon: ClockHistory },
+  { path: '/admin/settings', label: 'Cấu hình hệ thống', icon: Gear }
 ];
 
 export default function AdminLayout() {

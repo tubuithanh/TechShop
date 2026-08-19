@@ -3,10 +3,12 @@ import { useState } from 'react';
 import { Navbar, Nav, NavDropdown, Container, Form, Button, Badge } from 'react-bootstrap';
 import { useAuth } from '../store/AuthContext';
 import { useCart } from '../store/CartContext';
+import { useSettings } from '../store/SettingsContext';
 
 export default function Header() {
   const { user, logout } = useAuth();
   const { totalItems } = useCart();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const [keyword, setKeyword] = useState('');
 
@@ -18,8 +20,9 @@ export default function Header() {
   return (
     <Navbar bg="primary" variant="dark" sticky="top" className="shadow-sm py-3">
       <Container fluid="xl" className="flex-nowrap gap-3">
-        <Navbar.Brand as={Link} to="/" className="fw-bold fs-4 text-nowrap">
-          TechShop
+        <Navbar.Brand as={Link} to="/" className="fw-bold fs-4 text-nowrap d-flex align-items-center gap-2">
+          {settings.logoUrl && <img src={settings.logoUrl} alt={settings.siteName} height={28} />}
+          {settings.siteName}
         </Navbar.Brand>
 
         <Form className="d-flex flex-grow-1" onSubmit={handleSearch}>

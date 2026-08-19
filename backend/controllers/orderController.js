@@ -4,6 +4,7 @@ const Product = require('../models/Product');
 const StoreInventory = require('../models/StoreInventory');
 const Voucher = require('../models/Voucher');
 const Notification = require('../models/Notification');
+const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
 
 const SHIPPING_FEE_DEFAULT = 30000;
@@ -29,7 +30,14 @@ const createOrder = asyncHandler(async (req, res) => {
   }
 
   const itemsTotal = cart.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-  const shippingFee = deliveryMethod === 'store_pickup' ? 0 : SHIPPING_FEE_DEFAULT;
+
+  // Phí ship & ngưỡng miễn phí ship lấy từ cấu hình hệ thống (Admin > Cấu hình hệ thống),
+  // fallback về giá trị mặc định nếu admin chưa thiết lập.
+  const settings = await Setting.findOne();
+  const shippingFeeConfig = settings?.defaultShippingFee ?? SHIPPING_FEE_DEFAULT;
+  const freeShippingThreshold = settings?.freeShippingThreshold ?? 0;
+  const qualifiesFreeShipping = freeShippingThreshold > 0 && itemsTotal >= freeShippingThreshold;
+  const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
 
   let voucher = null;
   let discountAmount = 0;

@@ -13,9 +13,9 @@ export const postService = {
     const { data } = await api.post(`/posts/${postId}/comments`, { message });
     return data.data;
   },
-  async getAllAdmin() {
-    const { data } = await api.get('/posts/admin/all');
-    return data.data;
+  async getAllAdmin(params = {}) {
+    const { data } = await api.get('/posts/admin/all', { params });
+    return data;
   },
   async create(payload) {
     const { data } = await api.post('/posts', payload);

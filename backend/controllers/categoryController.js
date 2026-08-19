@@ -9,7 +9,7 @@ const getCategories = asyncHandler(async (req, res) => {
 
 const createCategory = asyncHandler(async (req, res) => {
   const { name, image } = req.body;
-  const slug = slugify(name, { lower: true, locale: 'vi' });
+  const slug = slugify(name, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g });
   const category = await Category.create({ name, image, slug });
   res.status(201).json({ data: category });
 });

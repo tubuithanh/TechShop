@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Container, Row, Col, Table, Button, Form, Modal, Badge } from 'react-bootstrap';
 import { postService } from '../../services/postService';
+import { useSettings } from '../../store/SettingsContext';
+import AdminPagination from '../../components/admin/AdminPagination';
 
 const emptyForm = { title: '', shortDescription: '', content: '', category: 'tin_tuc', featuredImage: '', isPublished: true };
 
@@ -9,12 +11,23 @@ export default function AdminArticlesPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const { settings } = useSettings();
+  const pageSize = settings.productsPerPage || 20;
 
-  const load = () => postService.getAllAdmin().then(setPosts);
+  const load = () =>
+    postService.getAllAdmin({ page, limit: pageSize }).then((res) => {
+      setPosts(res.data);
+      setTotalPages(res.totalPages || 1);
+      setTotal(res.total || 0);
+    });
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -170,6 +183,9 @@ export default function AdminArticlesPage() {
             ))}
           </tbody>
         </Table>
+        <div className="p-3 pt-0">
+          <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
+        </div>
       </div>
     </Container>
   );
