@@ -15,6 +15,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Cho phép truy cập qua tunnel (localtunnel/ngrok/cloudflared) khi test các tính năng cần
+    // HTTPS công khai (VD: đăng nhập Zalo) - Vite mặc định chặn Host header lạ để chống DNS rebinding.
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

@@ -5,6 +5,8 @@ const {
   verifyRegisterOtp,
   register,
   login,
+  zaloLoginRedirect,
+  zaloCallback,
   refresh,
   logout,
   getMe,
@@ -16,6 +18,8 @@ router.post('/register/request-otp', requestRegisterOtp);
 router.post('/register/verify-otp', verifyRegisterOtp);
 router.post('/register', register);
 router.post('/login', login);
+router.get('/zalo/login', zaloLoginRedirect);
+router.get('/zalo/callback', zaloCallback);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 router.get('/me', protect, getMe);

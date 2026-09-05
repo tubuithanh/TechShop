@@ -1,11 +1,13 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const Otp = require('../models/Otp');
 const asyncHandler = require('../utils/asyncHandler');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const { sendOtp } = require('../utils/sendOtp');
+const { buildAuthUrl, exchangeCodeForToken, fetchZaloProfile } = require('../utils/zaloAuth');
 
 const OTP_EXPIRES_MINUTES = 5;
 const MAX_OTP_ATTEMPTS = 5;
@@ -138,6 +140,65 @@ const login = asyncHandler(async (req, res) => {
   return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
 });
 
+// ================== ĐĂNG NHẬP BẰNG ZALO (OAuth 2.0 + PKCE) ==================
+
+const zaloLoginRedirect = asyncHandler(async (req, res) => {
+  if (!process.env.ZALO_APP_ID || !process.env.ZALO_REDIRECT_URI) {
+    return res.status(500).json({ message: 'Đăng nhập Zalo chưa được cấu hình (thiếu ZALO_APP_ID/ZALO_REDIRECT_URI)' });
+  }
+  const url = buildAuthUrl({ appId: process.env.ZALO_APP_ID, redirectUri: process.env.ZALO_REDIRECT_URI });
+  res.redirect(url);
+});
+
+const zaloCallback = asyncHandler(async (req, res) => {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const { code, state } = req.query;
+  if (!code || !state) {
+    return res.redirect(`${clientUrl}/login?error=zalo_failed`);
+  }
+
+  try {
+    const tokenData = await exchangeCodeForToken({
+      appId: process.env.ZALO_APP_ID,
+      appSecret: process.env.ZALO_APP_SECRET,
+      code,
+      codeVerifier: state
+    });
+    const profile = await fetchZaloProfile(tokenData.access_token);
+
+    let user = await User.findOne({ zaloId: profile.id });
+    if (!user) {
+      // Zalo Social API mặc định không trả về email, nên tạo email "giả" duy nhất để thỏa schema
+      // (không dùng để liên hệ/gửi mail) - tài khoản này chỉ đăng nhập lại được qua Zalo.
+      user = await User.create({
+        displayName: profile.name || 'Người dùng Zalo',
+        email: `zalo${profile.id}@zalo.techshop.local`,
+        avatar: profile.picture?.data?.url || '',
+        zaloId: profile.id,
+        password: crypto.randomBytes(24).toString('hex'),
+        termsAcceptedAt: new Date()
+      });
+    }
+    if (!user.isActive) {
+      return res.redirect(`${clientUrl}/login?error=account_locked`);
+    }
+
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
+    res.cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+
+    // Không thể trả JSON trực tiếp vì đây là điều hướng cả trang (Zalo redirect trình duyệt, không
+    // phải gọi API bằng axios) - dùng cookie refreshToken vừa set để trang chủ tự khôi phục phiên
+    // đăng nhập qua flow "/auth/refresh" đã có sẵn khi App.jsx load lại.
+    res.redirect(clientUrl);
+  } catch (err) {
+    console.error('Lỗi đăng nhập Zalo:', err.message);
+    res.redirect(`${clientUrl}/login?error=zalo_failed`);
+  }
+});
+
 const refresh = asyncHandler(async (req, res) => {
   const token = req.cookies?.refreshToken;
   if (!token) return res.status(401).json({ message: 'Không tìm thấy refresh token' });
@@ -191,6 +252,8 @@ module.exports = {
   verifyRegisterOtp,
   register,
   login,
+  zaloLoginRedirect,
+  zaloCallback,
   refresh,
   logout,
   getMe,

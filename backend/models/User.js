@@ -27,6 +27,8 @@ const userSchema = new mongoose.Schema(
     gender: { type: String, default: '' },
     phoneNumber: { type: String, default: '' },
     dateOfBirth: { type: String, default: '' },
+    // ID tài khoản Zalo khi đăng nhập qua Zalo OAuth - sparse để không xung đột với các user đăng ký bằng email thường
+    zaloId: { type: String, unique: true, sparse: true },
     addresses: [addressSchema],
     favoriteProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
     savedPostIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],

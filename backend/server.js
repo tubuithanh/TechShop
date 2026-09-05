@@ -1,5 +1,8 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 
@@ -10,10 +13,25 @@ const User = require('./models/User');
 const Admin = require('./models/Admin');
 
 const PORT = process.env.PORT || 5000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
 
 connectDB();
 
 const server = http.createServer(app);
+
+// Server HTTPS song song (dùng chung app Express) chỉ để phục vụ callback đăng nhập Zalo -
+// Zalo bắt buộc Home URL/Callback URL phải là https, kể cả khi test trên localhost. Chứng chỉ
+// tự ký (self-signed) trong backend/certs/ nên KHÔNG commit lên git (đã thêm vào .gitignore).
+// Không ảnh hưởng tới luồng http://localhost:5000 hiện có của app (frontend vẫn gọi qua đó).
+const certKeyPath = path.join(__dirname, 'certs', 'key.pem');
+const certPath = path.join(__dirname, 'certs', 'cert.pem');
+if (fs.existsSync(certKeyPath) && fs.existsSync(certPath)) {
+  https
+    .createServer({ key: fs.readFileSync(certKeyPath), cert: fs.readFileSync(certPath) }, app)
+    .listen(HTTPS_PORT, () => {
+      console.log(`[Server] HTTPS (dùng cho callback Zalo) chạy tại https://localhost:${HTTPS_PORT}`);
+    });
+}
 
 // ----- Socket.io: real-time (theo dõi đơn hàng, thông báo, chat) -----
 const io = new Server(server, {
