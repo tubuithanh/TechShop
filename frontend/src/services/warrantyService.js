@@ -12,5 +12,9 @@ export const warrantyService = {
   async track(code) {
     const { data } = await api.get(`/warranties/track/${code}`);
     return data.data;
+  },
+  async updateWarranty(id, payload) {
+    const { data } = await api.put(`/warranties/${id}`, payload);
+    return data.data;
   }
 };

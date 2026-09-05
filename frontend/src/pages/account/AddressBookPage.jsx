@@ -1,15 +1,27 @@
 import { useState } from 'react';
-import { Card, Button, Form, Stack } from 'react-bootstrap';
+import { Card, Button, Form, Stack, Badge, ButtonGroup } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
 import { userService } from '../../services/userService';
 
-const emptyForm = { addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', orderNote: '' };
+const LABEL_PRESETS = ['Nhà riêng', 'Công ty'];
+
+const emptyForm = {
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  pincode: '',
+  orderNote: '',
+  label: 'Nhà riêng',
+  isDefault: false
+};
 
 export default function AddressBookPage() {
   const { user, setUser } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [savingDefaultId, setSavingDefaultId] = useState(null);
 
   const refreshUser = (addresses) => {
     setUser({ ...user, addresses });
@@ -30,7 +42,7 @@ export default function AddressBookPage() {
   };
 
   const handleEdit = (addr) => {
-    setForm(addr);
+    setForm({ ...emptyForm, ...addr });
     setEditingId(addr._id);
     setShowForm(true);
   };
@@ -40,6 +52,18 @@ export default function AddressBookPage() {
     const addresses = await userService.deleteAddress(id);
     refreshUser(addresses);
   };
+
+  const handleSetDefault = async (id) => {
+    setSavingDefaultId(id);
+    try {
+      const addresses = await userService.setDefaultAddress(id);
+      refreshUser(addresses);
+    } finally {
+      setSavingDefaultId(null);
+    }
+  };
+
+  const editingIsCurrentDefault = editingId && form.isDefault;
 
   return (
     <Card>
@@ -90,6 +114,46 @@ export default function AddressBookPage() {
               className="mb-2"
               size="sm"
             />
+
+            <Form.Group className="mb-2">
+              <Form.Label className="small fw-medium mb-1">Loại địa chỉ</Form.Label>
+              <div className="d-flex align-items-center gap-2">
+                <ButtonGroup size="sm">
+                  {LABEL_PRESETS.map((preset) => (
+                    <Button
+                      key={preset}
+                      variant={form.label === preset ? 'dark' : 'outline-secondary'}
+                      onClick={() => setForm({ ...form, label: preset })}
+                    >
+                      {preset}
+                    </Button>
+                  ))}
+                </ButtonGroup>
+                <Form.Control
+                  size="sm"
+                  placeholder="Hoặc tự đặt tên (VD: Nhà bố mẹ, Kho hàng...)"
+                  value={LABEL_PRESETS.includes(form.label) ? '' : form.label}
+                  onChange={(e) => setForm({ ...form, label: e.target.value })}
+                />
+              </div>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Check
+                type="checkbox"
+                id="isDefaultAddress"
+                label="Đặt làm địa chỉ mặc định"
+                checked={form.isDefault}
+                disabled={editingIsCurrentDefault}
+                onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+              />
+              {editingIsCurrentDefault && (
+                <Form.Text className="text-muted">
+                  Đây đang là địa chỉ mặc định. Để bỏ, hãy đặt một địa chỉ khác làm mặc định.
+                </Form.Text>
+              )}
+            </Form.Group>
+
             <Button type="submit" variant="dark" size="sm">
               {editingId ? 'Cập nhật' : 'Lưu địa chỉ'}
             </Button>
@@ -98,9 +162,13 @@ export default function AddressBookPage() {
 
         <Stack gap={3}>
           {(user?.addresses || []).map((addr) => (
-            <Card key={addr._id} body className="small">
+            <Card key={addr._id} body className={`small ${addr.isDefault ? 'border-dark' : ''}`}>
               <div className="d-flex justify-content-between align-items-start">
                 <div>
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <Badge bg="secondary">{addr.label || 'Nhà riêng'}</Badge>
+                    {addr.isDefault && <Badge bg="dark">Mặc định</Badge>}
+                  </div>
                   <div>{addr.addressLine1}</div>
                   <div className="text-muted">
                     {addr.addressLine2}, {addr.city}
@@ -111,7 +179,18 @@ export default function AddressBookPage() {
                     </div>
                   )}
                 </div>
-                <div className="text-nowrap">
+                <div className="text-nowrap text-end">
+                  {!addr.isDefault && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="p-0 me-3"
+                      disabled={savingDefaultId === addr._id}
+                      onClick={() => handleSetDefault(addr._id)}
+                    >
+                      {savingDefaultId === addr._id ? 'Đang đặt...' : 'Đặt làm mặc định'}
+                    </Button>
+                  )}
                   <Button variant="link" size="sm" className="p-0 me-3" onClick={() => handleEdit(addr)}>
                     Sửa
                   </Button>

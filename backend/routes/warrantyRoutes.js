@@ -6,7 +6,8 @@ const {
   trackWarranty,
   submitWarrantyFeedback,
   getAllWarranties,
-  updateWarrantyStatus
+  updateWarrantyStatus,
+  updateWarranty
 } = require('../controllers/warrantyController');
 const { protect, authorize } = require('../middlewares/authMiddleware');
 
@@ -18,5 +19,6 @@ router.put('/:id/feedback', submitWarrantyFeedback);
 
 router.get('/admin/all', authorize('admin', 'staff'), getAllWarranties);
 router.put('/:id/status', authorize('admin', 'staff'), updateWarrantyStatus);
+router.put('/:id', authorize('admin', 'staff'), updateWarranty);
 
 module.exports = router;

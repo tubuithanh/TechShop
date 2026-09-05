@@ -8,6 +8,19 @@ const warrantySchema = new mongoose.Schema(
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     productName: String,
     issueDescription: { type: String, required: true },
+    returnReason: {
+      type: String,
+      enum: [
+        'loi_nha_san_xuat',
+        'hu_hong_van_chuyen',
+        'khong_dung_mo_ta',
+        'giao_nham_san_pham',
+        'thieu_phu_kien',
+        'doi_y',
+        'khac'
+      ],
+      default: 'loi_nha_san_xuat'
+    },
     images: [String],
     method: { type: String, enum: ['bring_to_store', 'pickup_at_home', 'send_by_post'], default: 'bring_to_store' },
     status: {

@@ -8,8 +8,14 @@ function generateTicketCode() {
   return `BH${Date.now().toString().slice(-6)}${rand}`;
 }
 
+const MAX_WARRANTY_IMAGES = 10;
+
 const createWarrantyRequest = asyncHandler(async (req, res) => {
-  const { orderId, productId, issueDescription, images, method } = req.body;
+  const { orderId, productId, issueDescription, returnReason, images, method } = req.body;
+
+  if (images && images.length > MAX_WARRANTY_IMAGES) {
+    return res.status(400).json({ message: `Chỉ được đính kèm tối đa ${MAX_WARRANTY_IMAGES} ảnh` });
+  }
 
   const order = await Order.findOne({ _id: orderId, userId: req.account._id, status: 'delivered' });
   if (!order) {
@@ -27,6 +33,7 @@ const createWarrantyRequest = asyncHandler(async (req, res) => {
     productId,
     productName: item.name,
     issueDescription,
+    returnReason,
     images,
     method: method || 'bring_to_store',
     statusHistory: [{ status: 'received', note: 'Tiếp nhận yêu cầu bảo hành', changedBy: req.account._id }]
@@ -64,6 +71,7 @@ const getAllWarranties = asyncHandler(async (req, res) => {
   const warranties = await Warranty.find(filter)
     .populate('userId', 'displayName phoneNumber email')
     .populate('productId', 'title')
+    .populate('statusHistory.changedBy', 'name')
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(Number(limit));
@@ -96,11 +104,53 @@ const updateWarrantyStatus = asyncHandler(async (req, res) => {
   res.json({ data: warranty });
 });
 
+// @route PUT /api/warranties/:id - chỉnh sửa toàn diện phiếu bảo hành (chỉ admin/staff):
+// mô tả lỗi, lý do trả hàng, trạng thái, ghi chú xử lý, chi phí sửa chữa - dùng cho modal
+// "Sửa" ở trang quản trị, khác với /:id/status chỉ đổi nhanh trạng thái ngay trong bảng.
+const updateWarranty = asyncHandler(async (req, res) => {
+  const { issueDescription, returnReason, status, note, cost, assignedTo, images } = req.body;
+  const warranty = await Warranty.findById(req.params.id);
+  if (!warranty) return res.status(404).json({ message: 'Không tìm thấy phiếu bảo hành' });
+
+  if (images !== undefined) {
+    if (images.length > MAX_WARRANTY_IMAGES) {
+      return res.status(400).json({ message: `Chỉ được đính kèm tối đa ${MAX_WARRANTY_IMAGES} ảnh` });
+    }
+    warranty.images = images;
+  }
+  if (issueDescription !== undefined) warranty.issueDescription = issueDescription;
+  if (returnReason !== undefined) warranty.returnReason = returnReason;
+  if (cost !== undefined) warranty.cost = cost;
+  if (assignedTo !== undefined) warranty.assignedTo = assignedTo || null;
+
+  const statusChanged = status !== undefined && status !== warranty.status;
+  if (statusChanged) warranty.status = status;
+  if (statusChanged || (note && note.trim())) {
+    warranty.statusHistory.push({ status: warranty.status, note, changedBy: req.account._id });
+  }
+  await warranty.save();
+
+  if (statusChanged) {
+    await Notification.create({
+      userId: warranty.userId,
+      type: 'warranty',
+      title: 'Cập nhật bảo hành',
+      message: `Phiếu bảo hành ${warranty.ticketCode} đã chuyển sang trạng thái "${status}"`,
+      link: `/warranties/${warranty._id}`
+    });
+    const io = req.app.get('io');
+    if (io) io.to(`user_${warranty.userId}`).emit('warranty:statusUpdated', { warrantyId: warranty._id, status });
+  }
+
+  res.json({ data: warranty });
+});
+
 module.exports = {
   createWarrantyRequest,
   getMyWarranties,
   trackWarranty,
   submitWarrantyFeedback,
   getAllWarranties,
-  updateWarrantyStatus
+  updateWarrantyStatus,
+  updateWarranty
 };

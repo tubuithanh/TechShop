@@ -36,9 +36,22 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.json({ user: user.toSafeObject() });
 });
 
+// Đảm bảo bất biến: luôn tối đa 1 địa chỉ isDefault=true trong danh sách.
+function clearOtherDefaults(user, keepId) {
+  user.addresses.forEach((a) => {
+    if (a._id.toString() !== String(keepId)) a.isDefault = false;
+  });
+}
+
 const addAddress = asyncHandler(async (req, res) => {
   const user = await User.findById(req.account._id);
-  user.addresses.push(req.body);
+  // Địa chỉ đầu tiên của khách luôn tự động là mặc định, để checkout luôn có địa chỉ để chọn sẵn.
+  const shouldBeDefault = req.body.isDefault === true || user.addresses.length === 0;
+  user.addresses.push({ ...req.body, isDefault: shouldBeDefault });
+  if (shouldBeDefault) {
+    const newAddress = user.addresses[user.addresses.length - 1];
+    clearOtherDefaults(user, newAddress._id);
+  }
   await user.save();
   res.status(201).json({ data: user.addresses });
 });
@@ -48,6 +61,17 @@ const updateAddress = asyncHandler(async (req, res) => {
   const address = user.addresses.id(req.params.addressId);
   if (!address) return res.status(404).json({ message: 'Không tìm thấy địa chỉ' });
   Object.assign(address, req.body);
+  if (req.body.isDefault === true) clearOtherDefaults(user, address._id);
+  await user.save();
+  res.json({ data: user.addresses });
+});
+
+const setDefaultAddress = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.account._id);
+  const address = user.addresses.id(req.params.addressId);
+  if (!address) return res.status(404).json({ message: 'Không tìm thấy địa chỉ' });
+  address.isDefault = true;
+  clearOtherDefaults(user, address._id);
   await user.save();
   res.json({ data: user.addresses });
 });
@@ -56,7 +80,10 @@ const deleteAddress = asyncHandler(async (req, res) => {
   const user = await User.findById(req.account._id);
   const address = user.addresses.id(req.params.addressId);
   if (!address) return res.status(404).json({ message: 'Không tìm thấy địa chỉ' });
+  const wasDefault = address.isDefault;
   address.deleteOne();
+  // Nếu vừa xóa địa chỉ mặc định mà vẫn còn địa chỉ khác, tự động thăng địa chỉ đầu tiên còn lại lên làm mặc định
+  if (wasDefault && user.addresses.length > 0) user.addresses[0].isDefault = true;
   await user.save();
   res.json({ data: user.addresses });
 });
@@ -96,6 +123,7 @@ module.exports = {
   updateProfile,
   addAddress,
   updateAddress,
+  setDefaultAddress,
   deleteAddress,
   getAllCustomers,
   toggleCustomerActive

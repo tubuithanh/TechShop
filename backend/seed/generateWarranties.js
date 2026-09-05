@@ -11,6 +11,17 @@ const ISSUE_TEMPLATES = [
   'Kết nối Bluetooth/Wifi chập chờn, hay bị rớt.'
 ];
 const METHODS = ['bring_to_store', 'pickup_at_home', 'send_by_post'];
+// 'loi_nha_san_xuat' lặp lại để tăng trọng số vì đây là lý do phổ biến nhất trong thực tế
+const RETURN_REASONS = [
+  'loi_nha_san_xuat',
+  'loi_nha_san_xuat',
+  'hu_hong_van_chuyen',
+  'khong_dung_mo_ta',
+  'giao_nham_san_pham',
+  'thieu_phu_kien',
+  'doi_y',
+  'khac'
+];
 // Thiên về 'done' vì phần lớn là dữ liệu bảo hành lịch sử đã xử lý xong
 const STATUS_WEIGHTED = ['done', 'done', 'done', 'done', 'repairing', 'checking', 'received', 'waiting_parts', 'returned'];
 const FEEDBACKS = [
@@ -36,6 +47,19 @@ function ticketCode(index) {
   return `BH${String(index).padStart(6, '0')}`;
 }
 
+// Ảnh minh chứng lỗi tự sinh dạng SVG nhúng trực tiếp (data URI) - nhất quán với cách làm ảnh
+// sản phẩm/bài viết, không phụ thuộc dịch vụ ảnh bên thứ ba nào.
+function makeEvidenceImage(index) {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 200 200">` +
+    `<rect width="200" height="200" fill="#374151"/>` +
+    `<rect x="60" y="70" width="80" height="60" rx="6" fill="#6b7280"/>` +
+    `<circle cx="100" cy="100" r="18" fill="#9ca3af"/>` +
+    `<text x="100" y="150" text-anchor="middle" fill="#d1d5db" font-family="Arial, Helvetica, sans-serif" font-size="11">Ảnh minh chứng ${index}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 /**
  * Sinh danh sách phiếu bảo hành mẫu, luôn gắn với 1 đơn hàng + 1 sản phẩm CÓ THẬT trong đơn đó
  * để đảm bảo tham chiếu hợp lệ (orderId/productId/userId khớp với đơn hàng gốc).
@@ -57,7 +81,8 @@ function generateWarranties(count, { orders, admins }) {
       productId: item.productId,
       productName: item.name,
       issueDescription: pick(ISSUE_TEMPLATES),
-      images: [],
+      returnReason: pick(RETURN_REASONS),
+      images: Math.random() < 0.4 ? Array.from({ length: randInt(1, 3) }, (_, idx) => makeEvidenceImage(idx + 1)) : [],
       method: pick(METHODS),
       status,
       statusHistory: [{ status, note: 'Khởi tạo dữ liệu mẫu', changedAt: createdAt }],

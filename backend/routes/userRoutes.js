@@ -6,6 +6,7 @@ const {
   updateProfile,
   addAddress,
   updateAddress,
+  setDefaultAddress,
   deleteAddress,
   getAllCustomers,
   toggleCustomerActive
@@ -18,6 +19,7 @@ router.post('/wishlist/:productId', toggleWishlist);
 router.put('/profile', updateProfile);
 router.post('/addresses', addAddress);
 router.put('/addresses/:addressId', updateAddress);
+router.put('/addresses/:addressId/default', setDefaultAddress);
 router.delete('/addresses/:addressId', deleteAddress);
 
 // Admin - quản lý khách hàng (mục 1.2.3)

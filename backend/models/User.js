@@ -8,7 +8,10 @@ const addressSchema = new mongoose.Schema(
     city: { type: String, default: '' },
     state: { type: String, default: '' },
     pincode: { type: String, default: '' },
-    orderNote: { type: String, default: '' }
+    orderNote: { type: String, default: '' },
+    // Nhãn phân loại địa chỉ: cho phép chọn nhanh "Nhà riêng"/"Công ty" hoặc tự nhập nhãn bất kỳ
+    label: { type: String, default: 'Nhà riêng' },
+    isDefault: { type: Boolean, default: false }
   },
   { _id: true }
 );

@@ -247,133 +247,85 @@ const CATEGORY_DEFS = [
   }
 ];
 
-// LƯU Ý: via.placeholder.com đã ngừng hoạt động, và placehold.co (dịch vụ thay thế) cũng không
-// tải được ổn định ở một số môi trường mạng/trình duyệt (bị chặn CDN, ad-block chặn query string...).
-// Để ảnh LUÔN hiển thị được mà không phụ thuộc mạng/dịch vụ bên thứ ba nào, ta tự sinh ảnh dạng
-// SVG nhúng thẳng vào chuỗi "data:" (data URI) — trình duyệt vẽ ảnh này hoàn toàn cục bộ, không
-// cần tải từ Internet.
+// Ảnh sản phẩm dùng ẢNH THẬT (ảnh chụp thiết bị công nghệ thật, không phải minh họa vector) lấy từ
+// Unsplash - kho ảnh miễn phí bản quyền, license cho phép dùng thương mại không cần ghi nguồn. Vì
+// không có kho ảnh chính hãng theo từng model cụ thể offline sẵn trong dự án, mỗi danh mục dùng chung
+// một bộ ảnh chụp thiết bị thật tiêu biểu cho danh mục đó (điện thoại/laptop/tai nghe...), xoay vòng
+// theo từng sản phẩm để tránh trùng lặp thứ tự. Mọi photo ID dưới đây ĐÃ được xác minh tải thành công
+// (HTTP 200) trực tiếp từ CDN images.unsplash.com trước khi đưa vào — tránh lặp lại sự cố ảnh chết đã
+// gặp trước đây với via.placeholder.com/placehold.co. Lưu ý: khác với SVG data-URI trước đó, ảnh này
+// CẦN kết nối mạng để tải (đánh đổi đã được xác nhận với người dùng khi chuyển sang dùng ảnh thật).
 const PRODUCT_IMAGE_COUNT = 10;
 
-function escapeXml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function wrapLines(text, maxCharsPerLine = 16, maxLines = 3) {
-  const words = text.split(' ');
-  const lines = [];
-  let current = '';
-  for (const word of words) {
-    const next = (current + ' ' + word).trim();
-    if (next.length > maxCharsPerLine && current) {
-      lines.push(current);
-      current = word;
-      if (lines.length === maxLines - 1) break;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.slice(0, maxLines);
-}
-
-// Bảng màu (nền gradient nhạt + màu hình khối) theo từng danh mục, dùng để vẽ minh họa sản phẩm
-const CATEGORY_PALETTE = {
-  'dien-thoai': { from: '#dbeafe', to: '#eff6ff', shape: '#2563eb', light: '#60a5fa' },
-  laptop: { from: '#ede9fe', to: '#f5f3ff', shape: '#7c3aed', light: '#a78bfa' },
-  'may-tinh-bang': { from: '#d1fae5', to: '#ecfdf5', shape: '#059669', light: '#34d399' },
-  'dong-ho-thong-minh': { from: '#fef3c7', to: '#fffbeb', shape: '#d97706', light: '#fbbf24' },
-  'tai-nghe-loa': { from: '#fce7f3', to: '#fdf2f8', shape: '#db2777', light: '#f472b6' },
-  'man-hinh': { from: '#cffafe', to: '#ecfeff', shape: '#0891b2', light: '#22d3ee' },
-  'phu-kien': { from: '#e5e7eb', to: '#f9fafb', shape: '#4b5563', light: '#9ca3af' }
+const CATEGORY_PHOTO_IDS = {
+  'dien-thoai': [
+    '1592890288564-76628a30a657', '1511707171634-5f897ff02aa9', '1598327105666-5b89351aff97',
+    '1634403665481-74948d815f03', '1523206489230-c012c64b2b48', '1580910051074-3eb694886505',
+    '1423784346385-c1d4dac9893a', '1573152143286-0c422b4d2175', '1512428559087-560fa5ceab42',
+    '1488509082528-cefbba5ad692', '1522125670776-3c7abb882bc2', '1572016047668-5b5e909e1605',
+    '1585060544812-6b45742d762f', '1512941937669-90a1b58e7e9c'
+  ],
+  laptop: [
+    '1773332598414-44a45e364d85', '1541807084-5c52b6b3adef', '1496181133206-80ce9b88a853',
+    '1525547719571-a2d4ac8945e2', '1486312338219-ce68d2c6f44d', '1649972904349-6e44c42644a7',
+    '1499914485622-a88fac536970', '1484788984921-03950022c9ef', '1531297484001-80022131f5a1',
+    '1611186871348-b1ce696e52c9', '1779896412244-aed1d2f8bed2', '1515378791036-0648a3ef77b2',
+    '1515378960530-7c0da6231fb1', '1508780709619-79562169bc64', '1522199755839-a2bacb67c546'
+  ],
+  'may-tinh-bang': [
+    '1561154464-82e9adf32764', '1623126908029-58cb08a2b272', '1542751110-97427bbecf20',
+    '1625864667534-aa5208d45a87', '1557825835-70d97c4aa567', '1521633286323-05b17f47cb74',
+    '1604399852419-f67ee7d5f2ef', '1585790050230-5dd28404ccb9', '1612367990403-73ef3e67bc4f',
+    '1527698266440-12104e498b76', '1587033411391-5d9e51cce126', '1568918460973-fe7f54f82482',
+    '1637152736123-8a027366b07a', '1589739900266-43b2843f4c12', '1611495464137-6bbcccfa996e'
+  ],
+  'dong-ho-thong-minh': [
+    '1579586337278-3befd40fd17a', '1660844817855-3ecc7ef21f12', '1508685096489-7aacd43bd3b1',
+    '1546868871-7041f2a55e12', '1637160151663-a410315e4e75', '1624096104992-9b4fa3a279dd',
+    '1434493789847-2f02dc6ca35d', '1551816230-ef5deaed4a26', '1617043983671-adaadcaa2460',
+    '1609096458733-95b38583ac4e', '1617625802912-cde586faf331', '1632794716789-42d9995fb5b6',
+    '1461141346587-763ab02bced9', '1517420879524-86d64ac2f339', '1544117519-31a4b719223d'
+  ],
+  'tai-nghe-loa': [
+    '1505740420928-5e560c06d30e', '1618366712010-f4ae9c647dcb', '1545127398-14699f92334b',
+    '1546435770-a3e426bf472b', '1613040809024-b4ef7ba99bc3', '1590658268037-6bf12165a8df',
+    '1641048930621-ab5d225ae5b0', '1628202926206-c63a34b1618f', '1585298723682-7115561c51b7',
+    '1491927570842-0261e477d937', '1606741965326-cb990ae01bb2', '1487215078519-e21cc028cb29',
+    '1606220945770-b5b6c2c55bf1', '1612858249937-1cc0852093dd', '1567928513899-997d98489fbd'
+  ],
+  'man-hinh': [
+    '1484788984921-03950022c9ef', '1527443224154-c4a3942d3acf', '1551739440-5dd934d3a94a',
+    '1585792180666-f7347c490ee2', '1547658718-1cdaa0852790', '1494173853739-c21f58b16055',
+    '1611648694931-1aeda329f9da', '1587831990711-23ca6441447b', '1527443195645-1133f7f28990',
+    '1666771410140-0573b232426e', '1517059224940-d4af9eec41b7', '1560131914-2e469a0e8607',
+    '1570485071395-29b575ea3b4e', '1534972195531-d756b9bfa9f2', '1579765754037-5bfef757251a'
+  ],
+  'phu-kien': [
+    '1504610926078-a1611febcad3', '1566793474285-2decf0fc182a', '1624823183493-ed5832f48f18',
+    '1677145503731-87bfe49e5c67', '1515940175183-6798529cb860', '1596207891316-23851be3cc20',
+    '1498049794561-7780e7231661', '1491933382434-500287f9b54b', '1678852524356-08188528aed9',
+    '1693279504914-d08266ecbe66', '1468495244123-6c6c332eeece', '1428223501723-d821c5d00ca3',
+    '1593259037198-c720f4420d7f', '1647334864689-e140efbfd51f'
+  ]
 };
 
-// Hình khối SVG mô phỏng dáng thiết bị theo từng danh mục (hệ tọa độ 0-200), vẽ đơn giản
-// theo phong cách flat-icon để không phụ thuộc ảnh chụp thật nhưng vẫn gợi hình rõ ràng.
-function categoryIconShape(categorySlug, color, light) {
-  switch (categorySlug) {
-    case 'dien-thoai':
-      return (
-        `<rect x="72" y="30" width="56" height="110" rx="12" fill="${color}"/>` +
-        `<rect x="79" y="42" width="42" height="80" rx="3" fill="#ffffff" opacity="0.9"/>` +
-        `<circle cx="100" cy="132" r="3.5" fill="#ffffff" opacity="0.9"/>`
-      );
-    case 'laptop':
-      return (
-        `<rect x="55" y="42" width="90" height="58" rx="4" fill="${color}"/>` +
-        `<rect x="61" y="48" width="78" height="46" rx="2" fill="#ffffff" opacity="0.9"/>` +
-        `<path d="M40 106 h120 l-8 14 a6 6 0 0 1 -5 3 h-94 a6 6 0 0 1 -5 -3 z" fill="${light}"/>`
-      );
-    case 'may-tinh-bang':
-      return (
-        `<rect x="58" y="30" width="84" height="106" rx="10" fill="${color}"/>` +
-        `<rect x="65" y="40" width="70" height="82" rx="3" fill="#ffffff" opacity="0.9"/>` +
-        `<circle cx="100" cy="129" r="3" fill="#ffffff" opacity="0.9"/>`
-      );
-    case 'dong-ho-thong-minh':
-      return (
-        `<rect x="88" y="14" width="24" height="18" rx="4" fill="${light}"/>` +
-        `<rect x="88" y="128" width="24" height="18" rx="4" fill="${light}"/>` +
-        `<rect x="66" y="42" width="68" height="76" rx="16" fill="${color}"/>` +
-        `<circle cx="100" cy="80" r="24" fill="#ffffff" opacity="0.9"/>`
-      );
-    case 'tai-nghe-loa':
-      return (
-        `<path d="M50 88 a50 50 0 0 1 100 0" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>` +
-        `<rect x="38" y="80" width="26" height="42" rx="13" fill="${color}"/>` +
-        `<rect x="136" y="80" width="26" height="42" rx="13" fill="${color}"/>` +
-        `<circle cx="51" cy="101" r="7" fill="${light}"/>` +
-        `<circle cx="149" cy="101" r="7" fill="${light}"/>`
-      );
-    case 'man-hinh':
-      return (
-        `<rect x="40" y="32" width="120" height="76" rx="6" fill="${color}"/>` +
-        `<rect x="48" y="40" width="104" height="60" rx="2" fill="#ffffff" opacity="0.9"/>` +
-        `<rect x="90" y="108" width="20" height="18" fill="${light}"/>` +
-        `<rect x="65" y="126" width="70" height="8" rx="4" fill="${light}"/>`
-      );
-    case 'phu-kien':
-    default:
-      return (
-        `<rect x="70" y="50" width="60" height="72" rx="10" fill="${color}"/>` +
-        `<rect x="86" y="28" width="10" height="26" rx="4" fill="${light}"/>` +
-        `<rect x="104" y="28" width="10" height="26" rx="4" fill="${light}"/>` +
-        `<path d="M100 122 q0 26 0 34" stroke="${light}" stroke-width="8" fill="none" stroke-linecap="round"/>`
-      );
-  }
+function unsplashUrl(photoId, size = 900) {
+  return `https://images.unsplash.com/photo-${photoId}?auto=format&fit=crop&w=${size}&h=${size}&q=75`;
 }
 
-function makeProductIllustration(text, categorySlug, index, size = 800) {
-  const palette = CATEGORY_PALETTE[categorySlug] || CATEGORY_PALETTE['phu-kien'];
-  const shape = categoryIconShape(categorySlug, palette.shape, palette.light);
-  const angle = ((index % 5) - 2) * 6; // xoay nhẹ -12°..12° để 10 ảnh trông có góc chụp khác nhau
-  const lines = wrapLines(text, 20, 2);
-  const captionLines = lines
-    .map((line, i) => `<tspan x="100" dy="${i === 0 ? 0 : 11}">${escapeXml(line)}</tspan>`)
-    .join('');
-  const gradId = `g${categorySlug.replace(/[^a-z]/g, '')}${index}`;
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 200 200">` +
-    `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0%" stop-color="${palette.from}"/><stop offset="100%" stop-color="${palette.to}"/>` +
-    `</linearGradient></defs>` +
-    `<rect width="200" height="200" fill="url(#${gradId})"/>` +
-    `<circle cx="100" cy="80" r="58" fill="#ffffff" opacity="0.5"/>` +
-    `<g transform="rotate(${angle} 100 80)">${shape}</g>` +
-    `<text x="100" y="176" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="600" fill="#374151">${captionLines}</text>` +
-    `</svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+// Băm chuỗi đơn giản (không cần bảo mật) để chọn điểm bắt đầu xoay vòng ảnh khác nhau cho từng
+// sản phẩm trong cùng 1 danh mục, tránh mọi sản phẩm hiển thị đúng 1 thứ tự ảnh giống hệt nhau.
+function hashString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h;
 }
 
-function buildImages(title, categorySlug) {
-  const urls = [];
-  for (let i = 1; i <= PRODUCT_IMAGE_COUNT; i++) {
-    urls.push(makeProductIllustration(title, categorySlug, i));
-  }
+function buildImages({ title, categorySlug }) {
+  const pool = CATEGORY_PHOTO_IDS[categorySlug] || CATEGORY_PHOTO_IDS['phu-kien'];
+  const count = Math.min(PRODUCT_IMAGE_COUNT, pool.length);
+  const start = hashString(`${categorySlug}:${title}`) % pool.length;
+  const urls = Array.from({ length: count }, (_, i) => unsplashUrl(pool[(start + i) % pool.length]));
   return { featuredImage: urls[0], imageURLs: urls };
 }
 
@@ -413,7 +365,7 @@ function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug
       const shortDescription = pick(SHORT_DESC_TEMPLATES[catDef.slug]);
       const categoryLabel = categoryLabelBySlug[catDef.slug];
       const description = buildDescription({ title, brand, categoryLabel, shortDescription, specs });
-      const { featuredImage, imageURLs } = buildImages(title, catDef.slug);
+      const { featuredImage, imageURLs } = buildImages({ title, categorySlug: catDef.slug, brand, variant, specs });
 
       const [minPrice, maxPrice] = catDef.priceRange;
       const price = roundPrice(randInt(minPrice, maxPrice));
@@ -450,4 +402,4 @@ function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug
   return products;
 }
 
-module.exports = { generateProducts, CATEGORY_DEFS };
+module.exports = { generateProducts, CATEGORY_DEFS, buildImages };

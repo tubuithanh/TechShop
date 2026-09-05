@@ -19,7 +19,7 @@ export default function CheckoutPage() {
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState('');
 
-  const defaultAddress = user?.addresses?.[0];
+  const defaultAddress = user?.addresses?.find((a) => a.isDefault) || user?.addresses?.[0];
   const [address, setAddress] = useState({
     fullName: user?.displayName || '',
     phone: user?.phoneNumber || '',
