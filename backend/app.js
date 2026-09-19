@@ -64,12 +64,19 @@ app.get('/api/health', (req, res) => {
 // các tunnel công khai (Cloudflare quick tunnel, localtunnel...) có domain ngẫu nhiên dài, vì Zalo
 // giới hạn ô "Tiền tố URL" tối đa 75 ký tự nên URL đầy đủ .../api/auth/zalo/callback/ dễ bị vượt quá.
 app.get('/api/zc', zaloCallback);
+
+const ZALO_VERIFIER_HTML =
+  '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
+  '<meta property="zalo-platform-site-verification" content="NDMO0fkd2pPgrvawuDmlO3Bug3VUZd9XD3Kt" />\n' +
+  '</head>\n<body>\nThere Is No Limit To What You Can Accomplish Using Zalo!\n</body>\n</html>\n';
 app.get('/api/zc/zalo_verifierNDMO0fkd2pPgrvawuDmlO3Bug3VUZd9XD3Kt.html', (req, res) => {
-  res.type('html').send(
-    '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
-      '<meta property="zalo-platform-site-verification" content="NDMO0fkd2pPgrvawuDmlO3Bug3VUZd9XD3Kt" />\n' +
-      '</head>\n<body>\nThere Is No Limit To What You Can Accomplish Using Zalo!\n</body>\n</html>\n'
-  );
+  res.type('html').send(ZALO_VERIFIER_HTML);
+});
+// Xác thực domain gốc (mục "Domain" trên dashboard Zalo, khác với "Tiền tố URL" của riêng route
+// callback ở trên) - cần phục vụ đúng file này ở path gốc của domain backend triển khai thật (VD:
+// techshop-twv1.onrender.com), vì backend không có gì serve file tĩnh ở root ngoài route này.
+app.get('/zalo_verifierNDMO0fkd2pPgrvawuDmlO3Bug3VUZd9XD3Kt.html', (req, res) => {
+  res.type('html').send(ZALO_VERIFIER_HTML);
 });
 
 // ----- Đăng ký các route chính -----
