@@ -17,7 +17,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleZaloLogin = () => {
-    window.location.href = '/api/auth/zalo/login';
+    // Điều hướng cả trang (không phải gọi API bằng axios) nên phải ghép URL đầy đủ của backend -
+    // lúc dev local VITE_API_URL không đặt, dùng lại '/api' tương đối qua Vite proxy như cũ.
+    const apiBase = import.meta.env.VITE_API_URL || '/api';
+    window.location.href = `${apiBase}/auth/zalo/login`;
   };
 
   const handleSubmit = async (e) => {
