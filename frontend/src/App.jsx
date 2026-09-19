@@ -16,6 +16,7 @@ import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ZaloFinishPage from './pages/ZaloFinishPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import ComparePage from './pages/ComparePage';
 import TermsPage from './pages/TermsPage';
@@ -57,7 +58,7 @@ function MaintenanceGate({ children }) {
   if (settingsLoading || authLoading) return null;
 
   const isStaffOrAdmin = user && ['admin', 'staff'].includes(user.role);
-  if (settings.maintenanceMode && !isStaffOrAdmin && location.pathname !== '/login') {
+  if (settings.maintenanceMode && !isStaffOrAdmin && !['/login', '/zalo-finish'].includes(location.pathname)) {
     return <MaintenancePage message={settings.maintenanceMessage} />;
   }
   return children;
@@ -90,6 +91,7 @@ export default function App() {
                 <Route path="/cart" element={<StorefrontLayout><CartPage /></StorefrontLayout>} />
                 <Route path="/login" element={<StorefrontLayout><LoginPage /></StorefrontLayout>} />
                 <Route path="/register" element={<StorefrontLayout><RegisterPage /></StorefrontLayout>} />
+                <Route path="/zalo-finish" element={<ZaloFinishPage />} />
                 <Route path="/terms" element={<StorefrontLayout><TermsPage /></StorefrontLayout>} />
                 <Route path="/privacy" element={<StorefrontLayout><PrivacyPage /></StorefrontLayout>} />
                 <Route path="/stores" element={<StorefrontLayout><StoreLocatorPage /></StorefrontLayout>} />

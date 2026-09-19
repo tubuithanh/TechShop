@@ -7,6 +7,7 @@ const {
   login,
   zaloLoginRedirect,
   zaloCallback,
+  zaloComplete,
   refresh,
   logout,
   getMe,
@@ -30,6 +31,9 @@ router.get('/zalo/callback/zalo_verifierNDMO0fkd2pPgrvawuDmlO3Bug3VUZd9XD3Kt.htm
   );
 });
 router.get('/zalo/callback', zaloCallback);
+// Frontend tự gọi graph.zalo.me lấy hồ sơ (mang IP thật của trình duyệt) rồi POST kết quả vào đây
+// để hoàn tất đăng nhập - xem giải thích trong authController.js (zaloCallback / zaloComplete).
+router.post('/zalo/complete', zaloComplete);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 router.get('/me', protect, getMe);

@@ -5,7 +5,8 @@ import { useAuth } from '../store/AuthContext';
 
 const ZALO_ERROR_MESSAGES = {
   zalo_failed: 'Đăng nhập bằng Zalo thất bại, vui lòng thử lại',
-  account_locked: 'Tài khoản Zalo này đã bị khóa'
+  account_locked: 'Tài khoản Zalo này đã bị khóa',
+  zalo_profile_failed: 'Không lấy được hồ sơ Zalo (tên/ảnh đại diện), vui lòng thử lại'
 };
 
 export default function LoginPage() {

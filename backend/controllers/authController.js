@@ -7,7 +7,7 @@ const Otp = require('../models/Otp');
 const asyncHandler = require('../utils/asyncHandler');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const { sendOtp } = require('../utils/sendOtp');
-const { buildAuthUrl, exchangeCodeForToken, fetchZaloProfile } = require('../utils/zaloAuth');
+const { buildAuthUrl, exchangeCodeForToken } = require('../utils/zaloAuth');
 
 const OTP_EXPIRES_MINUTES = 5;
 const MAX_OTP_ATTEMPTS = 5;
@@ -174,39 +174,48 @@ const zaloCallback = asyncHandler(async (req, res) => {
       code,
       codeVerifier: state
     });
-    const profile = await fetchZaloProfile(tokenData.access_token);
 
-    let user = await User.findOne({ zaloId: profile.id });
-    if (!user) {
-      // Zalo Social API mặc định không trả về email, nên tạo email "giả" duy nhất để thỏa schema
-      // (không dùng để liên hệ/gửi mail) - tài khoản này chỉ đăng nhập lại được qua Zalo.
-      user = await User.create({
-        displayName: profile.name || 'Người dùng Zalo',
-        email: `zalo${profile.id}@zalo.techshop.local`,
-        avatar: profile.picture?.data?.url || '',
-        zaloId: profile.id,
-        password: crypto.randomBytes(24).toString('hex'),
-        termsAcceptedAt: new Date()
-      });
-    }
-    if (!user.isActive) {
-      return res.redirect(`${clientUrl}/login?error=account_locked`);
-    }
-
-    user.lastLoginAt = new Date();
-    await user.save();
-
-    const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
-    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
-
-    // Không thể trả JSON trực tiếp vì đây là điều hướng cả trang (Zalo redirect trình duyệt, không
-    // phải gọi API bằng axios) - dùng cookie refreshToken vừa set để trang chủ tự khôi phục phiên
-    // đăng nhập qua flow "/auth/refresh" đã có sẵn khi App.jsx load lại.
-    res.redirect(clientUrl);
+    // KHÔNG gọi lấy hồ sơ (graph.zalo.me) ngay tại đây - Zalo chặn trả về thông tin cá nhân nếu
+    // request xuất phát từ server đặt ngoài Việt Nam (VD: Render). Thay vào đó, chuyển access_token
+    // cho trình duyệt của chính người dùng để TRÌNH DUYỆT tự gọi Zalo (mang đúng IP thật của họ) -
+    // xem zaloComplete() bên dưới, được gọi từ trang ZaloFinishPage ở frontend. Đặt access_token sau
+    // dấu "#" (URL fragment) vì phần này KHÔNG được trình duyệt gửi lên server ở bất kỳ request nào
+    // tiếp theo, giảm rủi ro token bị lưu vào access log.
+    res.redirect(`${clientUrl}/zalo-finish#access_token=${encodeURIComponent(tokenData.access_token)}`);
   } catch (err) {
     console.error('Lỗi đăng nhập Zalo:', err.message);
     res.redirect(`${clientUrl}/login?error=zalo_failed`);
   }
+});
+
+// @route POST /api/auth/zalo/complete - nhận hồ sơ Zalo mà FRONTEND đã tự lấy trực tiếp từ
+// graph.zalo.me (bằng chính IP trình duyệt người dùng), hoàn tất tạo/tìm user và đăng nhập.
+const zaloComplete = asyncHandler(async (req, res) => {
+  const { id, name, picture } = req.body;
+  if (!id) return res.status(400).json({ message: 'Thiếu thông tin định danh Zalo' });
+
+  let user = await User.findOne({ zaloId: id });
+  if (!user) {
+    // Zalo Social API mặc định không trả về email, nên tạo email "giả" duy nhất để thỏa schema
+    // (không dùng để liên hệ/gửi mail) - tài khoản này chỉ đăng nhập lại được qua Zalo.
+    user = await User.create({
+      displayName: name || 'Người dùng Zalo',
+      email: `zalo${id}@zalo.techshop.local`,
+      avatar: picture?.data?.url || '',
+      zaloId: id,
+      password: crypto.randomBytes(24).toString('hex'),
+      termsAcceptedAt: new Date()
+    });
+  }
+  if (!user.isActive) return res.status(403).json({ message: 'Tài khoản đã bị khóa' });
+
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
+  const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
+  res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
+  res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
 });
 
 const refresh = asyncHandler(async (req, res) => {
@@ -264,6 +273,7 @@ module.exports = {
   login,
   zaloLoginRedirect,
   zaloCallback,
+  zaloComplete,
   refresh,
   logout,
   getMe,

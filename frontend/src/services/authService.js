@@ -19,6 +19,11 @@ export const authService = {
     setAccessToken(data.accessToken);
     return data.user;
   },
+  async zaloComplete(profile) {
+    const { data } = await api.post('/auth/zalo/complete', profile);
+    setAccessToken(data.accessToken);
+    return data.user;
+  },
   async logout() {
     await api.post('/auth/logout');
     setAccessToken(null);
