@@ -57,10 +57,19 @@ async function fetchZaloProfile(accessToken) {
   url.searchParams.set('fields', 'id,name,picture');
   const res = await fetch(url.toString(), { headers: { access_token: accessToken } });
   const data = await res.json();
-  if (!data.id) {
-    throw new Error(data.message || 'Không lấy được thông tin người dùng từ Zalo');
-  }
-  return data;
+  if (data.id) return data;
+
+  // Zalo chặn trả về tên/ảnh đại diện (thông tin cá nhân) nếu server gọi API không có IP tại Việt
+  // Nam (VD: backend triển khai trên Render ở nước ngoài) - báo lỗi "Personal information is
+  // limited...". "id" (định danh, không phải thông tin cá nhân) thường vẫn lấy được riêng lẻ, nên
+  // thử lại chỉ với "id" để đăng nhập vẫn hoạt động (tên hiển thị sẽ dùng mặc định "Người dùng Zalo").
+  const idOnlyUrl = new URL(PROFILE_URL);
+  idOnlyUrl.searchParams.set('fields', 'id');
+  const idOnlyRes = await fetch(idOnlyUrl.toString(), { headers: { access_token: accessToken } });
+  const idOnlyData = await idOnlyRes.json();
+  if (idOnlyData.id) return idOnlyData;
+
+  throw new Error(data.message || idOnlyData.message || 'Không lấy được thông tin người dùng từ Zalo');
 }
 
 module.exports = { buildAuthUrl, exchangeCodeForToken, fetchZaloProfile };
