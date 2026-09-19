@@ -12,6 +12,16 @@ const { buildAuthUrl, exchangeCodeForToken, fetchZaloProfile } = require('../uti
 const OTP_EXPIRES_MINUTES = 5;
 const MAX_OTP_ATTEMPTS = 5;
 
+// Frontend/backend triển khai trên 2 domain khác nhau (VD: Render) là cross-site, nên cookie phải
+// dùng sameSite: 'none' + secure: true mới được trình duyệt gửi kèm ở request cross-origin. Lúc dev
+// local (cùng origin qua Vite proxy) vẫn cần sameSite: 'lax' vì 'none' bắt buộc https (secure).
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 7 * 24 * 60 * 60 * 1000
+};
+
 function getPasswordStrength(password) {
   if (!password || password.length < 6) return { valid: false, message: 'Mật khẩu phải có ít nhất 6 ký tự' };
   return { valid: true };
@@ -94,7 +104,7 @@ const register = asyncHandler(async (req, res) => {
 
   const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
   const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
-  res.cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+  res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
   res.status(201).json({ message: 'Đăng ký thành công', user: user.toSafeObject(), accessToken });
 });
@@ -118,7 +128,7 @@ const login = asyncHandler(async (req, res) => {
 
     const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
     const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
-    res.cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
     return res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
   }
 
@@ -133,7 +143,7 @@ const login = asyncHandler(async (req, res) => {
 
     const accessToken = generateAccessToken({ _id: admin._id, role: admin.role });
     const refreshToken = generateRefreshToken({ _id: admin._id, role: admin.role });
-    res.cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
     return res.json({ message: 'Đăng nhập thành công', user: admin.toSafeObject(), accessToken });
   }
 
@@ -187,7 +197,7 @@ const zaloCallback = asyncHandler(async (req, res) => {
     await user.save();
 
     const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
-    res.cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
     // Không thể trả JSON trực tiếp vì đây là điều hướng cả trang (Zalo redirect trình duyệt, không
     // phải gọi API bằng axios) - dùng cookie refreshToken vừa set để trang chủ tự khôi phục phiên

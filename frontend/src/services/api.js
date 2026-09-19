@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// Lúc dev local dùng '/api' (Vite proxy sang backend cùng origin). Lúc deploy thật (VD: Render),
+// frontend/backend nằm ở 2 domain khác nhau nên cần trỏ thẳng URL đầy đủ của backend qua biến môi
+// trường build-time VITE_API_URL (khai báo trong phần Environment của Static Site trên Render).
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true // gửi kèm httpOnly cookie chứa refresh token
 });
 
