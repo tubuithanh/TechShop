@@ -8,6 +8,7 @@ const { notFound, errorHandler } = require('./middlewares/errorMiddleware');
 const auditLogger = require('./middlewares/auditLogger');
 
 const authRoutes = require('./routes/authRoutes');
+const { zaloCallback } = require('./controllers/authController');
 const userRoutes = require('./routes/userRoutes');
 const brandRoutes = require('./routes/brandRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
@@ -57,6 +58,18 @@ app.use(auditLogger);
 // ----- Route health-check -----
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'MERN E-commerce API đang hoạt động', database: 'ecommerce_multistore_db' });
+});
+
+// Đường dẫn RÚT GỌN cho callback Zalo (giống hệt /api/auth/zalo/callback) - chỉ dùng khi test qua
+// các tunnel công khai (Cloudflare quick tunnel, localtunnel...) có domain ngẫu nhiên dài, vì Zalo
+// giới hạn ô "Tiền tố URL" tối đa 75 ký tự nên URL đầy đủ .../api/auth/zalo/callback/ dễ bị vượt quá.
+app.get('/api/zc', zaloCallback);
+app.get('/api/zc/zalo_verifierNDMO0fkd2pPgrvawuDmlO3Bug3VUZd9XD3Kt.html', (req, res) => {
+  res.type('html').send(
+    '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
+      '<meta property="zalo-platform-site-verification" content="NDMO0fkd2pPgrvawuDmlO3Bug3VUZd9XD3Kt" />\n' +
+      '</head>\n<body>\nThere Is No Limit To What You Can Accomplish Using Zalo!\n</body>\n</html>\n'
+  );
 });
 
 // ----- Đăng ký các route chính -----

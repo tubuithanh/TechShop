@@ -1,0 +1,43 @@
+1. TH | 1.1.1. Trang chủ | Banner/slider quảng cáo + Menu danh mục ngành hàng
+1. TH | 1.1.1. Trang chủ | Mega-menu sổ xuống khi hover danh mục
+1. TH | 1.1.1. Trang chủ | Khối "Deal hot theo khung giờ"
+1. TH | 1.1.1. Trang chủ | Khối sản phẩm theo ngành hàng
+1. TH | 1.1.1. Trang chủ | Chat widget nổi
+1. TH | 1.1.2. Danh mục & danh sách sản phẩm | Phân loại đa cấp theo hãng
+1. TH | 1.1.2. Danh mục & danh sách sản phẩm | Bộ lọc nhiều tiêu chí đồng thời + Sắp xếp
+1. TH | 1.1.2. Danh mục & danh sách sản phẩm | Nhãn trạng thái sản phẩm & Phân trang/tải thêm
+1. TH | 1.1.3. Tìm kiếm | Gợi ý tức thời (autocomplete) + tìm kiếm mờ
+1. TH | 1.1.3. Tìm kiếm | Trang kết quả tìm kiếm
+1. TH | 1.1.4. Trang chi tiết sản phẩm | Thư viện ảnh + Chọn biến thể (màu, dung lượng)
+1. TH | 1.1.4. Trang chi tiết sản phẩm | Nội dung mô tả chi tiết sản phẩm
+1. TH | 1.1.4. Trang chi tiết sản phẩm | Bảng thông số kỹ thuật
+1. TH | 1.1.4. Trang chi tiết sản phẩm | Đánh giá & xếp hạng sao
+1. TH | 1.1.5. So sánh sản phẩm | So sánh sản phẩm song song
+1. TH | 1.1.6. Giỏ hàng & Thanh toán | Giỏ hàng: thêm/sửa/xóa sản phẩm
+1. TH | 1.1.7. Quản lý tài khoản khách hàng | Đăng nhập/Đăng ký bằng OTP số điện thoại
+1. TH | 1.1.8. Đánh giá, bình luận & cộng đồng | Danh sách đánh giá thực tế kèm ảnh và phản hồi từ shop
+1. TH | 1.1.9. Khuyến mãi & chương trình ưu đãi | Thu cũ - đổi mới
+1. TH | 1.1.10. Nội dung & Tin tức | Tin tức công nghệ (TGDD 24h)
+1. TH | 1.1.11. Hệ thống cửa hàng & bản đồ | Tra cứu hệ thống cửa hàng
+1. TH | 1.1.12. Chăm sóc khách hàng & hỗ trợ | Trang FAQ theo chủ đề
+1. TH | 1.1.13. Ứng dụng di động | Ứng dụng "Quà Tặng VIP" - app chăm sóc khách hàng đa chuỗi
+1. TH | 1.1.14. Bảo hành & Hậu mãi | Chính sách bảo hành theo từng loại sản phẩm/hãng
+1. TH | 1.1.14. Bảo hành & Hậu mãi (bổ sung) | Bảo hành mở rộng (BHRV) - chi tiết quy trình và quyền lợi
+1. TH | 1.1.15 & 1.1.16. Vận chuyển & Thanh toán | Chính sách giao hàng & Thanh toán
+1. TH | 1.1.15 & 1.1.16. Vận chuyển & Thanh toán | Trả góp qua thẻ tín dụng / công ty tài chính
+1. TH | 1.1.17. Tiếp thị liên kết & Affiliate | Mô hình Cộng tác viên (CTV) bán hàng không cần vốn/tồn kho
+1. TH | 1.1.19. Gamification & Tương tác giữ chân khách hàng | Vòng quay may mắn "Xoay Lộc Sale"
+1. TH | 1.1.22. Trợ lý ảo / Chatbot hỗ trợ mua hàng | Trợ lý AI (chatbot) hỗ trợ chọn mua sản phẩm
+1. TH | ⚠ PHÁT HIỆN & ĐÍNH CHÍNH khi khảo sát thực tế | TGDD thực tế CÓ hệ sinh thái dịch vụ viễn thông/tài chính/bả
+2. FP | Trang chủ & danh mục | Trang chủ theo khối chủ đề
+2. FP | Trang chủ & danh mục | Trang danh mục sản phẩm
+2. FP | Điểm khác biệt: Dịch vụ viễn thông tích hợp | Bán SIM FPT, nạp thẻ, đóng cước - Trung tâm dịch vụ tiện ích
+2. FP | Tra cứu bảo hành trực tuyến | Tra cứu bảo hành, bảng giá sửa chữa
+2. FP | Nội dung tin tức | Trang tin tức/cẩm nang công nghệ
+2. FP | Điểm khác biệt: Đa dạng phương thức trả góp/BNPL | Chính sách trả góp chi tiết, minh bạch
+3. CE | Trang chủ & danh mục | Trang chủ hiện đại, phân nhóm theo icon
+3. CE | Trang chủ & danh mục | Trang danh mục sản phẩm
+3. CE | Điểm khác biệt: Kênh khách hàng doanh nghiệp | Dịch vụ khách hàng doanh nghiệp (S-Business)
+3. CE | Điểm khác biệt: VAT Refund | VAT Refund - hoàn thuế GTGT cho khách quốc tế
+3. CE | Điểm khác biệt: Chương trình thành viên Smember | Chương trình thành viên Smember
+3. CE | Điểm khác biệt: Hệ sinh thái nội dung tách riêng | Sforum - trang tin công nghệ tách biệt
