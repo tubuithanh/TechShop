@@ -84,8 +84,9 @@ const getProducts = asyncHandler(async (req, res) => {
 
 // @route GET /api/products/:slug
 const getProductBySlug = asyncHandler(async (req, res) => {
+  // specTemplate: để trang chi tiết hiển thị thông số theo nhóm, đúng thứ tự của danh mục
   const product = await Product.findOne({ slug: req.params.slug, isActive: true })
-    .populate('categoryId', 'name slug')
+    .populate('categoryId', 'name slug specTemplate')
     .populate('brandId', 'name image');
   if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
 
@@ -100,7 +101,9 @@ const getProductBySlug = asyncHandler(async (req, res) => {
   const inventories = inventoriesRaw.filter((inv) => inv.storeId);
   const totalStock = inventories.reduce((sum, inv) => sum + inv.stock, 0);
 
-  res.json({ data: { ...product.toObject(), inventories, totalStock } });
+  // flattenMaps: specifications là kiểu Map - toObject() mặc định giữ nguyên dạng Map của JS, mà
+  // JSON.stringify(Map) luôn ra "{}", nên trước đây tab "Thông số kỹ thuật" luôn trống dù có dữ liệu.
+  res.json({ data: { ...product.toObject({ flattenMaps: true }), inventories, totalStock } });
 });
 
 // @route GET /api/products/:id/related
@@ -122,7 +125,10 @@ const compareProducts = asyncHandler(async (req, res) => {
   if (!Array.isArray(ids) || ids.length < 2) {
     return res.status(400).json({ message: 'Cần chọn tối thiểu 2 sản phẩm để so sánh' });
   }
-  const products = await Product.find({ _id: { $in: ids }, isActive: true });
+  const products = await Product.find({ _id: { $in: ids }, isActive: true }).populate(
+    'categoryId',
+    'name slug specTemplate'
+  );
   res.json({ data: products });
 });
 

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Container, Row, Col, Table, Button, Form } from 'react-bootstrap';
 import { productService } from '../services/productService';
+import { buildCompareGroups } from '../utils/specs';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -24,7 +25,7 @@ export default function ComparePage() {
     setCompareResult(result);
   };
 
-  const allSpecKeys = [...new Set(compareResult.flatMap((p) => Object.keys(p.specifications || {})))];
+  const compareGroups = buildCompareGroups(compareResult);
 
   return (
     <Container fluid="xl" style={{ maxWidth: '72rem' }} className="py-4">
@@ -73,15 +74,28 @@ export default function ComparePage() {
                   </td>
                 ))}
               </tr>
-              {allSpecKeys.map((key) => (
-                <tr key={key}>
-                  <td className="fw-medium">{key}</td>
-                  {compareResult.map((p) => (
-                    <td key={p._id} className="text-center">
-                      {p.specifications?.[key] || '-'}
+              {compareGroups.map((g) => (
+                <Fragment key={g.group}>
+                  <tr>
+                    <td
+                      colSpan={compareResult.length + 1}
+                      className="bg-light fw-bold text-uppercase"
+                      style={{ fontSize: '0.8rem', letterSpacing: '0.03em' }}
+                    >
+                      {g.group}
                     </td>
+                  </tr>
+                  {g.keys.map((key) => (
+                    <tr key={key}>
+                      <td className="fw-medium">{key}</td>
+                      {compareResult.map((p) => (
+                        <td key={p._id} className="text-center">
+                          {p.specifications?.[key] || '-'}
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
+                </Fragment>
               ))}
             </tbody>
           </Table>

@@ -16,6 +16,7 @@ const { generatePosts } = require('./generatePosts');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const PermissionGroup = require('../models/PermissionGroup');
+const { SPEC_TEMPLATES } = require('../utils/specTemplates');
 const Brand = require('../models/Brand');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
@@ -127,7 +128,9 @@ async function run() {
     { name: 'Màn hình', slug: 'man-hinh' },
     { name: 'Phụ kiện', slug: 'phu-kien' }
   ];
-  const categoryDocs = await Category.insertMany(CATEGORY_LIST);
+  const categoryDocs = await Category.insertMany(
+    CATEGORY_LIST.map((c) => ({ ...c, specTemplate: SPEC_TEMPLATES[c.slug] || [] }))
+  );
   const categoryIdBySlug = {};
   const categoryLabelBySlug = {};
   categoryDocs.forEach((c) => {

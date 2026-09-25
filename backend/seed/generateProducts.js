@@ -1,4 +1,5 @@
 const slugify = require('slugify');
+const { buildExtraSpecs } = require('./extraSpecs');
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -361,7 +362,14 @@ function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug
       const model = pick(catDef.brands[brand]);
       const variant = pick(catDef.variants);
       const title = `${model} ${variant}`;
-      const specs = catDef.buildSpecs({ brand, model, variant });
+      const baseSpecs = catDef.buildSpecs({ brand, model, variant });
+      // Giữ các thông số gốc lên trước (buildDescription lấy 5 thông số đầu tiên làm "nổi bật"),
+      // bổ sung các trường chi tiết theo mẫu thông số của danh mục vào sau, không ghi đè giá trị gốc.
+      const extraSpecs = buildExtraSpecs(catDef.slug, { brand, model, variant, specs: baseSpecs });
+      const specs = { ...baseSpecs };
+      for (const [key, value] of Object.entries(extraSpecs)) {
+        if (!(key in specs)) specs[key] = value;
+      }
       const shortDescription = pick(SHORT_DESC_TEMPLATES[catDef.slug]);
       const categoryLabel = categoryLabelBySlug[catDef.slug];
       const description = buildDescription({ title, brand, categoryLabel, shortDescription, specs });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup } from 'react-bootstrap';
 import { productService } from '../services/productService';
@@ -9,6 +9,7 @@ import ProductCard from '../components/ProductCard';
 import InstallmentCalculator from '../components/InstallmentCalculator';
 import ProductQnA from '../components/ProductQnA';
 import { placeholderImage } from '../utils/placeholderImage';
+import { groupSpecs } from '../utils/specs';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -78,6 +79,7 @@ export default function ProductDetailPage() {
     );
 
   const displayPrice = product.effectivePrice ?? (product.salePrice || product.price);
+  const specGroups = groupSpecs(product.specifications, product.categoryId?.specTemplate);
   const images = product.imageURLs?.length ? product.imageURLs : [product.featuredImage];
   const selectedInventory = product.inventories?.find((inv) => inv.storeId?._id === selectedStoreId);
   const currentStock = selectedInventory?.stock || 0;
@@ -269,15 +271,24 @@ export default function ProductDetailPage() {
         {activeTab === 'specs' && (
           <Table className="small" style={{ maxWidth: '42rem' }}>
             <tbody>
-              {Object.entries(product.specifications || {}).map(([key, val]) => (
-                <tr key={key}>
-                  <td className="text-muted" style={{ width: '33%' }}>
-                    {key}
-                  </td>
-                  <td>{val}</td>
-                </tr>
+              {specGroups.map((g) => (
+                <Fragment key={g.group}>
+                  <tr>
+                    <td colSpan={2} className="bg-light fw-bold text-uppercase" style={{ fontSize: '0.8rem', letterSpacing: '0.03em' }}>
+                      {g.group}
+                    </td>
+                  </tr>
+                  {g.items.map((item) => (
+                    <tr key={item.key}>
+                      <td className="text-muted" style={{ width: '38%' }}>
+                        {item.key}
+                      </td>
+                      <td>{item.value}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
-              {Object.keys(product.specifications || {}).length === 0 && (
+              {specGroups.length === 0 && (
                 <tr>
                   <td className="text-muted">Chưa cập nhật thông số kỹ thuật</td>
                 </tr>

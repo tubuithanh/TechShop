@@ -6,6 +6,7 @@ import { placeholderImage } from '../../utils/placeholderImage';
 import { resizeImageToDataUrl } from '../../utils/imageUpload';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import SpecificationsEditor from '../../components/admin/SpecificationsEditor';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -19,8 +20,18 @@ const emptyForm = {
   salePrice: '',
   description: '',
   imageURLs: [placeholderImage(400, 400, 'San pham')],
-  coverIndex: 0
+  coverIndex: 0,
+  specifications: {}
 };
+
+// Bỏ các thông số để trống trước khi lưu - tránh lưu hàng loạt khóa rỗng từ các ô mẫu chưa điền.
+function cleanSpecs(specs) {
+  return Object.fromEntries(
+    Object.entries(specs || {})
+      .map(([key, value]) => [key.trim(), String(value ?? '').trim()])
+      .filter(([key, value]) => key && value)
+  );
+}
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -80,7 +91,8 @@ export default function AdminProductsPage() {
       salePrice: salePriceValue,
       description: form.description,
       featuredImage: cleanUrls[coverIdx],
-      imageURLs: cleanUrls
+      imageURLs: cleanUrls,
+      specifications: cleanSpecs(form.specifications)
     };
     try {
       if (editingId) {
@@ -108,7 +120,8 @@ export default function AdminProductsPage() {
       salePrice: p.salePrice ?? '', // dùng ?? thay vì || - salePrice=0 (hàng miễn phí) không nên hiện trống
       description: p.description || '',
       imageURLs: urls.length ? urls : [placeholderImage(400, 400, 'San pham')],
-      coverIndex: coverIdx === -1 ? 0 : coverIdx
+      coverIndex: coverIdx === -1 ? 0 : coverIdx,
+      specifications: { ...(p.specifications || {}) }
     });
     setEditingId(p._id);
     setShowForm(true);
@@ -316,6 +329,13 @@ export default function AdminProductsPage() {
                     placeholder="Mô tả sản phẩm"
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  />
+                </Col>
+                <Col xs={12}>
+                  <SpecificationsEditor
+                    template={categories.find((c) => c._id === form.categoryId)?.specTemplate}
+                    value={form.specifications}
+                    onChange={(specifications) => setForm((prev) => ({ ...prev, specifications }))}
                   />
                 </Col>
                 <Col xs={12}>
