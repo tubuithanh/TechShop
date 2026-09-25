@@ -89,11 +89,14 @@ async function run() {
     const docs = await col.find({ 'items.variantId': { $exists: false }, 'items.0': { $exists: true } }).toArray();
     let fixed = 0;
     for (const doc of docs) {
-      const items = doc.items.map((item) => {
+      let items = doc.items.map((item) => {
         if (item.variantId) return item;
         const v = defaultVariant.get(String(item.productId));
         return v ? { ...item, variantId: v._id, variantLabel: label(v) } : item;
       });
+      // Giỏ hàng là dữ liệu tạm: dòng trỏ tới sản phẩm không còn tồn tại thì bỏ đi (nếu giữ, giỏ đó sẽ
+      // lỗi validate vì variantId bắt buộc). Đơn hàng là lịch sử nên giữ nguyên.
+      if (colName === 'carts') items = items.filter((i) => i.variantId);
       await col.updateOne({ _id: doc._id }, { $set: { items } });
       fixed++;
     }
@@ -101,7 +104,10 @@ async function run() {
   }
 
   // 4. Màu mẫu cho demo
-  if (demoColors) {
+  const migrations = db.collection('migrations');
+  if (demoColors && (await migrations.findOne({ _id: 'variants-demo-colors' }))) {
+    console.log('4. Bỏ qua: màu mẫu đã được thêm ở lần chạy trước');
+  } else if (demoColors) {
     const stores = await db.collection('stores').find({}, { projection: { _id: 1 } }).toArray();
     const fresh = await db.collection('products').find({ 'variants.1': { $exists: false } }).toArray();
     let added = 0;
@@ -135,6 +141,7 @@ async function run() {
       );
       added += extra.length;
     }
+    await migrations.insertOne({ _id: 'variants-demo-colors', at: new Date() });
     console.log(`4. Đã thêm ${added} phiên bản màu mẫu cho ${fresh.length} sản phẩm`);
   }
 
