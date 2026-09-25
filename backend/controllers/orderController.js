@@ -6,6 +6,7 @@ const Voucher = require('../models/Voucher');
 const Notification = require('../models/Notification');
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
+const { hasPermission } = require('../middlewares/authMiddleware');
 
 const SHIPPING_FEE_DEFAULT = 30000;
 
@@ -259,9 +260,11 @@ const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id).populate('storeId', 'name city address phoneNumber');
   if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
 
+  // Trước đây cho phép BẤT KỲ staff nào xem chi tiết đơn hàng bất kỳ, bất kể có quyền 'orders.manage'
+  // hay không - lộ dữ liệu đơn hàng (địa chỉ, SĐT, giá trị mua) cho staff không được cấp quyền quản
+  // lý đơn hàng, trong khi danh sách đơn hàng (getAllOrders) đã được chặn đúng theo quyền này.
   const isOwner = order.userId.toString() === req.account._id.toString();
-  const isStaffOrAdmin = ['staff', 'admin'].includes(req.accountRole);
-  if (!isOwner && !isStaffOrAdmin) {
+  if (!isOwner && !hasPermission(req, 'orders.manage')) {
     return res.status(403).json({ message: 'Bạn không có quyền xem đơn hàng này' });
   }
   res.json({ data: order });

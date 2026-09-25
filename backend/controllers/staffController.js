@@ -56,15 +56,22 @@ const updateStaff = asyncHandler(async (req, res) => {
   }
   if (name !== undefined) target.name = name;
   if (isActive !== undefined) target.isActive = isActive;
-  if (role !== undefined) target.role = role === 'admin' ? 'admin' : 'staff';
-  if (groupIds !== undefined) {
+  if (role !== undefined) {
+    target.role = role === 'admin' ? 'admin' : 'staff';
+    // Luôn dọn sạch groupIds ngay khi lên admin - dù request KHÔNG gửi kèm groupIds. Nếu không, tài
+    // khoản này vẫn giữ nguyên nhóm quyền cũ (dữ liệu "treo", vô hại lúc đang là admin vì admin luôn
+    // toàn quyền bất kể groupIds), nhưng nếu sau này bị hạ lại xuống staff mà không ai chủ động chọn
+    // lại nhóm, họ sẽ ÂM THẦM kế thừa đúng nhóm quyền cũ trước khi được thăng lên admin.
+    if (target.role === 'admin') target.groupIds = [];
+  }
+  if (groupIds !== undefined && target.role === 'staff') {
     if (groupIds.length) {
       const validCount = await PermissionGroup.countDocuments({ _id: { $in: groupIds } });
       if (validCount !== new Set(groupIds.map(String)).size) {
         return res.status(400).json({ message: 'Một hoặc nhiều nhóm quyền không tồn tại' });
       }
     }
-    target.groupIds = target.role === 'admin' ? [] : groupIds;
+    target.groupIds = groupIds;
   }
   if (newPassword) {
     if (newPassword.length < 6) return res.status(400).json({ message: 'Mật khẩu mới phải từ 6 ký tự' });

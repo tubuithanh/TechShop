@@ -48,22 +48,27 @@ const authorize = (...roles) => {
   };
 };
 
-// Middleware phân quyền CHI TIẾT theo permission key (VD: 'orders.manage') - dùng cho các thao tác
-// quản trị mà staff có thể được cấp quyền riêng lẻ, khác với authorize() vốn chỉ phân theo vai trò
-// cố định (admin/staff). Admin LUÔN được đi qua (toàn quyền), không cần gán nhóm quyền nào.
+// Kiểm tra quyền CHI TIẾT (VD: 'orders.manage') cho request hiện tại - dùng ở CẢ middleware `can()`
+// bên dưới LẪN trực tiếp trong controller, cho các route công khai chấp nhận nhiều loại người dùng
+// (VD: "xem đơn hàng" cho phép chủ đơn HOẶC admin HOẶC staff có quyền orders.manage) mà không thể
+// diễn đạt chỉ bằng 1 middleware chặn ở đầu route. Admin LUÔN có quyền; staff cần thuộc ít nhất 1
+// nhóm có quyền tương ứng; vai trò khác (customer) không bao giờ có quyền quản trị.
+function hasPermission(req, permission) {
+  if (req.accountRole === 'admin') return true;
+  if (req.accountRole !== 'staff') return false;
+  const groups = req.account?.groupIds || [];
+  return groups.some((g) => g.permissions?.includes(permission));
+}
+
+// Middleware phân quyền CHI TIẾT theo permission key - dùng cho các thao tác quản trị mà staff có
+// thể được cấp quyền riêng lẻ, khác với authorize() vốn chỉ phân theo vai trò cố định (admin/staff).
 const can = (permission) => {
   return (req, res, next) => {
-    if (req.accountRole === 'admin') return next();
-    if (req.accountRole !== 'staff') {
-      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
-    }
-    const groups = req.account.groupIds || [];
-    const hasPermission = groups.some((g) => g.permissions?.includes(permission));
-    if (!hasPermission) {
+    if (!hasPermission(req, permission)) {
       return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này (thiếu quyền: ' + permission + ')' });
     }
     next();
   };
 };
 
-module.exports = { protect, authorize, can };
+module.exports = { protect, authorize, can, hasPermission };

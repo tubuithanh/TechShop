@@ -2,6 +2,7 @@ const ChatMessage = require('../models/ChatMessage');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const asyncHandler = require('../utils/asyncHandler');
+const { hasPermission } = require('../middlewares/authMiddleware');
 
 const getSupportAgent = asyncHandler(async (req, res) => {
   const agent = await Admin.findOne({ isActive: true }).select('_id name');
@@ -11,9 +12,11 @@ const getSupportAgent = asyncHandler(async (req, res) => {
 
 const getChatHistory = asyncHandler(async (req, res) => {
   const { conversationId } = req.params;
+  // Trước đây cho phép BẤT KỲ staff nào xem lịch sử BẤT KỲ hội thoại nào (chỉ cần biết/đoán đúng
+  // conversationId), bất kể có quyền 'chat.support' hay không - trong khi danh sách hội thoại
+  // (getConversations) đã được chặn đúng theo quyền này, tạo lỗ hổng bỏ qua chặn ở danh sách.
   const isOwner = req.account._id.toString() === conversationId;
-  const isStaffOrAdmin = ['staff', 'admin'].includes(req.accountRole);
-  if (!isOwner && !isStaffOrAdmin) {
+  if (!isOwner && !hasPermission(req, 'chat.support')) {
     return res.status(403).json({ message: 'Không có quyền xem hội thoại này' });
   }
 
