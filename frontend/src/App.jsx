@@ -151,18 +151,21 @@ export default function App() {
                     </PrivateRoute>
                   }
                 >
-                  <Route index element={<AdminDashboardPage />} />
-                  <Route path="products" element={<AdminProductsPage />} />
-                  <Route path="orders" element={<AdminOrdersPage />} />
-                  <Route path="warranties" element={<AdminWarrantiesPage />} />
-                  <Route path="customers" element={<AdminCustomersPage />} />
-                  <Route path="vouchers" element={<AdminVouchersPage />} />
-                  <Route path="reviews" element={<AdminReviewsPage />} />
-                  <Route path="inventory" element={<AdminInventoryPage />} />
-                  <Route path="articles" element={<AdminArticlesPage />} />
-                  <Route path="chat" element={<AdminChatPage />} />
-                  <Route path="audit-logs" element={<AdminAuditLogPage />} />
-                  <Route path="settings" element={<AdminSettingsPage />} />
+                  {/* Mỗi trang dưới đây khớp 1-1 với 1 permission key (utils/permissions.js) - staff
+                      thiếu quyền tương ứng bị điều hướng ra khỏi trang thay vì thấy trang trống/lỗi.
+                      audit-logs và settings KHÔNG có permissionPath - admin-only tuyệt đối. */}
+                  <Route index element={<PrivateRoute permissionPath="/admin"><AdminDashboardPage /></PrivateRoute>} />
+                  <Route path="products" element={<PrivateRoute permissionPath="/admin/products"><AdminProductsPage /></PrivateRoute>} />
+                  <Route path="orders" element={<PrivateRoute permissionPath="/admin/orders"><AdminOrdersPage /></PrivateRoute>} />
+                  <Route path="warranties" element={<PrivateRoute permissionPath="/admin/warranties"><AdminWarrantiesPage /></PrivateRoute>} />
+                  <Route path="customers" element={<PrivateRoute permissionPath="/admin/customers"><AdminCustomersPage /></PrivateRoute>} />
+                  <Route path="vouchers" element={<PrivateRoute permissionPath="/admin/vouchers"><AdminVouchersPage /></PrivateRoute>} />
+                  <Route path="reviews" element={<PrivateRoute permissionPath="/admin/reviews"><AdminReviewsPage /></PrivateRoute>} />
+                  <Route path="inventory" element={<PrivateRoute permissionPath="/admin/inventory"><AdminInventoryPage /></PrivateRoute>} />
+                  <Route path="articles" element={<PrivateRoute permissionPath="/admin/articles"><AdminArticlesPage /></PrivateRoute>} />
+                  <Route path="chat" element={<PrivateRoute permissionPath="/admin/chat"><AdminChatPage /></PrivateRoute>} />
+                  <Route path="audit-logs" element={<PrivateRoute roles={['admin']}><AdminAuditLogPage /></PrivateRoute>} />
+                  <Route path="settings" element={<PrivateRoute roles={['admin']}><AdminSettingsPage /></PrivateRoute>} />
                   {/* Quản lý nhân viên/nhóm quyền là thao tác cấu trúc nhạy cảm - chỉ admin được vào
                       trang này (staff dù có quyền gì cũng không thấy được, tránh tự cấp thêm quyền). */}
                   <Route

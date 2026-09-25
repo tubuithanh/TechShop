@@ -18,6 +18,7 @@ import {
   KeyFill
 } from 'react-bootstrap-icons';
 import { useAuth } from '../../store/AuthContext';
+import { hasPagePermission } from '../../utils/permissions';
 
 const menu = [
   { path: '/admin', label: 'Tổng quan (Dashboard)', icon: Speedometer2 },
@@ -29,7 +30,12 @@ const menu = [
   { path: '/admin/vouchers', label: 'Quản lý khuyến mãi', icon: TagsFill },
   { path: '/admin/reviews', label: 'Quản lý đánh giá', icon: Star },
   { path: '/admin/articles', label: 'Quản lý tin tức (CMS)', icon: Newspaper },
-  { path: '/admin/chat', label: 'Chat với khách hàng', icon: ChatDots },
+  { path: '/admin/chat', label: 'Chat với khách hàng', icon: ChatDots }
+];
+
+// 2 trang này admin-only tuyệt đối (không nằm trong PAGE_PERMISSIONS - xem utils/permissions.js),
+// nên tách riêng để chỉ hiện khi user.role === 'admin', không lọc theo hasPagePermission.
+const adminAbsoluteMenu = [
   { path: '/admin/audit-logs', label: 'Nhật ký thao tác', icon: ClockHistory },
   { path: '/admin/settings', label: 'Cấu hình hệ thống', icon: Gear }
 ];
@@ -44,7 +50,10 @@ const adminOnlyMenu = [
 export default function AdminLayout() {
   const location = useLocation();
   const { user } = useAuth();
-  const fullMenu = user?.role === 'admin' ? [...menu, ...adminOnlyMenu] : menu;
+  // Staff chỉ thấy đúng những trang mà nhóm quyền của họ thực sự truy cập được - trước đây sidebar
+  // hiện TẤT CẢ link bất kể nhóm quyền, staff bấm vào vẫn thấy link nhưng trang gọi API sẽ báo lỗi.
+  const visibleMenu = menu.filter((m) => hasPagePermission(user, m.path));
+  const fullMenu = user?.role === 'admin' ? [...visibleMenu, ...adminAbsoluteMenu, ...adminOnlyMenu] : visibleMenu;
   return (
     <div className="d-flex min-vh-100">
       <aside className="bg-dark text-white p-3" style={{ width: '14rem', flexShrink: 0 }}>
