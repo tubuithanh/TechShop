@@ -1,4 +1,5 @@
 const StoreInventory = require('../models/StoreInventory');
+const Product = require('../models/Product');
 const Store = require('../models/Store');
 const asyncHandler = require('../utils/asyncHandler');
 const { getScopedStoreId } = require('../middlewares/authMiddleware');
@@ -30,18 +31,28 @@ const getInventories = asyncHandler(async (req, res) => {
 
   const inventories = await StoreInventory.find(filter)
     .populate('storeId', 'name city address')
-    .populate('productId', 'title featuredImage price')
+    .populate('productId', 'title featuredImage price variants')
     .sort({ lastUpdated: -1 })
     .skip((page - 1) * limit)
     .limit(Number(limit));
   const total = await StoreInventory.countDocuments(filter);
-  res.json({ data: inventories, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+  res.json({ data: inventories.map(withVariantLabel), total, page: Number(page), totalPages: Math.ceil(total / limit) });
 });
 
-// @route GET /api/store-inventories/check?productId=&storeId= - kiểm tra tồn kho cụ thể
+// Gắn nhãn phiên bản ("Đen - 256GB") vào bản ghi tồn kho để hiển thị, rồi bỏ danh sách variants đầy đủ
+// của sản phẩm khỏi kết quả (chỉ cần để tra nhãn, không cần gửi về cho từng dòng).
+function withVariantLabel(inv) {
+  const obj = inv.toObject();
+  const variant = inv.productId?.variants?.id(inv.variantId);
+  obj.variantLabel = variant ? variant.label : '(phiên bản đã xóa)';
+  if (obj.productId) delete obj.productId.variants;
+  return obj;
+}
+
+// @route GET /api/store-inventories/check?productId=&variantId=&storeId= - kiểm tra tồn kho cụ thể
 const checkStock = asyncHandler(async (req, res) => {
-  const { productId, storeId } = req.query;
-  const inventory = await StoreInventory.findOne({ productId, storeId });
+  const { productId, variantId, storeId } = req.query;
+  const inventory = await StoreInventory.findOne({ productId, variantId, storeId });
   res.json({ data: { stock: inventory?.stock || 0 } });
 });
 
@@ -49,9 +60,14 @@ const checkStock = asyncHandler(async (req, res) => {
 
 // @route POST /api/store-inventories - tạo/cập nhật tồn kho (upsert)
 const upsertInventory = asyncHandler(async (req, res) => {
-  const { storeId, productId, stock, lowStockThreshold } = req.body;
+  const { storeId, productId, variantId, stock, lowStockThreshold } = req.body;
   if (typeof stock !== 'number' || stock < 0) {
     return res.status(400).json({ message: 'Số lượng tồn kho không hợp lệ (phải là số >= 0)' });
+  }
+  // Tồn kho tính theo phiên bản - phiên bản phải thực sự thuộc sản phẩm này (không nhận variantId tùy ý)
+  const product = productId ? await Product.findById(productId, 'variants') : null;
+  if (!product || !variantId || !product.variants.id(variantId)) {
+    return res.status(400).json({ message: 'Vui lòng chọn đúng sản phẩm và phiên bản (màu/dung lượng)' });
   }
 
   // Quản lý chi nhánh chỉ được thiết lập tồn kho cho ĐÚNG chi nhánh được gán - chặn ngay cả khi họ
@@ -65,7 +81,7 @@ const upsertInventory = asyncHandler(async (req, res) => {
   }
 
   const inventory = await StoreInventory.findOneAndUpdate(
-    { storeId, productId },
+    { storeId, productId, variantId },
     { stock, lowStockThreshold, lastUpdated: new Date() },
     { new: true, upsert: true, runValidators: true }
   );
@@ -109,8 +125,8 @@ const getLowStockAlerts = asyncHandler(async (req, res) => {
   const filter = scopedStoreId ? { storeId: scopedStoreId } : req.query.storeId ? { storeId: req.query.storeId } : {};
   const inventories = await StoreInventory.find(filter)
     .populate('storeId', 'name')
-    .populate('productId', 'title featuredImage');
-  const lowStock = inventories.filter((inv) => inv.stock <= inv.lowStockThreshold);
+    .populate('productId', 'title featuredImage variants');
+  const lowStock = inventories.filter((inv) => inv.stock <= inv.lowStockThreshold).map(withVariantLabel);
   res.json({ data: lowStock });
 });
 

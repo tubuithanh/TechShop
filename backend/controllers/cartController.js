@@ -9,24 +9,32 @@ const getOrCreateCart = async (userId) => {
   return cart;
 };
 
+// Tồn kho của 1 phiên bản: tại đúng cửa hàng nếu có storeId, ngược lại cộng dồn mọi cửa hàng
+async function getVariantStock(productId, variantId, storeId) {
+  if (storeId) {
+    const inv = await StoreInventory.findOne({ productId, variantId, storeId });
+    return inv?.stock || 0;
+  }
+  const inventories = await StoreInventory.find({ productId, variantId });
+  return inventories.reduce((sum, inv) => sum + inv.stock, 0);
+}
+
+const sameLine = (item, productId, variantId) =>
+  item.productId.toString() === String(productId) && item.variantId?.toString() === String(variantId);
+
 const getCart = asyncHandler(async (req, res) => {
   const cart = await getOrCreateCart(req.account._id);
 
-  // Đồng bộ lại unitPrice theo giá HIỆN TẠI của sản phẩm mỗi khi tải giỏ hàng - trước đây giá chỉ
-  // được lưu 1 lần lúc thêm vào giỏ và không bao giờ làm mới, nên nếu admin đổi giá sau đó, Frontend
-  // (trang Giỏ hàng/Thanh toán) vẫn hiển thị SAI giá cũ dù lúc đặt hàng backend đã tính đúng giá mới
-  // - gây lệch giữa số tiền xem trước và số tiền thực sự bị tính.
+  // Đồng bộ lại unitPrice theo giá HIỆN TẠI của đúng phiên bản mỗi khi tải giỏ hàng - giá có thể đã
+  // được admin đổi kể từ lúc thêm vào giỏ, nếu không trang Giỏ hàng/Thanh toán hiển thị sai giá cũ.
   if (cart.items.length) {
-    const products = await Product.find(
-      { _id: { $in: cart.items.map((i) => i.productId) } },
-      'effectivePrice isActive'
-    );
+    const products = await Product.find({ _id: { $in: cart.items.map((i) => i.productId) } }, 'variants isActive');
     const productMap = new Map(products.map((p) => [p._id.toString(), p]));
     let changed = false;
     for (const item of cart.items) {
-      const product = productMap.get(item.productId.toString());
-      if (product && product.isActive && item.unitPrice !== product.effectivePrice) {
-        item.unitPrice = product.effectivePrice;
+      const variant = productMap.get(item.productId.toString())?.variants.id(item.variantId);
+      if (variant && item.unitPrice !== variant.effectivePrice) {
+        item.unitPrice = variant.effectivePrice;
         changed = true;
       }
     }
@@ -37,43 +45,40 @@ const getCart = asyncHandler(async (req, res) => {
 });
 
 const addItem = asyncHandler(async (req, res) => {
-  const { productId, quantity = 1, storeId } = req.body;
+  const { productId, variantId, quantity = 1, storeId } = req.body;
+  const qty = Number(quantity);
+  if (!Number.isInteger(qty) || qty < 1) return res.status(400).json({ message: 'Số lượng không hợp lệ' });
+
   const product = await Product.findById(productId);
   if (!product || !product.isActive) {
     return res.status(404).json({ message: 'Sản phẩm không tồn tại hoặc đã ngừng kinh doanh' });
   }
-
-  // Dùng effectivePrice (đã được model tự tính đúng, xử lý cả trường hợp salePrice=0 cho hàng
-  // khuyến mãi miễn phí) thay vì `salePrice || price` - toán tử `||` coi 0 là falsy nên sẽ SAI,
-  // rơi về giá gốc thay vì giá 0đ mà admin chủ ý đặt.
-  const price = product.effectivePrice;
-  const cart = await getOrCreateCart(req.account._id);
-  const existing = cart.items.find((i) => i.productId.toString() === productId);
-  const totalQuantityAfterAdd = (existing?.quantity || 0) + Number(quantity);
-
-  // Kiểm tra tồn kho theo TỔNG số lượng sau khi thêm (kể cả số lượng đã có sẵn trong giỏ):
-  // nếu có chọn storeId thì kiểm tra đúng cửa hàng đó, ngược lại kiểm tra tổng tồn kho toàn hệ thống
-  let availableStock;
-  if (storeId) {
-    const inv = await StoreInventory.findOne({ productId, storeId });
-    availableStock = inv?.stock || 0;
-  } else {
-    const inventories = await StoreInventory.find({ productId });
-    availableStock = inventories.reduce((sum, inv) => sum + inv.stock, 0);
+  const variant = variantId ? product.variants.id(variantId) : null;
+  if (!variant || !variant.isActive) {
+    return res.status(400).json({ message: 'Vui lòng chọn phiên bản (màu/dung lượng) còn kinh doanh' });
   }
+
+  const cart = await getOrCreateCart(req.account._id);
+  const existing = cart.items.find((i) => sameLine(i, productId, variantId));
+  const totalQuantityAfterAdd = (existing?.quantity || 0) + qty;
+
+  // Kiểm tra tồn kho theo TỔNG số lượng sau khi thêm (kể cả số lượng đã có sẵn trong giỏ)
+  const availableStock = await getVariantStock(productId, variantId, storeId);
   if (availableStock < totalQuantityAfterAdd) {
-    return res.status(400).json({ message: 'Sản phẩm không đủ số lượng tồn kho' });
+    return res.status(400).json({ message: 'Phiên bản này không đủ số lượng tồn kho' });
   }
 
   if (existing) {
-    existing.quantity += Number(quantity);
+    existing.quantity += qty;
   } else {
     cart.items.push({
       productId,
+      variantId: variant._id,
+      variantLabel: variant.label,
       name: product.title,
-      image: product.featuredImage,
-      unitPrice: price,
-      quantity
+      image: variant.image || product.featuredImage,
+      unitPrice: variant.effectivePrice,
+      quantity: qty
     });
   }
   await cart.save();
@@ -81,18 +86,18 @@ const addItem = asyncHandler(async (req, res) => {
 });
 
 const updateItem = asyncHandler(async (req, res) => {
-  const { quantity } = req.body;
+  const quantity = Number(req.body.quantity);
   const cart = await getOrCreateCart(req.account._id);
   const item = cart.items.id(req.params.itemId);
   if (!item) return res.status(404).json({ message: 'Không tìm thấy sản phẩm trong giỏ hàng' });
+  if (!Number.isInteger(quantity)) return res.status(400).json({ message: 'Số lượng không hợp lệ' });
 
   if (quantity <= 0) {
     item.deleteOne();
   } else {
-    const inventories = await StoreInventory.find({ productId: item.productId });
-    const availableStock = inventories.reduce((sum, inv) => sum + inv.stock, 0);
+    const availableStock = await getVariantStock(item.productId, item.variantId);
     if (availableStock < quantity) {
-      return res.status(400).json({ message: 'Sản phẩm không đủ số lượng tồn kho' });
+      return res.status(400).json({ message: 'Phiên bản này không đủ số lượng tồn kho' });
     }
     item.quantity = quantity;
   }

@@ -210,7 +210,8 @@ export default function CheckoutPage() {
                 className={`d-flex justify-content-between p-3 small ${idx > 0 ? 'border-top' : ''}`}
               >
                 <span>
-                  {item.name} x{item.quantity}
+                  {item.name}
+                  {item.variantLabel && <span className="text-muted"> ({item.variantLabel})</span>} x{item.quantity}
                 </span>
                 <span>{formatVND(item.unitPrice * item.quantity)}</span>
               </div>

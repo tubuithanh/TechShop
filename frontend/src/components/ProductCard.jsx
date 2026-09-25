@@ -10,6 +10,10 @@ export default function ProductCard({ product }) {
   // effectivePrice (tính sẵn ở backend) xử lý đúng cả trường hợp salePrice=0 (hàng khuyến mãi miễn
   // phí) - `salePrice || price` coi 0 là falsy nên sẽ hiển thị nhầm về giá gốc.
   const displayPrice = product.effectivePrice ?? (product.salePrice || product.price);
+  // Các màu đang bán (không trùng) + sản phẩm có nhiều mức giá theo phiên bản hay không (hiện "Từ ...")
+  const activeVariants = (product.variants || []).filter((v) => v.isActive);
+  const colors = activeVariants.filter((v, i, arr) => arr.findIndex((x) => x.color === v.color) === i);
+  const hasPriceRange = new Set(activeVariants.map((v) => v.effectivePrice)).size > 1;
   const discountPercent =
     product.salePrice != null && product.salePrice < product.price
       ? Math.round(100 - (product.salePrice / product.price) * 100)
@@ -40,11 +44,24 @@ export default function ProductCard({ product }) {
           {product.title}
         </Card.Title>
         <div className="mt-1">
+          {hasPriceRange && <span className="small text-muted">Từ </span>}
           <span className="text-primary fw-bold">{formatVND(displayPrice)}</span>
-          {product.salePrice && product.salePrice < product.price && (
+          {product.salePrice != null && product.salePrice < product.price && (
             <span className="text-muted small text-decoration-line-through ms-2">{formatVND(product.price)}</span>
           )}
         </div>
+        {colors.length > 1 && (
+          <div className="d-flex align-items-center gap-1 mt-1" title={colors.map((c) => c.color).join(', ')}>
+            {colors.slice(0, 5).map((c) => (
+              <span
+                key={c.color}
+                className="rounded-circle border d-inline-block"
+                style={{ width: '0.75rem', height: '0.75rem', background: c.colorHex }}
+              />
+            ))}
+            {colors.length > 5 && <span className="text-muted" style={{ fontSize: '0.7rem' }}>+{colors.length - 5}</span>}
+          </div>
+        )}
         {product.ratingCount > 0 && (
           <div className="text-warning mt-1" style={{ fontSize: '0.75rem' }}>
             ★ {product.ratingAverage} ({product.ratingCount} đánh giá)

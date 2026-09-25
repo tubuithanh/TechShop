@@ -342,7 +342,8 @@ function buildDescription({ title, brand, categoryLabel, shortDescription, specs
 }
 
 /**
- * Sinh danh sách 1000 sản phẩm mẫu đa dạng danh mục/thương hiệu, đầy đủ ảnh và thông số.
+ * Sinh sản phẩm mẫu: mỗi mẫu máy (laptop/màn hình: mỗi cấu hình) là 1 sản phẩm, kèm các phiên bản
+ * màu × dung lượng/kích thước có giá, ảnh riêng - xem VARIANT_MODE.
  * @param {Object} params
  * @param {Record<string, mongoose.Types.ObjectId>} params.categoryIdBySlug
  * @param {Record<string, mongoose.Types.ObjectId>} params.brandIdByName
@@ -350,18 +351,54 @@ function buildDescription({ title, brand, categoryLabel, shortDescription, specs
  * @returns {Array<Object>} mỗi phần tử là 1 product definition kèm 2 field phụ (_brandName, _categorySlug)
  *   dùng để tra cứu sau khi insertMany (KHÔNG thuộc schema Product, phải loại bỏ trước khi insert).
  */
+// Bảng màu cho phiên bản sản phẩm (tên hiển thị + mã màu cho ô chọn màu ở trang chi tiết)
+const COLOR_POOL = [
+  { color: 'Đen', colorHex: '#1f2937' },
+  { color: 'Trắng', colorHex: '#f3f4f6' },
+  { color: 'Xanh Dương', colorHex: '#2563eb' },
+  { color: 'Xám', colorHex: '#6b7280' },
+  { color: 'Bạc', colorHex: '#cbd5e1' },
+  { color: 'Vàng', colorHex: '#eab308' },
+  { color: 'Tím', colorHex: '#8b5cf6' },
+  { color: 'Xanh Lá', colorHex: '#16a34a' },
+  { color: 'Hồng', colorHex: '#ec4899' }
+];
+
+// Cách tạo phiên bản theo danh mục:
+// - options: sản phẩm bán theo màu × tùy chọn (dung lượng/kích thước) - mỗi tùy chọn cao hơn đắt thêm ~12%
+// - config: cấu hình nằm trong TÊN sản phẩm (laptop "16GB/512GB SSD", màn hình "27 inch" thường là mã máy
+//   riêng), phiên bản chỉ khác màu
+// - color: chỉ khác màu
+const VARIANT_MODE = {
+  'dien-thoai': { mode: 'options' },
+  'may-tinh-bang': { mode: 'options' },
+  'dong-ho-thong-minh': { mode: 'options', options: ['41mm', '45mm'] },
+  laptop: { mode: 'config' },
+  'man-hinh': { mode: 'config', maxColors: 1 },
+  'tai-nghe-loa': { mode: 'color' },
+  'phu-kien': { mode: 'color' }
+};
+
+function pickOrdered(list, min, max) {
+  const chosen = new Set(pickMany(list, randInt(min, Math.min(max, list.length))));
+  return list.filter((x) => chosen.has(x));
+}
+
 function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug }) {
   const products = [];
   let globalIndex = 0;
 
   for (const catDef of CATEGORY_DEFS) {
-    const brandNames = Object.keys(catDef.brands);
-    for (let i = 0; i < catDef.count; i++) {
+    const { mode, options: fixedOptions, maxColors = 3 } = VARIANT_MODE[catDef.slug];
+    for (const [brand, models] of Object.entries(catDef.brands)) {
+      for (const model of models) {
+        for (const config of mode === 'config' ? catDef.variants : [null]) {
       globalIndex += 1;
-      const brand = pick(brandNames);
-      const model = pick(catDef.brands[brand]);
-      const variant = pick(catDef.variants);
-      const title = `${model} ${variant}`;
+      const title = config ? `${model} ${config}` : model;
+      const options = mode === 'options' ? pickOrdered(fixedOptions || catDef.variants, 1, 3) : [''];
+      const colors = pickMany(COLOR_POOL, randInt(1, maxColors));
+      // Chuỗi mô tả tùy chọn đưa vào thông số (VD: "Bộ nhớ trong": "128GB / 256GB")
+      const variant = mode === 'options' ? options.join(' / ') : mode === 'color' ? colors.map((c) => c.color).join(' / ') : config;
       const baseSpecs = catDef.buildSpecs({ brand, model, variant });
       // Giữ các thông số gốc lên trước (buildDescription lấy 5 thông số đầu tiên làm "nổi bật"),
       // bổ sung các trường chi tiết theo mẫu thông số của danh mục vào sau, không ghi đè giá trị gốc.
@@ -376,9 +413,23 @@ function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug
       const { featuredImage, imageURLs } = buildImages({ title, categorySlug: catDef.slug, brand, variant, specs });
 
       const [minPrice, maxPrice] = catDef.priceRange;
-      const price = roundPrice(randInt(minPrice, maxPrice));
-      const hasDiscount = Math.random() < 0.6;
-      const salePrice = hasDiscount ? roundPrice(price * (1 - randInt(5, 25) / 100)) : undefined;
+      const basePrice = randInt(minPrice, maxPrice);
+      const discountRate = Math.random() < 0.6 ? randInt(5, 25) / 100 : 0;
+      const variants = [];
+      colors.forEach((c, colorIndex) => {
+        options.forEach((opt, optionIndex) => {
+          const price = roundPrice(basePrice * (1 + 0.12 * optionIndex));
+          variants.push({
+            color: c.color,
+            colorHex: c.colorHex,
+            storage: opt,
+            price,
+            salePrice: discountRate ? roundPrice(price * (1 - discountRate)) : undefined,
+            image: imageURLs[colorIndex % imageURLs.length], // mỗi màu 1 ảnh đại diện riêng
+            isActive: true
+          });
+        });
+      });
 
       const slug = `${slugify(title, { lower: true, locale: 'vi' })}-${String(globalIndex).padStart(4, '0')}`;
 
@@ -391,8 +442,8 @@ function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug
         description,
         featuredImage,
         imageURLs,
-        price,
-        salePrice,
+        price: variants[0].price, // tạm - hook của Product tự tính lại theo phiên bản rẻ nhất
+        variants,
         specifications: specs,
         warrantyMonths: catDef.warrantyMonths(),
         tags: pickMany(TAG_POOL, randInt(1, 3)),
@@ -404,6 +455,8 @@ function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug
         _brandName: brand,
         _categorySlug: catDef.slug
       });
+        }
+      }
     }
   }
 

@@ -15,6 +15,12 @@ function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
 }
 
+// Bộ ảnh hiển thị: ảnh chung của sản phẩm, thêm ảnh riêng của phiên bản lên đầu nếu chưa có trong bộ
+function galleryImages(product, variant) {
+  const base = product.imageURLs?.length ? product.imageURLs : [product.featuredImage].filter(Boolean);
+  return variant?.image && !base.includes(variant.image) ? [variant.image, ...base] : base;
+}
+
 const TABS = [
   { id: 'description', label: 'Mô tả sản phẩm' },
   { id: 'specs', label: 'Thông số kỹ thuật' },
@@ -39,15 +45,30 @@ export default function ProductDetailPage() {
   const [newReview, setNewReview] = useState({ rating: 5, message: '' });
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState('');
+  const [selectedVariantId, setSelectedVariantId] = useState('');
+
+  // Chọn 1 phiên bản: tự chuyển sang cửa hàng còn hàng của ĐÚNG phiên bản đó (tồn kho tính theo phiên
+  // bản), đưa ảnh chính về ảnh của màu đó, và đặt lại số lượng.
+  const selectVariant = (data, variant, currentStoreId) => {
+    if (!variant) return;
+    setSelectedVariantId(variant._id);
+    setQuantity(1);
+    const invs = (data.inventories || []).filter((inv) => inv.variantId === variant._id);
+    const current = invs.find((inv) => inv.storeId?._id === currentStoreId && inv.stock > 0);
+    const firstAvailable = invs.find((inv) => inv.stock > 0);
+    setSelectedStoreId(current?.storeId?._id || firstAvailable?.storeId?._id || invs[0]?.storeId?._id || '');
+    const imgs = galleryImages(data, variant);
+    setActiveImage(Math.max(0, imgs.indexOf(variant.image)));
+  };
 
   useEffect(() => {
     (async () => {
       const data = await productService.getProductBySlug(slug);
       setProduct(data);
-      setActiveImage(0);
-      // Mặc định chọn cửa hàng đầu tiên còn hàng
-      const firstAvailable = data.inventories?.find((inv) => inv.stock > 0);
-      setSelectedStoreId(firstAvailable?.storeId?._id || data.inventories?.[0]?.storeId?._id || '');
+      // Mặc định chọn phiên bản đang bán đầu tiên còn hàng ở bất kỳ cửa hàng nào
+      const active = (data.variants || []).filter((v) => v.isActive);
+      const inStock = active.find((v) => data.inventories?.some((inv) => inv.variantId === v._id && inv.stock > 0));
+      selectVariant(data, inStock || active[0], '');
 
       const [rel, rev, qna] = await Promise.all([
         productService.getRelated(data._id),
@@ -78,19 +99,36 @@ export default function ProductDetailPage() {
       </div>
     );
 
-  const displayPrice = product.effectivePrice ?? (product.salePrice || product.price);
+  const activeVariants = (product.variants || []).filter((v) => v.isActive);
+  const selectedVariant = activeVariants.find((v) => v._id === selectedVariantId) || activeVariants[0];
+  const colorOptions = activeVariants.filter((v, i, arr) => arr.findIndex((x) => x.color === v.color) === i);
+  const storageOptions = activeVariants.filter((v) => v.color === selectedVariant?.color && v.storage);
+  const displayPrice = selectedVariant?.effectivePrice ?? product.effectivePrice;
+  const originalPrice = selectedVariant?.price ?? product.price;
   const specGroups = groupSpecs(product.specifications, product.categoryId?.specTemplate);
-  const images = product.imageURLs?.length ? product.imageURLs : [product.featuredImage];
-  const selectedInventory = product.inventories?.find((inv) => inv.storeId?._id === selectedStoreId);
+  const images = galleryImages(product, selectedVariant);
+  const variantInventories = (product.inventories || []).filter((inv) => inv.variantId === selectedVariant?._id);
+  const variantTotalStock = variantInventories.reduce((sum, inv) => sum + inv.stock, 0);
+  const selectedInventory = variantInventories.find((inv) => inv.storeId?._id === selectedStoreId);
   const currentStock = selectedInventory?.stock || 0;
 
+  // Đổi màu: giữ nguyên dung lượng đang chọn nếu màu mới có, ngược lại lấy phiên bản đầu tiên của màu đó
+  const handleSelectColor = (color) => {
+    const sameStorage = activeVariants.find((v) => v.color === color && v.storage === selectedVariant?.storage);
+    selectVariant(product, sameStorage || activeVariants.find((v) => v.color === color), selectedStoreId);
+  };
+
   const handleAddToCart = async () => {
+    if (!selectedVariant) {
+      setMessage('Sản phẩm hiện không có phiên bản nào đang bán');
+      return;
+    }
     if (!selectedStoreId) {
       setMessage('Vui lòng chọn cửa hàng trước khi thêm vào giỏ');
       return;
     }
     try {
-      await addToCart(product._id, quantity, selectedStoreId);
+      await addToCart(product._id, selectedVariant._id, quantity, selectedStoreId);
       setMessage('Đã thêm vào giỏ hàng!');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
@@ -180,23 +218,64 @@ export default function ProductDetailPage() {
 
           <div className="mb-4">
             <span className="fs-3 text-primary fw-bold">{formatVND(displayPrice)}</span>
-            {product.salePrice != null && product.salePrice < product.price && (
-              <span className="text-muted text-decoration-line-through ms-3">{formatVND(product.price)}</span>
+            {displayPrice < originalPrice && (
+              <span className="text-muted text-decoration-line-through ms-3">{formatVND(originalPrice)}</span>
             )}
           </div>
 
-          {/* Chọn cửa hàng - mô hình multi-store: tồn kho khác nhau theo từng chi nhánh */}
+          {/* Chọn phiên bản: màu (ô màu) + dung lượng/kích thước của màu đó - mỗi phiên bản có giá, ảnh, tồn kho riêng */}
+          {colorOptions.length > 0 && (
+            <div className="mb-3">
+              <div className="small fw-medium mb-2">
+                Màu sắc: <span className="text-muted fw-normal">{selectedVariant?.color}</span>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                {colorOptions.map((v) => (
+                  <button
+                    key={v.color}
+                    type="button"
+                    title={v.color}
+                    aria-label={`Màu ${v.color}`}
+                    aria-pressed={v.color === selectedVariant?.color}
+                    onClick={() => handleSelectColor(v.color)}
+                    className={`rounded-circle border ${v.color === selectedVariant?.color ? 'border-primary border-3' : 'border-secondary-subtle'}`}
+                    style={{ width: '2.25rem', height: '2.25rem', background: v.colorHex, padding: 0 }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {storageOptions.length > 0 && (
+            <div className="mb-4">
+              <div className="small fw-medium mb-2">Phiên bản</div>
+              <div className="d-flex flex-wrap gap-2">
+                {storageOptions.map((v) => (
+                  <Button
+                    key={v._id}
+                    size="sm"
+                    variant={v._id === selectedVariant?._id ? 'primary' : 'outline-secondary'}
+                    onClick={() => selectVariant(product, v, selectedStoreId)}
+                  >
+                    <div className="fw-medium">{v.storage}</div>
+                    <div style={{ fontSize: '0.7rem' }}>{formatVND(v.effectivePrice)}</div>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Chọn cửa hàng - tồn kho khác nhau theo từng chi nhánh VÀ theo từng phiên bản */}
           <div className="mb-4">
-            <div className="small fw-medium mb-1">Chọn cửa hàng để xem tồn kho</div>
+            <div className="small fw-medium mb-1">Chọn cửa hàng để xem tồn kho ({selectedVariant?.label})</div>
             <Form.Select value={selectedStoreId} onChange={(e) => setSelectedStoreId(e.target.value)} className="small">
-              {product.inventories?.map((inv) => (
+              {variantInventories.map((inv) => (
                 <option key={inv._id} value={inv.storeId?._id}>
                   {inv.storeId?.name} ({inv.storeId?.city}) — {inv.stock > 0 ? `Còn ${inv.stock} sản phẩm` : 'Hết hàng'}
                 </option>
               ))}
             </Form.Select>
             <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
-              Tổng tồn kho toàn hệ thống: {product.totalStock} sản phẩm
+              Tổng tồn kho phiên bản này toàn hệ thống: {variantTotalStock} sản phẩm
             </div>
           </div>
 

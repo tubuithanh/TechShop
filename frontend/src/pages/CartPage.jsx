@@ -55,6 +55,7 @@ export default function CartPage() {
                 />
                 <div className="flex-grow-1">
                   <div className="fw-medium small">{item.name}</div>
+                  {item.variantLabel && <div className="text-muted small">Phiên bản: {item.variantLabel}</div>}
                   <div className="text-primary fw-bold">{formatVND(item.unitPrice)}</div>
                 </div>
                 <div className="d-flex align-items-center border rounded">

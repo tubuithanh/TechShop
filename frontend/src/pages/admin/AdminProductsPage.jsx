@@ -7,6 +7,7 @@ import { resizeImageToDataUrl } from '../../utils/imageUpload';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
 import SpecificationsEditor from '../../components/admin/SpecificationsEditor';
+import VariantsEditor, { newVariant } from '../../components/admin/VariantsEditor';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -16,8 +17,7 @@ const emptyForm = {
   title: '',
   brandId: '',
   categoryId: '',
-  price: '',
-  salePrice: '',
+  variants: [newVariant()],
   description: '',
   imageURLs: [placeholderImage(400, 400, 'San pham')],
   coverIndex: 0,
@@ -91,20 +91,32 @@ export default function AdminProductsPage() {
       return;
     }
     const coverIdx = Math.min(form.coverIndex, cleanUrls.length - 1);
-    // form.salePrice === '' nghĩa là "không đặt giá khuyến mãi" (undefined) - nhưng nếu admin nhập
-    // đúng số 0 (hàng miễn phí), `Number(form.salePrice) || undefined` sẽ SAI vì 0 là falsy, luôn
-    // gửi undefined thay vì 0. Kiểm tra chuỗi rỗng tường minh thay vì dựa vào toán tử ||.
-    const salePriceValue = form.salePrice === '' ? undefined : Number(form.salePrice);
-    if (salePriceValue != null && salePriceValue > Number(form.price)) {
-      alert('Giá khuyến mãi không được lớn hơn giá gốc');
+    // salePrice '' = không khuyến mãi (undefined); nhưng số 0 (hàng miễn phí) phải giữ là 0 - kiểm tra
+    // chuỗi rỗng tường minh thay vì dùng toán tử || (0 là falsy).
+    const variants = form.variants.map((v) => ({
+      ...(v._id ? { _id: v._id } : {}), // giữ _id cũ -> không mất liên kết tồn kho/giỏ hàng/đơn hàng
+      color: v.color.trim(),
+      colorHex: v.colorHex,
+      storage: v.storage.trim(),
+      price: Number(v.price),
+      salePrice: v.salePrice === '' || v.salePrice == null ? undefined : Number(v.salePrice),
+      image: v.image.trim(),
+      isActive: v.isActive
+    }));
+    const invalid = variants.find((v) => !v.color || !(v.price >= 0) || (v.salePrice != null && v.salePrice > v.price));
+    if (invalid) {
+      alert('Mỗi phiên bản cần có tên màu và giá gốc hợp lệ; giá khuyến mãi không được lớn hơn giá gốc');
+      return;
+    }
+    if (!variants.some((v) => v.isActive)) {
+      alert('Cần ít nhất 1 phiên bản đang bán');
       return;
     }
     const payload = {
       title: form.title,
       brandId: form.brandId,
       categoryId: form.categoryId,
-      price: Number(form.price),
-      salePrice: salePriceValue,
+      variants,
       description: form.description,
       featuredImage: cleanUrls[coverIdx],
       imageURLs: cleanUrls,
@@ -132,8 +144,16 @@ export default function AdminProductsPage() {
       title: p.title,
       brandId: p.brandId?._id || p.brandId || '',
       categoryId: p.categoryId?._id || p.categoryId || '',
-      price: p.price,
-      salePrice: p.salePrice ?? '', // dùng ?? thay vì || - salePrice=0 (hàng miễn phí) không nên hiện trống
+      variants: (p.variants || []).map((v) => ({
+        _id: v._id,
+        color: v.color,
+        colorHex: v.colorHex || '#1f2937',
+        storage: v.storage || '',
+        price: v.price,
+        salePrice: v.salePrice ?? '', // ?? thay vì || - salePrice=0 (hàng miễn phí) không hiện trống
+        image: v.image || '',
+        isActive: v.isActive !== false
+      })),
       description: p.description || '',
       imageURLs: urls.length ? urls : [placeholderImage(400, 400, 'San pham')],
       coverIndex: coverIdx === -1 ? 0 : coverIdx,
@@ -256,21 +276,10 @@ export default function AdminProductsPage() {
                     ))}
                   </Form.Select>
                 </Col>
-                <Col md={6}>
-                  <Form.Control
-                    required
-                    type="number"
-                    placeholder="Giá gốc"
-                    value={form.price}
-                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  />
-                </Col>
-                <Col md={6}>
-                  <Form.Control
-                    type="number"
-                    placeholder="Giá khuyến mãi (tùy chọn)"
-                    value={form.salePrice}
-                    onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
+                <Col xs={12}>
+                  <VariantsEditor
+                    value={form.variants}
+                    onChange={(variants) => setForm((prev) => ({ ...prev, variants }))}
                   />
                 </Col>
                 <Col xs={12}>

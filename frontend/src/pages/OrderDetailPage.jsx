@@ -110,7 +110,8 @@ export default function OrderDetailPage() {
         {order.items.map((item, idx) => (
           <ListGroup.Item key={idx} className="d-flex justify-content-between small">
             <span>
-              {item.name} x{item.quantity}
+              {item.name}
+              {item.variantLabel && <span className="text-muted"> ({item.variantLabel})</span>} x{item.quantity}
             </span>
             <span>{formatVND(item.unitPrice * item.quantity)}</span>
           </ListGroup.Item>
@@ -169,8 +170,9 @@ export default function OrderDetailPage() {
             >
               <option value="">-- Chọn sản phẩm cần bảo hành --</option>
               {order.items.map((item) => (
-                <option key={item.productId} value={item.productId}>
+                <option key={`${item.productId}-${item.variantId}`} value={item.productId}>
                   {item.name}
+                  {item.variantLabel ? ` (${item.variantLabel})` : ''}
                 </option>
               ))}
             </Form.Select>

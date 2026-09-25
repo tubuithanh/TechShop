@@ -3,6 +3,9 @@ const mongoose = require('mongoose');
 const orderItemSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    // Phiên bản đã mua (dùng để hoàn kho đúng phiên bản khi hủy/trả hàng) + nhãn chụp lại tại thời điểm mua
+    variantId: { type: mongoose.Schema.Types.ObjectId },
+    variantLabel: { type: String, default: '' },
     quantity: { type: Number, required: true },
     unitPrice: { type: Number, required: true },
     // Mở rộng thêm để hiển thị nhanh trong lịch sử đơn hàng, không cần populate lại

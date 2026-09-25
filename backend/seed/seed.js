@@ -192,18 +192,22 @@ async function run() {
   const stores = [store1, store2, store3];
   const inventoryDocs = [];
   for (const product of createdProducts) {
-    for (const store of stores) {
-      inventoryDocs.push({
-        storeId: store._id,
-        productId: product._id,
-        stock: Math.floor(Math.random() * 30) + 5, // 5-34 sản phẩm mỗi cửa hàng
-        lowStockThreshold: 5,
-        lastUpdated: new Date()
-      });
+    for (const variant of product.variants) {
+      for (const store of stores) {
+        inventoryDocs.push({
+          storeId: store._id,
+          productId: product._id,
+          variantId: variant._id,
+          stock: Math.floor(Math.random() * 30) + 5, // 5-34 sản phẩm mỗi phiên bản mỗi cửa hàng
+          lowStockThreshold: 5,
+          lastUpdated: new Date()
+        });
+      }
     }
   }
   await StoreInventory.insertMany(inventoryDocs);
-  console.log(`[Seed] Đã tạo ${inventoryDocs.length} bản ghi tồn kho (${createdProducts.length} sản phẩm × ${stores.length} cửa hàng)`);
+  const variantCount = createdProducts.reduce((s, p) => s + p.variants.length, 0);
+  console.log(`[Seed] Đã tạo ${inventoryDocs.length} bản ghi tồn kho (${variantCount} phiên bản × ${stores.length} cửa hàng)`);
 
   // ----- 1000 đơn hàng mẫu -----
   const orderDefs = generateOrders(1000, { customers: allCustomers, products: createdProducts, stores });

@@ -6,6 +6,8 @@ const mongoose = require('mongoose');
 const cartItemSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    variantId: { type: mongoose.Schema.Types.ObjectId, required: true }, // phiên bản trong Product.variants
+    variantLabel: { type: String, default: '' }, // VD: "Đen - 256GB" (lưu sẵn để hiển thị)
     name: String,
     image: String,
     unitPrice: { type: Number, required: true },

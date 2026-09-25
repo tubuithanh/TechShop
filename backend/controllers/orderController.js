@@ -40,12 +40,18 @@ async function restoreCartItems(userId, items) {
     return;
   }
   for (const restored of items) {
-    const existing = cart.items.find((i) => i.productId.toString() === restored.productId.toString());
+    const existing = cart.items.find(
+      (i) =>
+        i.productId.toString() === restored.productId.toString() &&
+        String(i.variantId) === String(restored.variantId)
+    );
     if (existing) {
       existing.quantity += restored.quantity;
     } else {
       cart.items.push({
         productId: restored.productId,
+        variantId: restored.variantId,
+        variantLabel: restored.variantLabel,
         name: restored.name,
         image: restored.image,
         unitPrice: restored.unitPrice,
@@ -56,10 +62,16 @@ async function restoreCartItems(userId, items) {
   await cart.save();
 }
 
+// Hoàn kho đúng phiên bản đã bán. Đơn hàng cũ (trước khi có phiên bản) đã được migration gán variantId
+// (seed/migrateVariants.js); nếu vẫn thiếu thì KHÔNG đoán bừa phiên bản nào để cộng kho.
 async function restoreStock(storeId, items) {
   for (const item of items) {
+    if (!item.variantId) {
+      console.warn(`[restoreStock] Bỏ qua dòng hàng thiếu variantId (sản phẩm ${item.productId})`);
+      continue;
+    }
     await StoreInventory.findOneAndUpdate(
-      { productId: item.productId, storeId },
+      { productId: item.productId, variantId: item.variantId, storeId },
       { $inc: { stock: item.quantity }, lastUpdated: new Date() }
     );
   }
@@ -99,16 +111,20 @@ const createOrder = asyncHandler(async (req, res) => {
   const orderItems = [];
   for (const item of cartItemsSnapshot) {
     const product = productMap.get(item.productId.toString());
-    if (!product || !product.isActive) {
+    const variant = product?.variants.id(item.variantId);
+    if (!product || !product.isActive || !variant || !variant.isActive) {
       await restoreCartItems(req.account._id, cartItemsSnapshot);
-      return res.status(400).json({ message: `Sản phẩm "${item.name}" không còn kinh doanh` });
+      const label = item.variantLabel ? ` (${item.variantLabel})` : '';
+      return res.status(400).json({ message: `Sản phẩm "${item.name}${label}" không còn kinh doanh` });
     }
     orderItems.push({
       productId: item.productId,
+      variantId: variant._id,
+      variantLabel: variant.label,
       quantity: item.quantity,
-      unitPrice: product.effectivePrice,
+      unitPrice: variant.effectivePrice,
       name: product.title,
-      image: product.featuredImage
+      image: variant.image || product.featuredImage
     });
   }
 
@@ -165,7 +181,7 @@ const createOrder = asyncHandler(async (req, res) => {
   const decremented = [];
   for (const item of orderItems) {
     const updated = await StoreInventory.findOneAndUpdate(
-      { productId: item.productId, storeId, stock: { $gte: item.quantity } },
+      { productId: item.productId, variantId: item.variantId, storeId, stock: { $gte: item.quantity } },
       { $inc: { stock: -item.quantity }, lastUpdated: new Date() },
       { new: true }
     );
@@ -173,7 +189,7 @@ const createOrder = asyncHandler(async (req, res) => {
       await restoreStock(storeId, decremented);
       await restoreCartItems(req.account._id, cartItemsSnapshot);
       return res.status(400).json({
-        message: `Sản phẩm "${item.name}" không đủ tồn kho tại cửa hàng đã chọn`
+        message: `Sản phẩm "${item.name} (${item.variantLabel})" không đủ tồn kho tại cửa hàng đã chọn`
       });
     }
     decremented.push(item);

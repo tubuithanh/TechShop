@@ -31,8 +31,8 @@ export function CartProvider({ children }) {
   }, [user, refreshCart]);
 
   // storeId: cửa hàng khách chọn để mua (mô hình multi-store) - có thể null nếu chưa chọn
-  const addToCart = async (productId, quantity = 1, storeId = null) => {
-    const data = await cartService.addItem({ productId, quantity, storeId });
+  const addToCart = async (productId, variantId, quantity = 1, storeId = null) => {
+    const data = await cartService.addItem({ productId, variantId, quantity, storeId });
     setCart(data);
   };
 

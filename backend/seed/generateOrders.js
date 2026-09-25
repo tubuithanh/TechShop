@@ -39,12 +39,15 @@ function generateOrders(count, { customers, products, stores }) {
     const items = [];
     for (let k = 0; k < itemCount; k++) {
       const product = pick(products);
+      const variant = pick(product.variants);
       items.push({
         productId: product._id,
+        variantId: variant._id,
+        variantLabel: variant.label,
         quantity: randInt(1, 2),
-        unitPrice: product.effectivePrice ?? (product.salePrice || product.price),
+        unitPrice: variant.effectivePrice,
         name: product.title,
-        image: product.featuredImage
+        image: variant.image || product.featuredImage
       });
     }
     const itemsTotal = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);

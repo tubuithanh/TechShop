@@ -176,8 +176,27 @@ const createProduct = asyncHandler(async (req, res) => {
 const updateProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+
+  // Phiên bản bị xóa khỏi danh sách: chỉ cho xóa khi không còn hàng ở bất kỳ cửa hàng nào - nếu không,
+  // tồn kho đó "mồ côi" (trỏ tới phiên bản không còn tồn tại). Muốn ngừng bán thì tắt isActive.
+  // Phiên bản giữ lại PHẢI gửi kèm _id cũ, nếu không sẽ bị coi là xóa + tạo mới (mất liên kết tồn kho).
+  let removedIds = [];
+  if (Array.isArray(req.body.variants)) {
+    const keptIds = new Set(req.body.variants.filter((v) => v._id).map((v) => String(v._id)));
+    removedIds = product.variants.filter((v) => !keptIds.has(String(v._id))).map((v) => v._id);
+    if (removedIds.length) {
+      const stocked = await StoreInventory.countDocuments({ productId: product._id, variantId: { $in: removedIds }, stock: { $gt: 0 } });
+      if (stocked > 0) {
+        return res.status(400).json({
+          message: 'Không thể xóa phiên bản còn hàng trong kho - hãy tắt "Đang bán" của phiên bản đó thay vì xóa'
+        });
+      }
+    }
+  }
+
   Object.assign(product, req.body);
   await product.save();
+  if (removedIds.length) await StoreInventory.deleteMany({ productId: product._id, variantId: { $in: removedIds } });
   res.json({ data: product });
 });
 

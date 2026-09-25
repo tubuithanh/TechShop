@@ -19,7 +19,7 @@ export default function AdminInventoryPage() {
   const [stores, setStores] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(scopedStoreId || '');
-  const [form, setForm] = useState({ productId: '', stock: 0, lowStockThreshold: 5 });
+  const [form, setForm] = useState({ productId: '', variantId: '', stock: 0, lowStockThreshold: 5 });
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -58,7 +58,7 @@ export default function AdminInventoryPage() {
     e.preventDefault();
     try {
       await api.post('/store-inventories', { ...form, storeId: selectedStoreId, stock: Number(form.stock) });
-      setForm({ productId: '', stock: 0, lowStockThreshold: 5 });
+      setForm({ productId: '', variantId: '', stock: 0, lowStockThreshold: 5 });
       loadInventories(selectedStoreId);
     } catch (err) {
       alert(err.response?.data?.message || 'Không thể lưu tồn kho');
@@ -109,12 +109,31 @@ export default function AdminInventoryPage() {
               <Form.Select
                 required
                 value={form.productId}
-                onChange={(e) => setForm({ ...form, productId: e.target.value })}
+                onChange={(e) => setForm({ ...form, productId: e.target.value, variantId: '' })}
               >
                 <option value="">-- Chọn sản phẩm --</option>
                 {products.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.title}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label className="small text-muted">Phiên bản</Form.Label>
+              <Form.Select
+                required
+                value={form.variantId}
+                disabled={!form.productId}
+                onChange={(e) => setForm({ ...form, variantId: e.target.value })}
+              >
+                <option value="">-- Chọn phiên bản --</option>
+                {(products.find((p) => p._id === form.productId)?.variants || []).map((v) => (
+                  <option key={v._id} value={v._id}>
+                    {v.label}
+                    {v.isActive ? '' : ' (ngừng bán)'}
                   </option>
                 ))}
               </Form.Select>
@@ -167,7 +186,10 @@ export default function AdminInventoryPage() {
           <tbody>
             {inventories.map((inv) => (
               <tr key={inv._id} className={inv.stock <= inv.lowStockThreshold ? 'table-danger' : ''}>
-                <td>{inv.productId?.title}</td>
+                <td>
+                  {inv.productId?.title}
+                  <div className="small text-muted">{inv.variantLabel}</div>
+                </td>
                 <td className="fw-medium">
                   {inv.stock}
                   {inv.stock <= inv.lowStockThreshold && (

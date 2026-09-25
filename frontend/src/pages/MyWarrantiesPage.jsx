@@ -195,8 +195,9 @@ export default function MyWarrantiesPage() {
               >
                 <option value="">-- Chọn sản phẩm --</option>
                 {selectedOrder?.items.map((item) => (
-                  <option key={item.productId} value={item.productId}>
+                  <option key={`${item.productId}-${item.variantId}`} value={item.productId}>
                     {item.name}
+                    {item.variantLabel ? ` (${item.variantLabel})` : ''}
                   </option>
                 ))}
               </Form.Select>
