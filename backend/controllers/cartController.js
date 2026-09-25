@@ -21,7 +21,10 @@ const addItem = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Sản phẩm không tồn tại hoặc đã ngừng kinh doanh' });
   }
 
-  const price = product.salePrice || product.price;
+  // Dùng effectivePrice (đã được model tự tính đúng, xử lý cả trường hợp salePrice=0 cho hàng
+  // khuyến mãi miễn phí) thay vì `salePrice || price` - toán tử `||` coi 0 là falsy nên sẽ SAI,
+  // rơi về giá gốc thay vì giá 0đ mà admin chủ ý đặt.
+  const price = product.effectivePrice;
   const cart = await getOrCreateCart(req.account._id);
   const existing = cart.items.find((i) => i.productId.toString() === productId);
   const totalQuantityAfterAdd = (existing?.quantity || 0) + Number(quantity);

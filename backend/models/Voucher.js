@@ -8,8 +8,9 @@ const voucherSchema = new mongoose.Schema(
     discountValue: { type: Number, required: true },
     maxDiscountAmount: Number, // áp dụng khi discountType = percent
     minOrderValue: { type: Number, default: 0 },
-    usageLimit: { type: Number, default: 0 }, // 0 = không giới hạn
+    usageLimit: { type: Number, default: 0 }, // 0 = không giới hạn (tổng toàn hệ thống)
     usedCount: { type: Number, default: 0 },
+    perCustomerLimit: { type: Number, default: 1 }, // 0 = không giới hạn số lần dùng của mỗi khách
     startDate: { type: Date, default: Date.now },
     endDate: { type: Date, required: true },
     isActive: { type: Boolean, default: true }

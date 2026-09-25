@@ -6,7 +6,7 @@ const storeInventorySchema = new mongoose.Schema(
   {
     storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', required: true },
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
-    stock: { type: Number, required: true, default: 0 },
+    stock: { type: Number, required: true, default: 0, min: 0 },
     lowStockThreshold: { type: Number, default: 5 },
     lastUpdated: { type: Date, default: Date.now }
   },

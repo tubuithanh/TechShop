@@ -15,18 +15,21 @@ const getProducts = asyncHandler(async (req, res) => {
   if (keyword) filter.$text = { $search: keyword };
   if (categoryId) filter.categoryId = categoryId;
   if (brandId) filter.brandId = { $in: brandId.split(',') };
+  // Lọc/sắp xếp theo effectivePrice (giá THẬT khách trả = salePrice||price), không phải "price"
+  // (giá gốc trước khuyến mãi) - nếu không, sản phẩm đang giảm giá sâu có thể bị loại khỏi kết quả
+  // lọc theo ngân sách của khách dù giá thực tế vẫn nằm trong khoảng đó.
   if (minPrice || maxPrice) {
-    filter.price = {};
-    if (minPrice) filter.price.$gte = Number(minPrice);
-    if (maxPrice) filter.price.$lte = Number(maxPrice);
+    filter.effectivePrice = {};
+    if (minPrice) filter.effectivePrice.$gte = Number(minPrice);
+    if (maxPrice) filter.effectivePrice.$lte = Number(maxPrice);
   }
 
   // Trường sắp xếp chính của từng chế độ sort, kèm _id làm tiêu chí phụ để đảm bảo
   // thứ tự ổn định (nhiều sản phẩm có thể trùng price/soldCount/ratingAverage)
   const sortFieldMap = {
     newest: null, // chỉ sort theo _id
-    price_asc: { field: 'price', dir: 1 },
-    price_desc: { field: 'price', dir: -1 },
+    price_asc: { field: 'effectivePrice', dir: 1 },
+    price_desc: { field: 'effectivePrice', dir: -1 },
     best_selling: { field: 'soldCount', dir: -1 },
     top_rated: { field: 'ratingAverage', dir: -1 }
   };

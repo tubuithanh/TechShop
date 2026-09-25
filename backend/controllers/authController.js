@@ -35,6 +35,9 @@ const requestRegisterOtp = asyncHandler(async (req, res) => {
 
   const existed = await User.findOne({ email: email.toLowerCase() });
   if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' });
+  // Cũng kiểm tra trùng với collection "admins" - tránh gửi OTP đăng ký cho email của 1 admin thật.
+  const existedAdmin = await Admin.findOne({ email: email.toLowerCase() });
+  if (existedAdmin) return res.status(409).json({ message: 'Email đã được sử dụng' });
 
   await Otp.deleteMany({ email: email.toLowerCase(), purpose: 'register' });
   const code = Otp.generateCode();
@@ -86,6 +89,11 @@ const register = asyncHandler(async (req, res) => {
 
   const existed = await User.findOne({ email: email.toLowerCase() });
   if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' });
+  // Cũng phải kiểm tra trùng với collection "admins" - nếu không, ai đó có thể tự đăng ký tài khoản
+  // khách hàng bằng đúng email của 1 admin thật, khiến admin đó gặp khó khăn khi đăng nhập lại
+  // (login() phải thử cả 2 collection - xem sửa đổi ở login() bên dưới để phòng vệ thêm 1 lớp nữa).
+  const existedAdmin = await Admin.findOne({ email: email.toLowerCase() });
+  if (existedAdmin) return res.status(409).json({ message: 'Email đã được sử dụng' });
 
   const verifiedOtp = await Otp.findOne({ email: email.toLowerCase(), purpose: 'register', verified: true }).sort({
     createdAt: -1
@@ -118,35 +126,40 @@ const login = asyncHandler(async (req, res) => {
   const normalizedEmail = email.toLowerCase();
 
   const user = await User.findOne({ email: normalizedEmail }).select('+password');
-  if (user) {
-    if (!user.isActive) return res.status(401).json({ message: 'Tài khoản đã bị khóa' });
+  if (user && user.isActive) {
     const isMatch = await user.comparePassword(password);
-    if (!isMatch) return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+    if (isMatch) {
+      user.lastLoginAt = new Date();
+      await user.save();
 
-    user.lastLoginAt = new Date();
-    await user.save();
-
-    const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
-    const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
-    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
-    return res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
+      const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
+      const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
+      res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
+      return res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
+    }
   }
 
+  // Email không khớp (hoặc sai mật khẩu/bị khóa) ở collection "users" - THỬ TIẾP collection
+  // "admins" thay vì dừng lại ngay ở trên. Trước đây chỉ cần tìm thấy email ở "users" là dừng luôn
+  // (kể cả khi sai mật khẩu), nên nếu ai đó tự đăng ký tài khoản khách hàng trùng email với 1 admin
+  // thật, admin đó sẽ không bao giờ đăng nhập được nữa dù nhập đúng mật khẩu admin của mình.
   const admin = await Admin.findOne({ email: normalizedEmail }).select('+password');
-  if (admin) {
-    if (!admin.isActive) return res.status(401).json({ message: 'Tài khoản đã bị khóa' });
+  if (admin && admin.isActive) {
     const isMatch = await admin.comparePassword(password);
-    if (!isMatch) return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+    if (isMatch) {
+      admin.lastLoginAt = new Date();
+      await admin.save();
 
-    admin.lastLoginAt = new Date();
-    await admin.save();
-
-    const accessToken = generateAccessToken({ _id: admin._id, role: admin.role });
-    const refreshToken = generateRefreshToken({ _id: admin._id, role: admin.role });
-    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
-    return res.json({ message: 'Đăng nhập thành công', user: admin.toSafeObject(), accessToken });
+      const accessToken = generateAccessToken({ _id: admin._id, role: admin.role });
+      const refreshToken = generateRefreshToken({ _id: admin._id, role: admin.role });
+      res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
+      return res.json({ message: 'Đăng nhập thành công', user: admin.toSafeObject(), accessToken });
+    }
   }
 
+  if ((user && !user.isActive) || (admin && !admin.isActive)) {
+    return res.status(401).json({ message: 'Tài khoản đã bị khóa' });
+  }
   return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
 });
 
@@ -178,10 +191,18 @@ const zaloCallback = asyncHandler(async (req, res) => {
     // KHÔNG gọi lấy hồ sơ (graph.zalo.me) ngay tại đây - Zalo chặn trả về thông tin cá nhân nếu
     // request xuất phát từ server đặt ngoài Việt Nam (VD: Render). Thay vào đó, chuyển access_token
     // cho trình duyệt của chính người dùng để TRÌNH DUYỆT tự gọi Zalo (mang đúng IP thật của họ) -
-    // xem zaloComplete() bên dưới, được gọi từ trang ZaloFinishPage ở frontend. Đặt access_token sau
-    // dấu "#" (URL fragment) vì phần này KHÔNG được trình duyệt gửi lên server ở bất kỳ request nào
-    // tiếp theo, giảm rủi ro token bị lưu vào access log.
-    res.redirect(`${clientUrl}/zalo-finish#access_token=${encodeURIComponent(tokenData.access_token)}`);
+    // xem zaloComplete() bên dưới, được gọi từ trang ZaloFinishPage ở frontend.
+    //
+    // access_token KHÔNG được gửi thẳng - nó được BỌC trong 1 JWT ký bởi chính server (hết hạn sau 3
+    // phút). Đây là bằng chứng KHÔNG THỂ GIẢ MẠO rằng zaloComplete() đang được gọi ngay sau một lượt
+    // đổi code->token THẬT với Zalo vừa xảy ra, chặn kiểu tấn công "POST thẳng { id, name, picture }
+    // vào /api/auth/zalo/complete mà chưa từng đăng nhập Zalo" để chiếm đoạt tài khoản của người khác.
+    // Đặt sau dấu "#" (URL fragment) vì phần này KHÔNG được trình duyệt gửi lên server ở bất kỳ
+    // request nào tiếp theo, giảm rủi ro lọt vào access log.
+    const zaloSession = jwt.sign({ zaloAccessToken: tokenData.access_token }, process.env.JWT_ACCESS_SECRET, {
+      expiresIn: '3m'
+    });
+    res.redirect(`${clientUrl}/zalo-finish#session=${encodeURIComponent(zaloSession)}`);
   } catch (err) {
     console.error('Lỗi đăng nhập Zalo:', err.message);
     res.redirect(`${clientUrl}/login?error=zalo_failed`);
@@ -191,17 +212,34 @@ const zaloCallback = asyncHandler(async (req, res) => {
 // @route POST /api/auth/zalo/complete - nhận hồ sơ Zalo mà FRONTEND đã tự lấy trực tiếp từ
 // graph.zalo.me (bằng chính IP trình duyệt người dùng), hoàn tất tạo/tìm user và đăng nhập.
 const zaloComplete = asyncHandler(async (req, res) => {
-  const { id, name, picture } = req.body;
-  if (!id) return res.status(400).json({ message: 'Thiếu thông tin định danh Zalo' });
+  const { id, name, picture, session } = req.body;
+
+  // Bắt buộc "session" hợp lệ (JWT do chính backend ký ở zaloCallback ngay sau khi đổi code lấy
+  // access_token THẬT với Zalo) - chứng minh request bắt nguồn từ một lượt đăng nhập Zalo vừa hoàn
+  // tất, không phải một request giả mạo tự chế { id, name, picture } gửi thẳng tới endpoint này.
+  try {
+    jwt.verify(session, process.env.JWT_ACCESS_SECRET);
+  } catch (err) {
+    return res.status(401).json({ message: 'Phiên đăng nhập Zalo không hợp lệ hoặc đã hết hạn' });
+  }
+
+  // "id" phải là chuỗi (không phải object) - chặn NoSQL injection kiểu gửi { "$ne": null } khiến
+  // truy vấn Mongo bên dưới khớp với BẤT KỲ user nào đã liên kết Zalo thay vì đúng 1 user.
+  if (typeof id !== 'string' || !id.trim()) {
+    return res.status(400).json({ message: 'Thiếu thông tin định danh Zalo' });
+  }
+
+  const safeName = typeof name === 'string' && name.trim() ? name.trim() : 'Người dùng Zalo';
+  const safeAvatar = typeof picture?.data?.url === 'string' ? picture.data.url : '';
 
   let user = await User.findOne({ zaloId: id });
   if (!user) {
     // Zalo Social API mặc định không trả về email, nên tạo email "giả" duy nhất để thỏa schema
     // (không dùng để liên hệ/gửi mail) - tài khoản này chỉ đăng nhập lại được qua Zalo.
     user = await User.create({
-      displayName: name || 'Người dùng Zalo',
+      displayName: safeName,
       email: `zalo${id}@zalo.techshop.local`,
-      avatar: picture?.data?.url || '',
+      avatar: safeAvatar,
       zaloId: id,
       password: crypto.randomBytes(24).toString('hex'),
       termsAcceptedAt: new Date()

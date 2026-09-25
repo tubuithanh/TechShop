@@ -30,10 +30,13 @@ const checkStock = asyncHandler(async (req, res) => {
 // @route POST /api/store-inventories - tạo/cập nhật tồn kho (upsert)
 const upsertInventory = asyncHandler(async (req, res) => {
   const { storeId, productId, stock, lowStockThreshold } = req.body;
+  if (typeof stock !== 'number' || stock < 0) {
+    return res.status(400).json({ message: 'Số lượng tồn kho không hợp lệ (phải là số >= 0)' });
+  }
   const inventory = await StoreInventory.findOneAndUpdate(
     { storeId, productId },
     { stock, lowStockThreshold, lastUpdated: new Date() },
-    { new: true, upsert: true }
+    { new: true, upsert: true, runValidators: true }
   );
   res.status(201).json({ data: inventory });
 });
