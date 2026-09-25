@@ -8,11 +8,11 @@ const {
   updateVoucher,
   deleteVoucher
 } = require('../controllers/voucherController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, authorize, can } = require('../middlewares/authMiddleware');
 
 router.get('/active', getActiveVouchers);
 router.post('/validate', protect, validateVoucher);
-router.get('/', protect, authorize('admin', 'staff'), getVouchers);
+router.get('/', protect, can('vouchers.view'), getVouchers);
 router.post('/', protect, authorize('admin'), createVoucher);
 router.put('/:id', protect, authorize('admin'), updateVoucher);
 router.delete('/:id', protect, authorize('admin'), deleteVoucher);

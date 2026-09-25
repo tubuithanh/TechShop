@@ -7,12 +7,12 @@ const {
   updateInventory,
   getLowStockAlerts
 } = require('../controllers/storeInventoryController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, can } = require('../middlewares/authMiddleware');
 
 router.get('/', getInventories);
 router.get('/check', checkStock);
-router.get('/low-stock', protect, authorize('admin', 'staff'), getLowStockAlerts);
-router.post('/', protect, authorize('admin', 'staff'), upsertInventory);
-router.put('/:id', protect, authorize('admin', 'staff'), updateInventory);
+router.get('/low-stock', protect, can('inventory.manage'), getLowStockAlerts);
+router.post('/', protect, can('inventory.manage'), upsertInventory);
+router.put('/:id', protect, can('inventory.manage'), updateInventory);
 
 module.exports = router;

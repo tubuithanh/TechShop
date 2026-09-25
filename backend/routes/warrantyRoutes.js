@@ -9,7 +9,7 @@ const {
   updateWarrantyStatus,
   updateWarranty
 } = require('../controllers/warrantyController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, can } = require('../middlewares/authMiddleware');
 
 router.get('/track/:code', trackWarranty);
 router.use(protect);
@@ -17,8 +17,8 @@ router.post('/', createWarrantyRequest);
 router.get('/', getMyWarranties);
 router.put('/:id/feedback', submitWarrantyFeedback);
 
-router.get('/admin/all', authorize('admin', 'staff'), getAllWarranties);
-router.put('/:id/status', authorize('admin', 'staff'), updateWarrantyStatus);
-router.put('/:id', authorize('admin', 'staff'), updateWarranty);
+router.get('/admin/all', can('warranties.manage'), getAllWarranties);
+router.put('/:id/status', can('warranties.manage'), updateWarrantyStatus);
+router.put('/:id', can('warranties.manage'), updateWarranty);
 
 module.exports = router;

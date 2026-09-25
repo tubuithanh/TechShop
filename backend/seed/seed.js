@@ -15,6 +15,7 @@ const { generatePosts } = require('./generatePosts');
 
 const User = require('../models/User');
 const Admin = require('../models/Admin');
+const PermissionGroup = require('../models/PermissionGroup');
 const Brand = require('../models/Brand');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
@@ -44,8 +45,22 @@ async function run() {
     Post.deleteMany({}),
     Order.deleteMany({}),
     Review.deleteMany({}),
-    Warranty.deleteMany({})
+    Warranty.deleteMany({}),
+    PermissionGroup.deleteMany({})
   ]);
+
+  // ----- Nhóm quyền mẫu (phân quyền chi tiết cho staff - xem models/PermissionGroup.js) -----
+  const fullOpsGroup = await PermissionGroup.create({
+    name: 'Quản lý vận hành',
+    description: 'Toàn bộ quyền thao tác nghiệp vụ hàng ngày (không gồm các thao tác chỉ-admin như xóa, cấu hình hệ thống)',
+    permissions: PermissionGroup.PERMISSION_KEYS
+  });
+  const supportGroup = await PermissionGroup.create({
+    name: 'Chăm sóc khách hàng',
+    description: 'Chat hỗ trợ, xem đơn hàng và khách hàng',
+    permissions: ['chat.support', 'orders.manage', 'customers.view']
+  });
+  console.log('[Seed] Đã tạo nhóm quyền:', fullOpsGroup.name, '|', supportGroup.name);
 
   // ----- Admins (collection riêng biệt) -----
   const admin = await Admin.create({
@@ -58,9 +73,10 @@ async function run() {
     name: 'Nhân viên bán hàng',
     email: 'staff@example.com',
     password: 'staff123',
-    role: 'staff'
+    role: 'staff',
+    groupIds: [fullOpsGroup._id]
   });
-  console.log('[Seed] Đã tạo admin:', admin.email, '| staff:', staff.email);
+  console.log('[Seed] Đã tạo admin:', admin.email, '| staff:', staff.email, '(nhóm quyền:', fullOpsGroup.name + ')');
 
   // ----- Users (khách hàng) -----
   const customer = await User.create({

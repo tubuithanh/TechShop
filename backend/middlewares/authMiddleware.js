@@ -18,6 +18,10 @@ const protect = async (req, res, next) => {
     let account;
     if (decoded.role === 'customer') {
       account = await User.findById(decoded.id);
+    } else if (decoded.role === 'staff') {
+      // Nạp sẵn quyền của các nhóm mà staff này thuộc về - để middleware `can()` bên dưới kiểm tra
+      // ngay trong bộ nhớ (không phải query DB lại ở mỗi route riêng lẻ).
+      account = await Admin.findById(decoded.id).populate('groupIds', 'name permissions');
     } else {
       account = await Admin.findById(decoded.id);
     }
@@ -44,4 +48,22 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { protect, authorize };
+// Middleware phân quyền CHI TIẾT theo permission key (VD: 'orders.manage') - dùng cho các thao tác
+// quản trị mà staff có thể được cấp quyền riêng lẻ, khác với authorize() vốn chỉ phân theo vai trò
+// cố định (admin/staff). Admin LUÔN được đi qua (toàn quyền), không cần gán nhóm quyền nào.
+const can = (permission) => {
+  return (req, res, next) => {
+    if (req.accountRole === 'admin') return next();
+    if (req.accountRole !== 'staff') {
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
+    }
+    const groups = req.account.groupIds || [];
+    const hasPermission = groups.some((g) => g.permissions?.includes(permission));
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này (thiếu quyền: ' + permission + ')' });
+    }
+    next();
+  };
+};
+
+module.exports = { protect, authorize, can };

@@ -47,6 +47,8 @@ import AdminArticlesPage from './pages/admin/AdminArticlesPage';
 import AdminChatPage from './pages/admin/AdminChatPage';
 import AdminAuditLogPage from './pages/admin/AdminAuditLogPage';
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
+import AdminStaffPage from './pages/admin/AdminStaffPage';
+import AdminPermissionGroupsPage from './pages/admin/AdminPermissionGroupsPage';
 
 // Chặn truy cập toàn site khi bật chế độ bảo trì (Admin > Cấu hình hệ thống), trừ trang /login
 // (để admin/staff vẫn đăng nhập được và tự tắt bảo trì) và các tài khoản admin/staff đã đăng nhập.
@@ -161,6 +163,24 @@ export default function App() {
                   <Route path="chat" element={<AdminChatPage />} />
                   <Route path="audit-logs" element={<AdminAuditLogPage />} />
                   <Route path="settings" element={<AdminSettingsPage />} />
+                  {/* Quản lý nhân viên/nhóm quyền là thao tác cấu trúc nhạy cảm - chỉ admin được vào
+                      trang này (staff dù có quyền gì cũng không thấy được, tránh tự cấp thêm quyền). */}
+                  <Route
+                    path="staff"
+                    element={
+                      <PrivateRoute roles={['admin']}>
+                        <AdminStaffPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="permission-groups"
+                    element={
+                      <PrivateRoute roles={['admin']}>
+                        <AdminPermissionGroupsPage />
+                      </PrivateRoute>
+                    }
+                  />
                 </Route>
               </Routes>
             </MaintenanceGate>

@@ -27,6 +27,8 @@ const collectionRoutes = require('./routes/collectionRoutes');
 const auditLogRoutes = require('./routes/auditLogRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const settingRoutes = require('./routes/settingRoutes');
+const permissionGroupRoutes = require('./routes/permissionGroupRoutes');
+const staffRoutes = require('./routes/staffRoutes');
 
 const app = express();
 
@@ -99,6 +101,8 @@ app.use('/api/collections', collectionRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/settings', settingRoutes);
+app.use('/api/permission-groups', permissionGroupRoutes);
+app.use('/api/staff', staffRoutes);
 
 // ----- Xử lý lỗi -----
 app.use(notFound);

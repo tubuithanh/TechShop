@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { hideReview, replyReview, getAllReviewsAdmin } = require('../controllers/reviewController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, can } = require('../middlewares/authMiddleware');
 
-router.get('/admin/all', protect, authorize('admin', 'staff'), getAllReviewsAdmin);
-router.put('/:id/hide', protect, authorize('admin', 'staff'), hideReview);
-router.post('/:id/reply', protect, authorize('admin', 'staff'), replyReview);
+router.get('/admin/all', protect, can('reviews.manage'), getAllReviewsAdmin);
+router.put('/:id/hide', protect, can('reviews.manage'), hideReview);
+router.post('/:id/reply', protect, can('reviews.manage'), replyReview);
 
 module.exports = router;

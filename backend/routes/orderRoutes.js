@@ -8,14 +8,14 @@ const {
   getAllOrders,
   updateOrderStatus
 } = require('../controllers/orderController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, can } = require('../middlewares/authMiddleware');
 
 router.use(protect);
 router.post('/', createOrder);
 router.get('/', getMyOrders);
-router.get('/admin/all', authorize('admin', 'staff'), getAllOrders);
+router.get('/admin/all', can('orders.manage'), getAllOrders);
 router.get('/:id', getOrderById);
 router.put('/:id/cancel', cancelOrder);
-router.put('/:id/status', authorize('admin', 'staff'), updateOrderStatus);
+router.put('/:id/status', can('orders.manage'), updateOrderStatus);
 
 module.exports = router;

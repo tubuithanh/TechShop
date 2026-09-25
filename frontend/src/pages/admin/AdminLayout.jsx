@@ -13,8 +13,11 @@ import {
   ChatDots,
   ClockHistory,
   HouseDoor,
-  Gear
+  Gear,
+  PersonBadge,
+  KeyFill
 } from 'react-bootstrap-icons';
+import { useAuth } from '../../store/AuthContext';
 
 const menu = [
   { path: '/admin', label: 'Tổng quan (Dashboard)', icon: Speedometer2 },
@@ -31,8 +34,17 @@ const menu = [
   { path: '/admin/settings', label: 'Cấu hình hệ thống', icon: Gear }
 ];
 
+// Chỉ admin thấy được - quản lý tài khoản nhân viên/nhóm quyền là thao tác cấu trúc nhạy cảm
+// (đã chặn thêm ở tầng route bằng PrivateRoute roles={['admin']}, đây chỉ là ẩn bớt ở giao diện).
+const adminOnlyMenu = [
+  { path: '/admin/staff', label: 'Quản lý nhân viên', icon: PersonBadge },
+  { path: '/admin/permission-groups', label: 'Nhóm quyền', icon: KeyFill }
+];
+
 export default function AdminLayout() {
   const location = useLocation();
+  const { user } = useAuth();
+  const fullMenu = user?.role === 'admin' ? [...menu, ...adminOnlyMenu] : menu;
   return (
     <div className="d-flex min-vh-100">
       <aside className="bg-dark text-white p-3" style={{ width: '14rem', flexShrink: 0 }}>
@@ -40,7 +52,7 @@ export default function AdminLayout() {
           <Speedometer2 size={18} /> Trang quản trị
         </h2>
         <Nav className="flex-column gap-1">
-          {menu.map((m) => (
+          {fullMenu.map((m) => (
             <Nav.Link
               key={m.path}
               as={Link}

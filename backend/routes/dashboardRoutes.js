@@ -7,9 +7,9 @@ const {
   getOrderStatusStats,
   getRevenueByStore
 } = require('../controllers/dashboardController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, can } = require('../middlewares/authMiddleware');
 
-router.use(protect, authorize('admin', 'staff'));
+router.use(protect, can('dashboard.view'));
 router.get('/summary', getSummary);
 router.get('/revenue-by-day', getRevenueByDay);
 router.get('/best-selling-products', getBestSellingProducts);

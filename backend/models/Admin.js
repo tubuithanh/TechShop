@@ -12,6 +12,9 @@ const adminSchema = new mongoose.Schema(
     avatar: { type: String, default: '' },
     // role phụ để phân biệt Admin toàn quyền và Staff (nhân viên) - vẫn nằm trong collection admins
     role: { type: String, enum: ['admin', 'staff'], default: 'staff' },
+    // Nhóm quyền được gán (chỉ áp dụng cho role='staff' - admin luôn có toàn quyền, không cần gán
+    // nhóm). 1 staff có thể thuộc nhiều nhóm cùng lúc, quyền thực tế = hợp của mọi nhóm đã gán.
+    groupIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PermissionGroup' }],
     isActive: { type: Boolean, default: true },
     lastLoginAt: Date
   },
