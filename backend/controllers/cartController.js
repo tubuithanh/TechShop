@@ -11,6 +11,28 @@ const getOrCreateCart = async (userId) => {
 
 const getCart = asyncHandler(async (req, res) => {
   const cart = await getOrCreateCart(req.account._id);
+
+  // Đồng bộ lại unitPrice theo giá HIỆN TẠI của sản phẩm mỗi khi tải giỏ hàng - trước đây giá chỉ
+  // được lưu 1 lần lúc thêm vào giỏ và không bao giờ làm mới, nên nếu admin đổi giá sau đó, Frontend
+  // (trang Giỏ hàng/Thanh toán) vẫn hiển thị SAI giá cũ dù lúc đặt hàng backend đã tính đúng giá mới
+  // - gây lệch giữa số tiền xem trước và số tiền thực sự bị tính.
+  if (cart.items.length) {
+    const products = await Product.find(
+      { _id: { $in: cart.items.map((i) => i.productId) } },
+      'effectivePrice isActive'
+    );
+    const productMap = new Map(products.map((p) => [p._id.toString(), p]));
+    let changed = false;
+    for (const item of cart.items) {
+      const product = productMap.get(item.productId.toString());
+      if (product && product.isActive && item.unitPrice !== product.effectivePrice) {
+        item.unitPrice = product.effectivePrice;
+        changed = true;
+      }
+    }
+    if (changed) await cart.save();
+  }
+
   res.json({ data: cart });
 });
 

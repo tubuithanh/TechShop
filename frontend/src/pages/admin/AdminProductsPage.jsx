@@ -64,25 +64,37 @@ export default function AdminProductsPage() {
       return;
     }
     const coverIdx = Math.min(form.coverIndex, cleanUrls.length - 1);
+    // form.salePrice === '' nghĩa là "không đặt giá khuyến mãi" (undefined) - nhưng nếu admin nhập
+    // đúng số 0 (hàng miễn phí), `Number(form.salePrice) || undefined` sẽ SAI vì 0 là falsy, luôn
+    // gửi undefined thay vì 0. Kiểm tra chuỗi rỗng tường minh thay vì dựa vào toán tử ||.
+    const salePriceValue = form.salePrice === '' ? undefined : Number(form.salePrice);
+    if (salePriceValue != null && salePriceValue > Number(form.price)) {
+      alert('Giá khuyến mãi không được lớn hơn giá gốc');
+      return;
+    }
     const payload = {
       title: form.title,
       brandId: form.brandId,
       categoryId: form.categoryId,
       price: Number(form.price),
-      salePrice: Number(form.salePrice) || undefined,
+      salePrice: salePriceValue,
       description: form.description,
       featuredImage: cleanUrls[coverIdx],
       imageURLs: cleanUrls
     };
-    if (editingId) {
-      await api.put(`/products/${editingId}`, payload);
-    } else {
-      await api.post('/products', payload);
+    try {
+      if (editingId) {
+        await api.put(`/products/${editingId}`, payload);
+      } else {
+        await api.post('/products', payload);
+      }
+      setShowForm(false);
+      setForm(emptyForm);
+      setEditingId(null);
+      loadProducts();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Lưu sản phẩm thất bại');
     }
-    setShowForm(false);
-    setForm(emptyForm);
-    setEditingId(null);
-    loadProducts();
   };
 
   const handleEdit = (p) => {
@@ -93,7 +105,7 @@ export default function AdminProductsPage() {
       brandId: p.brandId?._id || p.brandId || '',
       categoryId: p.categoryId?._id || p.categoryId || '',
       price: p.price,
-      salePrice: p.salePrice || '',
+      salePrice: p.salePrice ?? '', // dùng ?? thay vì || - salePrice=0 (hàng miễn phí) không nên hiện trống
       description: p.description || '',
       imageURLs: urls.length ? urls : [placeholderImage(400, 400, 'San pham')],
       coverIndex: coverIdx === -1 ? 0 : coverIdx
@@ -334,7 +346,7 @@ export default function AdminProductsPage() {
               <tr key={p._id}>
                 <td className="p-3">{p.title}</td>
                 <td className="p-3">{p.brandId?.name}</td>
-                <td className="p-3">{formatVND(p.salePrice || p.price)}</td>
+                <td className="p-3">{formatVND(p.effectivePrice ?? (p.salePrice || p.price))}</td>
                 <td className="p-3">{p.soldCount}</td>
                 <td className="p-3">
                   <Badge bg={p.isActive ? 'success' : 'secondary'}>{p.isActive ? 'Đang bán' : 'Đã ẩn'}</Badge>

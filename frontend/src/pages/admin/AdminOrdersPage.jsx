@@ -5,6 +5,21 @@ import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
 
 const statusOptions = ['pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled', 'returned'];
+
+// Phải khớp với ORDER_STATUS_TRANSITIONS ở backend/controllers/orderController.js - trước đây
+// dropdown liệt kê đủ cả 7 trạng thái cho MỌI đơn hàng bất kể trạng thái hiện tại, nên admin có thể
+// chọn 1 bước chuyển mà backend chắc chắn từ chối (VD: "Đã giao hàng" -> "Chờ xác nhận"), gây lỗi
+// 400 âm thầm (không có try/catch) và dropdown vẫn hiển thị lựa chọn không được lưu.
+const ORDER_STATUS_TRANSITIONS = {
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['processing', 'cancelled'],
+  processing: ['shipping', 'cancelled'],
+  shipping: ['delivered', 'returned'],
+  delivered: ['returned'],
+  cancelled: [],
+  returned: []
+};
+
 const statusLabel = {
   pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
@@ -46,7 +61,13 @@ export default function AdminOrdersPage() {
   };
 
   const handleChangeStatus = async (orderId, status) => {
-    await orderService.updateOrderStatus(orderId, status, `Cập nhật trạng thái: ${statusLabel[status]}`);
+    try {
+      await orderService.updateOrderStatus(orderId, status, `Cập nhật trạng thái: ${statusLabel[status]}`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không thể cập nhật trạng thái đơn hàng');
+    }
+    // Luôn tải lại dù thành công hay thất bại - dropdown đang hiển thị lựa chọn người dùng vừa
+    // chọn (chưa chắc đã lưu), tải lại để đồng bộ đúng trạng thái thật từ server.
     loadOrders();
   };
 
@@ -95,9 +116,11 @@ export default function AdminOrdersPage() {
                   <Form.Select
                     size="sm"
                     value={o.status}
+                    disabled={ORDER_STATUS_TRANSITIONS[o.status]?.length === 0}
                     onChange={(e) => handleChangeStatus(o._id, e.target.value)}
                   >
-                    {statusOptions.map((s) => (
+                    <option value={o.status}>{statusLabel[o.status]}</option>
+                    {(ORDER_STATUS_TRANSITIONS[o.status] || []).map((s) => (
                       <option key={s} value={s}>
                         {statusLabel[s]}
                       </option>

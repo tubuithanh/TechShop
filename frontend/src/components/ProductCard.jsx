@@ -7,9 +7,11 @@ function formatVND(value) {
 }
 
 export default function ProductCard({ product }) {
-  const displayPrice = product.salePrice || product.price;
+  // effectivePrice (tính sẵn ở backend) xử lý đúng cả trường hợp salePrice=0 (hàng khuyến mãi miễn
+  // phí) - `salePrice || price` coi 0 là falsy nên sẽ hiển thị nhầm về giá gốc.
+  const displayPrice = product.effectivePrice ?? (product.salePrice || product.price);
   const discountPercent =
-    product.salePrice && product.salePrice < product.price
+    product.salePrice != null && product.salePrice < product.price
       ? Math.round(100 - (product.salePrice / product.price) * 100)
       : 0;
 

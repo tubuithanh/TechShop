@@ -1,4 +1,5 @@
 const Voucher = require('../models/Voucher');
+const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
 
 // @route GET /api/vouchers/active - danh sách voucher công khai đang áp dụng (mục 1.1.9)
@@ -22,9 +23,24 @@ const validateVoucher = asyncHandler(async (req, res) => {
   if (orderValue < voucher.minOrderValue) {
     return res.status(400).json({ message: `Đơn hàng tối thiểu ${voucher.minOrderValue.toLocaleString()}đ để áp dụng mã này` });
   }
+  // Kiểm tra luôn giới hạn lượt dùng/khách ngay tại bước "Áp dụng" (giống hệt kiểm tra thật ở
+  // orderController.js/createOrder) - nếu không, khách bấm "Áp dụng" luôn thấy thành công, chỉ tới
+  // khi bấm "Đặt hàng" mới biết mã đã hết lượt, gây khó hiểu và giữ nguyên số tiền giảm giá sai trên
+  // màn hình xem trước.
+  if (voucher.perCustomerLimit > 0) {
+    const usedByCustomer = await Order.countDocuments({
+      userId: req.account._id,
+      voucherCode: voucher.code,
+      status: { $nin: ['cancelled', 'returned'] }
+    });
+    if (usedByCustomer >= voucher.perCustomerLimit) {
+      return res.status(400).json({ message: 'Bạn đã sử dụng hết lượt cho mã giảm giá này' });
+    }
+  }
+  const maxDiscount = typeof voucher.maxDiscountAmount === 'number' ? voucher.maxDiscountAmount : Infinity;
   const discountAmount =
     voucher.discountType === 'percent'
-      ? Math.min((orderValue * voucher.discountValue) / 100, voucher.maxDiscountAmount || Infinity)
+      ? Math.round(Math.min((orderValue * voucher.discountValue) / 100, maxDiscount))
       : voucher.discountValue;
 
   res.json({ data: { voucher, discountAmount } });

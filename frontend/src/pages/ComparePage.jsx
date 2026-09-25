@@ -69,7 +69,7 @@ export default function ComparePage() {
                 <td className="fw-medium">Giá</td>
                 {compareResult.map((p) => (
                   <td key={p._id} className="text-center text-primary fw-bold">
-                    {formatVND(p.salePrice || p.price)}
+                    {formatVND(p.effectivePrice ?? (p.salePrice || p.price))}
                   </td>
                 ))}
               </tr>

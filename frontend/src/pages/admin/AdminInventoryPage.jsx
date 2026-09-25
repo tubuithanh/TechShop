@@ -48,14 +48,22 @@ export default function AdminInventoryPage() {
 
   const handleUpsert = async (e) => {
     e.preventDefault();
-    await api.post('/store-inventories', { ...form, storeId: selectedStoreId, stock: Number(form.stock) });
-    setForm({ productId: '', stock: 0, lowStockThreshold: 5 });
-    loadInventories(selectedStoreId);
+    try {
+      await api.post('/store-inventories', { ...form, storeId: selectedStoreId, stock: Number(form.stock) });
+      setForm({ productId: '', stock: 0, lowStockThreshold: 5 });
+      loadInventories(selectedStoreId);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không thể lưu tồn kho');
+    }
   };
 
   const handleQuickUpdate = async (id, newStock) => {
-    await api.put(`/store-inventories/${id}`, { stock: Number(newStock) });
-    loadInventories(selectedStoreId);
+    try {
+      await api.put(`/store-inventories/${id}`, { stock: Number(newStock) });
+      loadInventories(selectedStoreId);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không thể cập nhật tồn kho');
+    }
   };
 
   return (

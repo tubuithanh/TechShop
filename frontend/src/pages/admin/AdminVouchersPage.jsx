@@ -10,6 +10,7 @@ const emptyForm = {
   maxDiscountAmount: '',
   minOrderValue: 0,
   usageLimit: 0,
+  perCustomerLimit: 1,
   endDate: ''
 };
 
@@ -31,7 +32,8 @@ export default function AdminVouchersPage() {
       discountValue: Number(form.discountValue),
       maxDiscountAmount: Number(form.maxDiscountAmount) || undefined,
       minOrderValue: Number(form.minOrderValue) || 0,
-      usageLimit: Number(form.usageLimit) || 0
+      usageLimit: Number(form.usageLimit) || 0,
+      perCustomerLimit: Number(form.perCustomerLimit) || 0
     });
     setShowForm(false);
     setForm(emptyForm);
@@ -120,12 +122,23 @@ export default function AdminVouchersPage() {
               </Col>
               <Col md={6}>
                 <Form.Group>
-                  <Form.Label>Giới hạn lượt dùng (0 = không giới hạn)</Form.Label>
+                  <Form.Label>Giới hạn lượt dùng - toàn hệ thống (0 = không giới hạn)</Form.Label>
                   <Form.Control
                     type="number"
                     value={form.usageLimit}
                     onChange={(e) => setForm({ ...form, usageLimit: e.target.value })}
                   />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Giới hạn lượt dùng / khách hàng (0 = không giới hạn)</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={form.perCustomerLimit}
+                    onChange={(e) => setForm({ ...form, perCustomerLimit: e.target.value })}
+                  />
+                  <Form.Text className="text-muted">Mặc định 1 (mỗi khách chỉ dùng được 1 lần)</Form.Text>
                 </Form.Group>
               </Col>
               <Col md={6}>
@@ -170,6 +183,7 @@ export default function AdminVouchersPage() {
               <th>Mô tả</th>
               <th>Giảm giá</th>
               <th>Đã dùng</th>
+              <th>Lượt/khách</th>
               <th>Hết hạn</th>
               <th>Trạng thái</th>
               <th>Thao tác</th>
@@ -186,6 +200,7 @@ export default function AdminVouchersPage() {
                 <td>
                   {v.usedCount} / {v.usageLimit || '∞'}
                 </td>
+                <td>{v.perCustomerLimit || '∞'}</td>
                 <td>{new Date(v.endDate).toLocaleDateString('vi-VN')}</td>
                 <td>
                   <Badge bg={v.isActive ? 'success' : 'secondary'}>{v.isActive ? 'Hoạt động' : 'Đã tắt'}</Badge>

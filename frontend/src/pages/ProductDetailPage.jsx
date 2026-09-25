@@ -77,7 +77,7 @@ export default function ProductDetailPage() {
       </div>
     );
 
-  const displayPrice = product.salePrice || product.price;
+  const displayPrice = product.effectivePrice ?? (product.salePrice || product.price);
   const images = product.imageURLs?.length ? product.imageURLs : [product.featuredImage];
   const selectedInventory = product.inventories?.find((inv) => inv.storeId?._id === selectedStoreId);
   const currentStock = selectedInventory?.stock || 0;
@@ -178,7 +178,7 @@ export default function ProductDetailPage() {
 
           <div className="mb-4">
             <span className="fs-3 text-primary fw-bold">{formatVND(displayPrice)}</span>
-            {product.salePrice && product.salePrice < product.price && (
+            {product.salePrice != null && product.salePrice < product.price && (
               <span className="text-muted text-decoration-line-through ms-3">{formatVND(product.price)}</span>
             )}
           </div>

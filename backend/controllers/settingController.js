@@ -16,8 +16,13 @@ const getSettings = asyncHandler(async (req, res) => {
 // @route PUT /api/settings - chỉ admin (không cho staff vì đây là cấu hình toàn hệ thống)
 const updateSettings = asyncHandler(async (req, res) => {
   const settings = await getOrCreateSettings();
-  const { _id, createdAt, updatedAt, __v, ...allowedFields } = req.body;
+  const { _id, createdAt, updatedAt, __v, socialLinks, seo, ...allowedFields } = req.body;
   Object.assign(settings, allowedFields);
+  // socialLinks/seo là object lồng nhau - Object.assign(settings, {socialLinks:{facebook:'x'}}) sẽ
+  // THAY THẾ TOÀN BỘ subdocument, xoá mất các field khác (zalo/youtube/instagram) về mặc định rỗng
+  // nếu client chỉ gửi 1 field trong đó. Gộp (merge) thủ công thay vì ghi đè cả object.
+  if (socialLinks) settings.socialLinks = { ...settings.toObject().socialLinks, ...socialLinks };
+  if (seo) settings.seo = { ...settings.toObject().seo, ...seo };
   await settings.save();
   res.json({ data: settings });
 });

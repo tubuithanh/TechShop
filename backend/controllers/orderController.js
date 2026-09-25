@@ -30,13 +30,29 @@ function generateOrderCode() {
 
 async function restoreCartItems(userId, items) {
   if (!items || !items.length) return;
-  // $push ở đầu mảng thay vì ghi đè toàn bộ items - tránh xoá mất sản phẩm mà người dùng có thể đã
-  // thêm vào giỏ trong lúc đơn hàng trước đó đang được xử lý.
-  await Cart.findOneAndUpdate(
-    { userId },
-    { $push: { items: { $each: items, $position: 0 } } },
-    { upsert: true }
-  );
+  // Gộp lại theo productId thay vì $push thẳng snapshot cũ vào - nếu khách đã lỡ thêm lại đúng sản
+  // phẩm đó vào giỏ (đang rỗng) trong lúc đơn hàng trước đó bị từ chối (hết hàng/voucher hết lượt),
+  // tránh tạo ra 2 dòng riêng biệt cho cùng 1 sản phẩm trong giỏ hàng.
+  let cart = await Cart.findOne({ userId });
+  if (!cart) {
+    await Cart.create({ userId, items });
+    return;
+  }
+  for (const restored of items) {
+    const existing = cart.items.find((i) => i.productId.toString() === restored.productId.toString());
+    if (existing) {
+      existing.quantity += restored.quantity;
+    } else {
+      cart.items.push({
+        productId: restored.productId,
+        name: restored.name,
+        image: restored.image,
+        unitPrice: restored.unitPrice,
+        quantity: restored.quantity
+      });
+    }
+  }
+  await cart.save();
 }
 
 async function restoreStock(storeId, items) {
@@ -118,10 +134,12 @@ const createOrder = asyncHandler(async (req, res) => {
       return res.status(400).json({ message: `Đơn hàng tối thiểu ${voucher.minOrderValue.toLocaleString()}đ để áp dụng mã` });
     }
     if (voucher.perCustomerLimit > 0) {
+      // Đơn đã hủy HOẶC đã hoàn trả (được hoàn tiền đầy đủ) không tính vào số lượt đã dùng - khách
+      // hàng không thực sự hưởng giảm giá nào từ những đơn đó nên không nên bị khoá vĩnh viễn.
       const usedByCustomer = await Order.countDocuments({
         userId: req.account._id,
         voucherCode: voucher.code,
-        status: { $ne: 'cancelled' }
+        status: { $nin: ['cancelled', 'returned'] }
       });
       if (usedByCustomer >= voucher.perCustomerLimit) {
         await restoreCartItems(req.account._id, cartItemsSnapshot);
@@ -205,8 +223,15 @@ const createOrder = asyncHandler(async (req, res) => {
     throw err;
   }
 
+  // Đơn hàng, tồn kho và lượt dùng voucher đã được ghi nhận THÀNH CÔNG ở trên - cập nhật soldCount
+  // (chỉ phục vụ thống kê "bán chạy") không được để lỗi ở đây làm hỏng phản hồi thành công, khiến
+  // khách hàng thấy lỗi 500 dù đơn hàng thực ra đã đặt thành công.
   for (const item of orderItems) {
-    await Product.findByIdAndUpdate(item.productId, { $inc: { soldCount: item.quantity } });
+    try {
+      await Product.findByIdAndUpdate(item.productId, { $inc: { soldCount: item.quantity } });
+    } catch (err) {
+      console.error(`Lỗi cập nhật soldCount cho sản phẩm ${item.productId}:`, err.message);
+    }
   }
 
   await Notification.create({

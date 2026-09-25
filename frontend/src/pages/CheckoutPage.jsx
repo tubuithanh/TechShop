@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Form, Button, Card, Alert } from 'react-bootstrap';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
+import { useSettings } from '../store/SettingsContext';
 import { orderService } from '../services/orderService';
 import { storeService } from '../services/storeService';
 import api from '../services/api';
@@ -14,6 +15,7 @@ function formatVND(value) {
 export default function CheckoutPage() {
   const { cart, totalAmount, refreshCart } = useCart();
   const { user } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
 
   const [stores, setStores] = useState([]);
@@ -44,10 +46,30 @@ export default function CheckoutPage() {
     });
   }, []);
 
-  const shippingFee = deliveryMethod === 'store_pickup' ? 0 : 30000;
+  // Tính phí ship GIỐNG HỆT logic backend (orderController.js/createOrder) - trước đây trang này
+  // hardcode 30.000đ, bỏ qua hoàn toàn ngưỡng miễn phí ship (freeShippingThreshold) admin đã cấu
+  // hình, khiến khách nhìn thấy tổng tiền xem trước SAI (cao hơn số tiền thực sự bị tính khi đặt).
+  const shippingFeeConfig = settings.defaultShippingFee ?? 30000;
+  const freeShippingThreshold = settings.freeShippingThreshold ?? 0;
+  const qualifiesFreeShipping = freeShippingThreshold > 0 && totalAmount >= freeShippingThreshold;
+  const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
   const grandTotal = Math.max(totalAmount + shippingFee - discount, 0);
 
+  const handleVoucherCodeChange = (value) => {
+    setVoucherCode(value);
+    // Xoá mã / sửa lại mã đang có hiệu lực trước đó thì phải bỏ luôn số tiền giảm giá đã áp dụng -
+    // trước đây discount/voucherMsg chỉ được set khi "Áp dụng" thành công, không bao giờ được reset,
+    // nên khách xoá/đổi mã vẫn thấy số tiền giảm giá CŨ áp dụng trên tổng tiền dù mã đã đổi/mất.
+    if (discount > 0) setDiscount(0);
+    if (voucherMsg) setVoucherMsg('');
+  };
+
   const applyVoucher = async () => {
+    if (!voucherCode.trim()) {
+      setDiscount(0);
+      setVoucherMsg('');
+      return;
+    }
     try {
       const { data } = await api.post('/vouchers/validate', { code: voucherCode, orderValue: totalAmount });
       setDiscount(data.data.discountAmount);
@@ -140,7 +162,11 @@ export default function CheckoutPage() {
               type="radio"
               id="delivery-home"
               name="deliveryMethod"
-              label="Giao hàng tận nơi (30.000đ)"
+              label={
+                qualifiesFreeShipping
+                  ? 'Giao hàng tận nơi (Miễn phí)'
+                  : `Giao hàng tận nơi (${formatVND(shippingFeeConfig)})`
+              }
               checked={deliveryMethod === 'home_delivery'}
               onChange={() => setDeliveryMethod('home_delivery')}
             />
@@ -195,7 +221,7 @@ export default function CheckoutPage() {
             <Form.Control
               placeholder="Nhập mã giảm giá"
               value={voucherCode}
-              onChange={(e) => setVoucherCode(e.target.value)}
+              onChange={(e) => handleVoucherCodeChange(e.target.value)}
               size="sm"
             />
             <Button variant="dark" size="sm" onClick={applyVoucher} className="text-nowrap">
