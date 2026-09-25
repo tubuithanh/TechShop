@@ -28,6 +28,11 @@ const certPath = path.join(__dirname, 'certs', 'cert.pem');
 if (fs.existsSync(certKeyPath) && fs.existsSync(certPath)) {
   https
     .createServer({ key: fs.readFileSync(certKeyPath), cert: fs.readFileSync(certPath) }, app)
+    .on('error', (err) => {
+      // Server HTTPS này chỉ phục vụ test đăng nhập Zalo ở máy local - không được để lỗi của nó (VD:
+      // cổng đang bị 1 tiến trình khác chiếm) làm sập luôn API chính ở cổng PORT.
+      console.warn(`[Server] Không mở được HTTPS cổng ${HTTPS_PORT} (${err.code}) - bỏ qua, API chính vẫn chạy bình thường`);
+    })
     .listen(HTTPS_PORT, () => {
       console.log(`[Server] HTTPS (dùng cho callback Zalo) chạy tại https://localhost:${HTTPS_PORT}`);
     });
