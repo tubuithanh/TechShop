@@ -9,7 +9,7 @@ const bcrypt = require('bcryptjs');
 const { generateProducts } = require('./generateProducts');
 const { generateCustomers } = require('./generateCustomers');
 const { generateOrders } = require('./generateOrders');
-const { generateReviews } = require('./generateReviews');
+const { generateProductReviews } = require('./generateReviews');
 const { generateWarranties } = require('./generateWarranties');
 const { generatePosts } = require('./generatePosts');
 
@@ -214,8 +214,8 @@ async function run() {
   const createdOrders = await Order.insertMany(orderDefs);
   console.log(`[Seed] Đã tạo ${createdOrders.length} đơn hàng`);
 
-  // ----- 1000 đánh giá sản phẩm mẫu -----
-  const reviewDefs = generateReviews(1000, { customers: allCustomers, products: createdProducts });
+  // ----- 10 đánh giá (kèm ảnh thực tế) cho MỖI sản phẩm -----
+  const reviewDefs = createdProducts.flatMap((p) => generateProductReviews(p, allCustomers, 10));
   const createdReviews = await Review.insertMany(reviewDefs);
   console.log(`[Seed] Đã tạo ${createdReviews.length} đánh giá sản phẩm`);
 

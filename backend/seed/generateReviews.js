@@ -59,4 +59,39 @@ function generateReviews(count, { customers, products }) {
   return reviews;
 }
 
-module.exports = { generateReviews };
+// Câu mở đầu nhắc đúng phiên bản khách đã mua - để đánh giá trông như của người mua thật
+const VARIANT_OPENERS = ['Mình mua bản {v}.', 'Đã nhận bản {v}.', 'Chọn bản {v},', 'Lấy bản {v} làm quà.', 'Bản {v} ngoài đời đẹp hơn ảnh.'];
+const PHOTO_NOTES = ['Gửi vài ảnh thực tế cho mọi người tham khảo.', 'Ảnh chụp lúc vừa mở hộp.', 'Up ảnh thật, không chỉnh sửa.', ''];
+
+// Lấy ngẫu nhiên k phần tử khác nhau
+function sample(arr, k) {
+  return [...arr].sort(() => Math.random() - 0.5).slice(0, Math.min(k, arr.length));
+}
+
+// `count` đánh giá cho ĐÚNG 1 sản phẩm, mỗi đánh giá của 1 khách khác nhau (khớp quy tắc "1 khách chỉ
+// đánh giá 1 lần/sản phẩm") và kèm 1-3 ảnh lấy từ bộ ảnh của chính sản phẩm/phiên bản đó.
+function generateProductReviews(product, customers, count = 10) {
+  const photos = [...new Set([...(product.imageURLs || []), ...(product.variants || []).map((v) => v.image)].filter(Boolean))];
+  const variants = (product.variants || []).filter((v) => v.isActive !== false);
+  return sample(customers, count).map((customer) => {
+    const rating = pick(RATING_WEIGHTED);
+    const base = rating >= 4 ? pick(POSITIVE_COMMENTS) : rating === 3 ? pick(NEUTRAL_COMMENTS) : pick(NEGATIVE_COMMENTS);
+    const variant = variants.length ? pick(variants) : null;
+    const variantLabel = variant ? (variant.storage ? `${variant.color} - ${variant.storage}` : variant.color) : '';
+    const opener = variantLabel ? pick(VARIANT_OPENERS).replace('{v}', variantLabel) + ' ' : '';
+    return {
+      userId: customer._id,
+      productId: product._id,
+      displayName: customer.displayName,
+      photoURL: '',
+      message: `${opener}${base} ${pick(PHOTO_NOTES)}`.trim(),
+      rating,
+      images: sample(photos, randInt(1, 3)),
+      isVerifiedPurchase: Math.random() < 0.8,
+      status: 'visible',
+      createdAt: randomPastDate(180)
+    };
+  });
+}
+
+module.exports = { generateReviews, generateProductReviews };

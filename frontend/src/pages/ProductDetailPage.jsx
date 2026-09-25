@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup } from 'react-bootstrap';
+import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal } from 'react-bootstrap';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
 import { useCart } from '../store/CartContext';
@@ -37,6 +37,7 @@ export default function ProductDetailPage() {
   const [activeImage, setActiveImage] = useState(0);
   const [related, setRelated] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [zoomImage, setZoomImage] = useState(null); // ảnh đánh giá đang phóng to
   const [questions, setQuestions] = useState([]);
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState('');
@@ -423,6 +424,22 @@ export default function ProductDetailPage() {
                     )}
                   </div>
                   <p className="small mt-1">{r.message}</p>
+                  {r.images?.length > 0 && (
+                    <div className="d-flex flex-wrap gap-2 mb-2">
+                      {r.images.map((img) => (
+                        <img
+                          key={img}
+                          src={img}
+                          alt="Ảnh đánh giá"
+                          loading="lazy"
+                          role="button"
+                          onClick={() => setZoomImage(img)}
+                          className="rounded border"
+                          style={{ width: '4.5rem', height: '4.5rem', objectFit: 'cover' }}
+                        />
+                      ))}
+                    </div>
+                  )}
                   {r.reply?.content && (
                     <div className="bg-light rounded p-2 mt-2" style={{ fontSize: '0.75rem' }}>
                       <span className="fw-medium text-primary">Phản hồi từ TechShop: </span>
@@ -473,6 +490,11 @@ export default function ProductDetailPage() {
           </Container>
         </div>
       )}
+      <Modal show={!!zoomImage} onHide={() => setZoomImage(null)} centered size="lg">
+        <Modal.Body className="p-0">
+          <img src={zoomImage || ''} alt="Ảnh đánh giá" className="w-100 rounded" onClick={() => setZoomImage(null)} />
+        </Modal.Body>
+      </Modal>
     </Container>
   );
 }
