@@ -2,14 +2,26 @@ const slugify = require('slugify');
 const Product = require('../models/Product');
 const StoreInventory = require('../models/StoreInventory');
 const asyncHandler = require('../utils/asyncHandler');
+const { NUMERIC_KEYS } = require('../utils/specNumbers');
 
 // @route GET /api/products
 // (params `page` + `limit`: phân trang kiểu số trang, dùng cho trang quản trị;
 //  param `cursor` + `limit`: phân trang kiểu cursor, dùng cho trang danh sách sản phẩm phía khách hàng.
 //  param `includeInactive=true`: cho phép trang quản trị thấy cả sản phẩm đã ẩn (isActive=false))
 const getProducts = asyncHandler(async (req, res) => {
-  const { keyword, categoryId, brandId, minPrice, maxPrice, sort = 'newest', cursor, page, limit = 12, includeInactive } =
-    req.query;
+  const {
+    keyword,
+    categoryId,
+    brandId,
+    minPrice,
+    maxPrice,
+    specFilters,
+    sort = 'newest',
+    cursor,
+    page,
+    limit = 12,
+    includeInactive
+  } = req.query;
 
   const filter = includeInactive === 'true' ? {} : { isActive: true };
   if (keyword) filter.$text = { $search: keyword };
@@ -22,6 +34,26 @@ const getProducts = asyncHandler(async (req, res) => {
     filter.effectivePrice = {};
     if (minPrice) filter.effectivePrice.$gte = Number(minPrice);
     if (maxPrice) filter.effectivePrice.$lte = Number(maxPrice);
+  }
+
+  // Lọc theo thông số dạng số: specFilters=[{"key":"RAM","min":8},{"key":"Pin","min":5000}]. Chỉ
+  // chấp nhận khóa nằm trong NUMERIC_KEYS và min/max là số hữu hạn - khóa được ghép vào đường dẫn
+  // truy vấn Mongo (specNumbers.<key>) nên KHÔNG được để client truyền khóa tùy ý.
+  if (specFilters) {
+    let parsed;
+    try {
+      parsed = JSON.parse(specFilters);
+    } catch {
+      return res.status(400).json({ message: 'Bộ lọc thông số không hợp lệ' });
+    }
+    if (!Array.isArray(parsed)) return res.status(400).json({ message: 'Bộ lọc thông số không hợp lệ' });
+    for (const f of parsed) {
+      if (!f || !NUMERIC_KEYS.has(f.key)) continue;
+      const range = {};
+      if (f.min !== undefined && f.min !== '' && Number.isFinite(Number(f.min))) range.$gte = Number(f.min);
+      if (f.max !== undefined && f.max !== '' && Number.isFinite(Number(f.max))) range.$lte = Number(f.max);
+      if (Object.keys(range).length) filter[`specNumbers.${f.key}`] = range;
+    }
   }
 
   // Trường sắp xếp chính của từng chế độ sort, kèm _id làm tiêu chí phụ để đảm bảo

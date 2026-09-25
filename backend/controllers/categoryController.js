@@ -31,7 +31,11 @@ const createCategory = asyncHandler(async (req, res) => {
 const updateCategory = asyncHandler(async (req, res) => {
   const category = await Category.findById(req.params.id);
   if (!category) return res.status(404).json({ message: 'Không tìm thấy danh mục' });
-  Object.assign(category, req.body);
+  // Không cho sửa specTemplate qua API: mẫu thông số (kể cả cờ "numeric") được quản lý trong code
+  // (utils/specTemplates.js) và backend tách số/lọc theo đúng bản trong code. Nếu cho sửa ở database,
+  // 2 bên lệch nhau: giao diện hiện ô lọc cho trường mà backend không lọc được (bộ lọc âm thầm vô hiệu).
+  const { specTemplate, ...updates } = req.body;
+  Object.assign(category, updates);
   if (req.body.name) category.slug = buildCategorySlug(req.body.name);
   try {
     await category.save();

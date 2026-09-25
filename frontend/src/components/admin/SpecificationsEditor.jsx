@@ -23,9 +23,10 @@ export default function SpecificationsEditor({ template, value, onChange }) {
   const addCustomField = () => {
     const key = newKey.trim();
     if (!key || !newValue.trim()) return;
-    // Mongoose Map không chấp nhận khóa chứa dấu "." - chặn ngay ở đây thay vì để backend báo lỗi.
-    if (key.includes('.')) {
-      alert('Tên thông số không được chứa dấu chấm (.)');
+    // Mongoose Map không chấp nhận khóa chứa dấu "." hoặc bắt đầu bằng "$" - chặn ngay ở đây thay vì
+    // để backend trả lỗi hệ thống khó hiểu khi bấm lưu.
+    if (key.includes('.') || key.startsWith('$')) {
+      alert('Tên thông số không được chứa dấu chấm (.) hoặc bắt đầu bằng ký tự $');
       return;
     }
     if (key in specs || templateKeys.has(key)) {

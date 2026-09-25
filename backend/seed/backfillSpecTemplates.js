@@ -15,6 +15,7 @@ const Product = require('../models/Product');
 require('../models/Brand');
 const { SPEC_TEMPLATES } = require('../utils/specTemplates');
 const { buildExtraSpecs } = require('./extraSpecs');
+const { computeSpecNumbers } = require('../utils/specNumbers');
 
 async function run() {
   const fillProducts = process.argv.includes('--fill-products');
@@ -34,29 +35,31 @@ async function run() {
     console.log(`- Đã gắn mẫu thông số cho "${category.name}" (${template.length} nhóm)`);
   }
 
-  if (!fillProducts) {
-    console.log('Hoàn tất. (Chạy thêm --fill-products nếu muốn bổ sung thông số chi tiết cho sản phẩm mẫu đã có.)');
-    await mongoose.disconnect();
-    return;
-  }
-
+  // specNumbers (giá trị số tách từ thông số, dùng cho bộ lọc/so sánh) LUÔN được tính lại cho mọi sản
+  // phẩm - updateOne bỏ qua hook pre('validate') của model nên phải tự tính ở đây. Đây là dữ liệu dẫn
+  // xuất, tính lại bao nhiêu lần cũng không làm mất gì.
   const products = await Product.find({}, 'title categoryId brandId specifications').populate('brandId', 'name');
-  let updated = 0;
+  let filled = 0;
   for (const product of products) {
-    const slug = slugById.get(String(product.categoryId));
-    if (!slug) continue;
     const current = product.specifications ? Object.fromEntries(product.specifications) : {};
-    const extras = buildExtraSpecs(slug, { brand: product.brandId?.name, variant: product.title, specs: current });
     const $set = {};
-    for (const [key, value] of Object.entries(extras)) {
-      if (current[key] === undefined || current[key] === '') $set[`specifications.${key}`] = value;
+    const slug = slugById.get(String(product.categoryId?._id || product.categoryId));
+    if (fillProducts && slug) {
+      const extras = buildExtraSpecs(slug, { brand: product.brandId?.name, variant: product.title, specs: current });
+      for (const [key, value] of Object.entries(extras)) {
+        if (current[key] === undefined || current[key] === '') {
+          $set[`specifications.${key}`] = value;
+          current[key] = value;
+        }
+      }
+      if (Object.keys($set).length) filled++;
     }
-    if (Object.keys($set).length) {
-      await Product.updateOne({ _id: product._id }, { $set });
-      updated++;
-    }
+    $set.specNumbers = computeSpecNumbers(current, slug);
+    await Product.updateOne({ _id: product._id }, { $set });
   }
-  console.log(`Hoàn tất: đã bổ sung thông số chi tiết cho ${updated}/${products.length} sản phẩm.`);
+  console.log(`Đã tính lại giá trị số (bộ lọc thông số) cho ${products.length} sản phẩm.`);
+  if (fillProducts) console.log(`Đã bổ sung thông số chi tiết cho ${filled}/${products.length} sản phẩm.`);
+  else console.log('(Chạy thêm --fill-products nếu muốn bổ sung thông số chi tiết cho sản phẩm mẫu đã có.)');
   await mongoose.disconnect();
 }
 

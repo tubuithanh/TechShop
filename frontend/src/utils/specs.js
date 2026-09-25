@@ -31,6 +31,20 @@ export function groupSpecs(specifications, template) {
   return groups;
 }
 
+// Giá trị "tốt nhất" của 1 dòng thông số dạng số trên trang so sánh (để tô nổi bật), hoặc null nếu
+// không áp dụng. CHỈ so khi mọi sản phẩm cùng danh mục - cùng 1 tên thông số có thể khác đơn vị giữa
+// các danh mục (Pin điện thoại tính mAh, Pin laptop tính Wh), so thẳng số với nhau sẽ ra kết quả sai.
+export function getBestSpecValue(products, key) {
+  const categoryIds = new Set(products.map((p) => p.categoryId?._id || p.categoryId));
+  if (categoryIds.size !== 1) return null;
+  const field = (products[0].categoryId?.specTemplate || []).flatMap((g) => g.fields).find((f) => f.key === key);
+  const better = field?.numeric?.better;
+  if (better !== 'higher' && better !== 'lower') return null;
+  const values = products.map((p) => p.specNumbers?.[key]).filter((n) => typeof n === 'number');
+  if (values.length < 2 || new Set(values).size === 1) return null;
+  return better === 'higher' ? Math.max(...values) : Math.min(...values);
+}
+
 // Dựng các nhóm dòng cho trang so sánh nhiều sản phẩm (có thể khác danh mục): [{ group, keys }].
 // Thứ tự lấy theo mẫu của sản phẩm đầu tiên, rồi bổ sung trường từ mẫu các sản phẩm còn lại; chỉ giữ
 // các dòng mà ít nhất 1 sản phẩm có giá trị - để các dòng luôn thẳng hàng giữa các cột.

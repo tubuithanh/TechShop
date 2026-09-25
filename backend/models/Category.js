@@ -6,7 +6,12 @@ const mongoose = require('mongoose');
 const specFieldSchema = new mongoose.Schema(
   {
     key: { type: String, required: true },
-    hint: { type: String, default: '' }
+    hint: { type: String, default: '' },
+    // Có giá trị = trường dạng số, lọc được theo khoảng; better: 'higher' | 'lower' | '' (xem specTemplates.js)
+    numeric: {
+      type: new mongoose.Schema({ unit: String, better: { type: String, default: '' } }, { _id: false }),
+      default: undefined
+    }
   },
   { _id: false }
 );

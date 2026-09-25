@@ -67,6 +67,22 @@ export default function AdminProductsPage() {
     productService.getBrands().then(setBrands);
   }, []);
 
+  // Đổi danh mục: bỏ các thông số thuộc mẫu của danh mục CŨ mà mẫu danh mục MỚI không có (VD: "Camera
+  // sau" khi đổi điện thoại -> màn hình). Nếu giữ lại, chúng bị lưu lẫn vào "Thông số khác" của danh
+  // mục mới. Thông số tự thêm (ngoài mọi mẫu) vẫn được giữ nguyên.
+  const templateKeysOf = (catId) =>
+    new Set((categories.find((c) => c._id === catId)?.specTemplate || []).flatMap((g) => g.fields.map((f) => f.key)));
+  const changeCategory = (newCategoryId) => {
+    setForm((prev) => {
+      const oldKeys = templateKeysOf(prev.categoryId);
+      const newKeys = templateKeysOf(newCategoryId);
+      const specifications = Object.fromEntries(
+        Object.entries(prev.specifications || {}).filter(([key]) => newKeys.has(key) || !oldKeys.has(key))
+      );
+      return { ...prev, categoryId: newCategoryId, specifications };
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const cleanUrls = form.imageURLs.map((u) => u.trim()).filter(Boolean);
@@ -230,7 +246,7 @@ export default function AdminProductsPage() {
                   <Form.Select
                     required
                     value={form.categoryId}
-                    onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                    onChange={(e) => changeCategory(e.target.value)}
                   >
                     <option value="">-- Chọn danh mục --</option>
                     {categories.map((c) => (

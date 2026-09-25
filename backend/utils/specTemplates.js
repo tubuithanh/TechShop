@@ -325,4 +325,59 @@ const SPEC_TEMPLATES = {
   ]
 };
 
+// Các trường dạng SỐ (dùng để lọc theo khoảng và so sánh "tốt hơn" ở trang so sánh). Giá trị vẫn nhập
+// dạng chữ như cũ ("8GB", "5000 mAh"), hệ thống tự tách số ra - xem utils/specNumbers.js. `unit` là đơn
+// vị đã chuẩn hóa (dung lượng quy về GB, khối lượng quy về gram); `better`: 'higher' | 'lower' | bỏ trống
+// nếu không có khái niệm "tốt hơn" (VD: kích thước màn hình tùy nhu cầu).
+const HZ = { unit: 'Hz', better: 'higher' };
+const GB = { unit: 'GB', better: 'higher' };
+const GRAM = { unit: 'g', better: 'lower' };
+const NUMERIC_FIELDS = {
+  'dien-thoai': {
+    'Màn hình': { unit: 'inch' },
+    'Tần số quét': HZ,
+    'Độ sáng tối đa': { unit: 'nits', better: 'higher' },
+    RAM: GB,
+    'Bộ nhớ trong': GB,
+    Pin: { unit: 'mAh', better: 'higher' },
+    'Sạc nhanh': { unit: 'W', better: 'higher' },
+    'Trọng lượng': GRAM
+  },
+  laptop: {
+    RAM: GB,
+    'Ổ cứng': GB,
+    'Màn hình': { unit: 'inch' },
+    'Tần số quét': HZ,
+    Pin: { unit: 'Wh', better: 'higher' },
+    'Công suất sạc': { unit: 'W', better: 'higher' },
+    'Trọng lượng': GRAM
+  },
+  'may-tinh-bang': {
+    'Màn hình': { unit: 'inch' },
+    'Tần số quét': HZ,
+    RAM: GB,
+    'Bộ nhớ trong': GB,
+    Pin: { unit: 'mAh', better: 'higher' },
+    'Sạc nhanh': { unit: 'W', better: 'higher' },
+    'Trọng lượng': GRAM
+  },
+  'dong-ho-thong-minh': {
+    'Kích thước màn hình': { unit: 'inch' }
+  },
+  'man-hinh': {
+    'Kích thước': { unit: 'inch' },
+    'Tần số quét': HZ,
+    'Thời gian phản hồi': { unit: 'ms', better: 'lower' },
+    'Độ sáng': { unit: 'nits', better: 'higher' }
+  }
+};
+
+for (const [slug, fields] of Object.entries(NUMERIC_FIELDS)) {
+  for (const group of SPEC_TEMPLATES[slug]) {
+    for (const field of group.fields) {
+      if (fields[field.key]) field.numeric = { ...fields[field.key] };
+    }
+  }
+}
+
 module.exports = { SPEC_TEMPLATES };

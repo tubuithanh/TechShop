@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Container, Row, Col, Table, Button, Form } from 'react-bootstrap';
 import { productService } from '../services/productService';
-import { buildCompareGroups } from '../utils/specs';
+import { buildCompareGroups, getBestSpecValue } from '../utils/specs';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -85,16 +85,23 @@ export default function ComparePage() {
                       {g.group}
                     </td>
                   </tr>
-                  {g.keys.map((key) => (
-                    <tr key={key}>
-                      <td className="fw-medium">{key}</td>
-                      {compareResult.map((p) => (
-                        <td key={p._id} className="text-center">
-                          {p.specifications?.[key] || '-'}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {g.keys.map((key) => {
+                    const best = getBestSpecValue(compareResult, key);
+                    return (
+                      <tr key={key}>
+                        <td className="fw-medium">{key}</td>
+                        {compareResult.map((p) => {
+                          const isBest = best !== null && p.specNumbers?.[key] === best;
+                          return (
+                            <td key={p._id} className={`text-center ${isBest ? 'text-success fw-bold' : ''}`}>
+                              {p.specifications?.[key] || '-'}
+                              {isBest && ' ✓'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </Fragment>
               ))}
             </tbody>
