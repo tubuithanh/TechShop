@@ -16,18 +16,25 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 
     let account;
+    let accountRole;
     if (decoded.role === 'customer') {
       account = await User.findById(decoded.id);
-    } else if (decoded.role === 'staff') {
+      accountRole = 'customer';
+    } else {
       // Nạp sẵn quyền của các nhóm mà staff này thuộc về - để middleware `can()` bên dưới kiểm tra
       // ngay trong bộ nhớ (không phải query DB lại ở mỗi route riêng lẻ). Nạp thêm tên chi nhánh
       // (storeId) để Frontend hiển thị được, dù bản thân việc so sánh giới hạn chi nhánh (getScopedStoreId)
-      // chỉ cần đúng ObjectId, không cần populate.
+      // chỉ cần đúng ObjectId, không cần populate. Luôn populate cho cả admin lẫn staff, vì role có
+      // thể vừa đổi (xem giải thích accountRole bên dưới) và trở thành staff ngay trong request này.
       account = await Admin.findById(decoded.id)
         .populate('groupIds', 'name permissions')
         .populate('storeId', 'name city');
-    } else {
-      account = await Admin.findById(decoded.id);
+      // LẤY role TỪ DATABASE (account.role), KHÔNG dùng decoded.role (giá trị cũ lưu trong access
+      // token lúc đăng nhập/làm mới gần nhất). Nếu chỉ dùng decoded.role, một admin vừa bị hạ xuống
+      // staff (hoặc ngược lại) vẫn giữ nguyên quyền CŨ cho tới khi access token hết hạn (tối đa 15
+      // phút) - isActive đã được kiểm tra tức thời như dưới đây, nhưng role thì không, tạo ra 1
+      // khoảng hở giữ quyền admin sau khi đã bị hạ quyền.
+      accountRole = account?.role;
     }
 
     if (!account || !account.isActive) {
@@ -35,7 +42,7 @@ const protect = async (req, res, next) => {
     }
 
     req.account = account;
-    req.accountRole = decoded.role; // 'customer' | 'staff' | 'admin'
+    req.accountRole = accountRole; // 'customer' | 'staff' | 'admin' - LUÔN lấy tươi từ DB, không tin token
     next();
   } catch (err) {
     return res.status(401).json({ message: 'Token không hợp lệ hoặc đã hết hạn' });

@@ -1,6 +1,16 @@
 const StoreInventory = require('../models/StoreInventory');
+const Store = require('../models/Store');
 const asyncHandler = require('../utils/asyncHandler');
 const { getScopedStoreId } = require('../middlewares/authMiddleware');
+
+// Chi nhánh được gán cho 1 staff không tự động biến mất khi cửa hàng đó bị ẩn (isActive=false) -
+// không có cơ chế dọn dẹp nào khác gán lại/gỡ storeId khi admin ẩn 1 cửa hàng. Nếu không kiểm tra
+// lại đây, staff đó vẫn thao tác được vô thời hạn lên tồn kho của 1 chi nhánh đã ngừng hoạt động.
+async function assertScopedStoreIsActive(scopedStoreId) {
+  if (!scopedStoreId) return true;
+  const store = await Store.findById(scopedStoreId);
+  return Boolean(store?.isActive);
+}
 
 // @route GET /api/store-inventories?storeId=&productId=
 const getInventories = asyncHandler(async (req, res) => {
@@ -50,6 +60,9 @@ const upsertInventory = asyncHandler(async (req, res) => {
   if (scopedStoreId && String(storeId) !== scopedStoreId) {
     return res.status(403).json({ message: 'Bạn chỉ được quản lý tồn kho của chi nhánh mình phụ trách' });
   }
+  if (scopedStoreId && !(await assertScopedStoreIsActive(scopedStoreId))) {
+    return res.status(403).json({ message: 'Chi nhánh bạn phụ trách đã ngừng hoạt động, vui lòng liên hệ quản trị viên' });
+  }
 
   const inventory = await StoreInventory.findOneAndUpdate(
     { storeId, productId },
@@ -68,8 +81,24 @@ const updateInventory = asyncHandler(async (req, res) => {
   if (scopedStoreId && inventory.storeId.toString() !== scopedStoreId) {
     return res.status(403).json({ message: 'Bạn chỉ được quản lý tồn kho của chi nhánh mình phụ trách' });
   }
+  if (scopedStoreId && !(await assertScopedStoreIsActive(scopedStoreId))) {
+    return res.status(403).json({ message: 'Chi nhánh bạn phụ trách đã ngừng hoạt động, vui lòng liên hệ quản trị viên' });
+  }
 
-  Object.assign(inventory, req.body, { lastUpdated: new Date() });
+  // CHỈ cho sửa stock/lowStockThreshold - trước đây Object.assign(inventory, req.body) chấp nhận
+  // BẤT KỲ field nào gửi lên, kể cả storeId/productId. Một "Quản lý chi nhánh" gửi kèm storeId của
+  // MỘT chi nhánh khác trong body sẽ vượt qua được kiểm tra ở trên (vẫn đang sửa đúng bản ghi thuộc
+  // chi nhánh mình) rồi Object.assign ghi đè storeId của bản ghi sang chi nhánh khác - lách hoàn
+  // toàn cơ chế giới hạn theo chi nhánh.
+  const { stock, lowStockThreshold } = req.body;
+  if (stock !== undefined) {
+    if (typeof stock !== 'number' || stock < 0) {
+      return res.status(400).json({ message: 'Số lượng tồn kho không hợp lệ (phải là số >= 0)' });
+    }
+    inventory.stock = stock;
+  }
+  if (lowStockThreshold !== undefined) inventory.lowStockThreshold = lowStockThreshold;
+  inventory.lastUpdated = new Date();
   await inventory.save();
   res.json({ data: inventory });
 });
