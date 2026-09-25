@@ -61,6 +61,12 @@ const verifyRegisterOtp = asyncHandler(async (req, res) => {
   const otp = await Otp.findOne({ email: email?.toLowerCase(), purpose: 'register' }).sort({ createdAt: -1 });
 
   if (!otp) return res.status(400).json({ message: 'Không tìm thấy mã OTP, vui lòng yêu cầu gửi lại' });
+  // Trước đây chỉ dựa vào TTL index của MongoDB (quét nền, không chạy đúng ngay tại thời điểm hết
+  // hạn) để tự xoá OTP hết hạn - kiểm tra tường minh tại đây để đảm bảo hạn dùng được áp dụng NGAY,
+  // không có khoảng hở vài chục giây giữa lúc hết hạn và lúc MongoDB thực sự quét xoá.
+  if (otp.expiresAt < new Date()) {
+    return res.status(400).json({ message: 'Mã OTP đã hết hạn, vui lòng yêu cầu gửi lại' });
+  }
   if (otp.attempts >= MAX_OTP_ATTEMPTS) {
     return res.status(429).json({ message: 'Bạn đã nhập sai quá nhiều lần, vui lòng yêu cầu gửi lại mã mới' });
   }

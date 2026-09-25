@@ -27,11 +27,17 @@ const getWishlist = asyncHandler(async (req, res) => {
 const updateProfile = asyncHandler(async (req, res) => {
   const { displayName, phoneNumber, avatar, gender, dateOfBirth } = req.body;
   const user = await User.findById(req.account._id);
-  if (displayName) user.displayName = displayName;
-  if (phoneNumber) user.phoneNumber = phoneNumber;
-  if (avatar) user.avatar = avatar;
-  if (gender) user.gender = gender;
-  if (dateOfBirth) user.dateOfBirth = dateOfBirth;
+  // Trước đây dùng kiểm tra truthy (if (displayName)) nên gửi chuỗi rỗng bị ÂM THẦM bỏ qua - Frontend
+  // vẫn báo "Cập nhật thành công" dù không có gì thay đổi, và họ tên rỗng không được coi là lỗi dù
+  // đây là field bắt buộc phải có giá trị.
+  if (displayName !== undefined) {
+    if (!displayName.trim()) return res.status(400).json({ message: 'Họ và tên không được để trống' });
+    user.displayName = displayName.trim();
+  }
+  if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+  if (avatar !== undefined) user.avatar = avatar;
+  if (gender !== undefined) user.gender = gender;
+  if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth;
   await user.save();
   res.json({ user: user.toSafeObject() });
 });
@@ -60,8 +66,19 @@ const updateAddress = asyncHandler(async (req, res) => {
   const user = await User.findById(req.account._id);
   const address = user.addresses.id(req.params.addressId);
   if (!address) return res.status(404).json({ message: 'Không tìm thấy địa chỉ' });
+  const wasDefault = address.isDefault;
   Object.assign(address, req.body);
-  if (req.body.isDefault === true) clearOtherDefaults(user, address._id);
+  if (req.body.isDefault === true) {
+    clearOtherDefaults(user, address._id);
+  } else if (wasDefault && req.body.isDefault === false) {
+    // Trước đây có thể bỏ chọn "mặc định" của địa chỉ ĐANG mặc định mà không tự thăng địa chỉ khác
+    // lên thay thế, khiến người dùng còn 0 địa chỉ mặc định (checkout không tự chọn sẵn được địa
+    // chỉ nào). Tự động thăng địa chỉ khác lên mặc định; nếu đây là địa chỉ DUY NHẤT thì giữ nguyên
+    // mặc định (không cho phép 1 địa chỉ duy nhất lại không phải mặc định).
+    const other = user.addresses.find((a) => a._id.toString() !== address._id.toString());
+    if (other) other.isDefault = true;
+    else address.isDefault = true;
+  }
   await user.save();
   res.json({ data: user.addresses });
 });

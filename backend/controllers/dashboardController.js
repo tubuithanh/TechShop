@@ -33,7 +33,9 @@ const getRevenueByDay = asyncHandler(async (req, res) => {
     { $match: { createdAt: { $gte: fromDate }, status: { $ne: 'cancelled' } } },
     {
       $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+        // Không truyền timezone, $dateToString mặc định gộp theo ngày UTC - đơn đặt buổi tối giờ
+        // Việt Nam (UTC+7) sẽ bị gộp nhầm sang ngày hôm sau trên biểu đồ doanh thu.
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Asia/Ho_Chi_Minh' } },
         revenue: { $sum: '$grandTotal' },
         orderCount: { $sum: 1 }
       }
@@ -67,7 +69,10 @@ const getRevenueByStore = asyncHandler(async (req, res) => {
     { $match: { status: 'delivered' } },
     { $group: { _id: '$storeId', revenue: { $sum: '$grandTotal' }, orderCount: { $sum: 1 } } },
     { $lookup: { from: 'stores', localField: '_id', foreignField: '_id', as: 'store' } },
-    { $unwind: '$store' },
+    // preserveNullAndEmptyArrays: true - nếu cửa hàng đã bị xoá hẳn khỏi database (không phải chỉ
+    // ẩn/isActive=false), $unwind mặc định sẽ loại bỏ luôn dòng doanh thu đó, làm giảm tổng doanh
+    // thu hiển thị so với thẻ tổng quan (không lọc theo cửa hàng còn tồn tại hay không).
+    { $unwind: { path: '$store', preserveNullAndEmptyArrays: true } },
     { $sort: { revenue: -1 } }
   ]);
   res.json({ data });

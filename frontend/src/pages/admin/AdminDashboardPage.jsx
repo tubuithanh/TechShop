@@ -194,7 +194,7 @@ export default function AdminDashboardPage() {
                     <div className="d-flex justify-content-between align-items-center mb-1">
                       <div className="d-flex align-items-center gap-2">
                         <ShopWindow className="text-primary" />
-                        <span className="small fw-medium">{s.store?.name}</span>
+                        <span className="small fw-medium">{s.store?.name || 'Cửa hàng đã xóa'}</span>
                       </div>
                       <span className="small text-muted">{s.orderCount} đơn</span>
                     </div>

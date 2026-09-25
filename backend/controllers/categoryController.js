@@ -1,5 +1,6 @@
 const slugify = require('slugify');
 const Category = require('../models/Category');
+const Product = require('../models/Product');
 const asyncHandler = require('../utils/asyncHandler');
 
 const getCategories = asyncHandler(async (req, res) => {
@@ -44,6 +45,12 @@ const updateCategory = asyncHandler(async (req, res) => {
 const deleteCategory = asyncHandler(async (req, res) => {
   const category = await Category.findById(req.params.id);
   if (!category) return res.status(404).json({ message: 'Không tìm thấy danh mục' });
+  // Xoá cứng danh mục còn sản phẩm tham chiếu sẽ để lại categoryId "treo" (trỏ tới danh mục không
+  // còn tồn tại) trên các sản phẩm đó - chặn xoá thay vì cho phép tạo dữ liệu mồ côi.
+  const productCount = await Product.countDocuments({ categoryId: category._id, isActive: true });
+  if (productCount > 0) {
+    return res.status(400).json({ message: `Không thể xóa - còn ${productCount} sản phẩm thuộc danh mục này` });
+  }
   await category.deleteOne();
   res.json({ message: 'Đã xóa danh mục' });
 });

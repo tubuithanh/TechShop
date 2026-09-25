@@ -26,11 +26,19 @@ api.interceptors.request.use((config) => {
 let isRefreshing = false;
 let pendingQueue = [];
 
+// CHỈ loại trừ đúng các endpoint không nên thử refresh-rồi-gọi-lại: /auth/refresh (tránh lặp vô hạn
+// khi chính refresh cũng trả 401) và /auth/login (401 ở đó nghĩa là sai mật khẩu, không phải hết
+// hạn access token). Trước đây loại trừ CẢ prefix "/auth/" khiến /auth/me, /auth/change-password...
+// không bao giờ được tự thử làm mới token trước khi báo lỗi, dù các endpoint này hoàn toàn cần
+// access token và có thể hết hạn giống mọi API khác.
+const NO_REFRESH_RETRY_PATHS = ['/auth/refresh', '/auth/login'];
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url.includes('/auth/')) {
+    const skipRetry = NO_REFRESH_RETRY_PATHS.some((p) => originalRequest.url.includes(p));
+    if (error.response?.status === 401 && !originalRequest._retry && !skipRetry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           pendingQueue.push({ resolve, reject });

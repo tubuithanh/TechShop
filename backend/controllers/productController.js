@@ -89,8 +89,15 @@ const getProductBySlug = asyncHandler(async (req, res) => {
     .populate('brandId', 'name image');
   if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
 
-  // Lấy tồn kho theo từng cửa hàng (mô hình multi-store)
-  const inventories = await StoreInventory.find({ productId: product._id }).populate('storeId', 'name city address');
+  // Lấy tồn kho theo từng cửa hàng (mô hình multi-store) - lọc bỏ cửa hàng đã ngừng hoạt động
+  // (isActive=false): trước đây vẫn hiện trong danh sách chọn cửa hàng và cộng cả vào totalStock,
+  // khiến khách có thể "mua" ở 1 cửa hàng đã đóng cửa.
+  const inventoriesRaw = await StoreInventory.find({ productId: product._id }).populate({
+    path: 'storeId',
+    match: { isActive: true },
+    select: 'name city address'
+  });
+  const inventories = inventoriesRaw.filter((inv) => inv.storeId);
   const totalStock = inventories.reduce((sum, inv) => sum + inv.stock, 0);
 
   res.json({ data: { ...product.toObject(), inventories, totalStock } });

@@ -1,4 +1,5 @@
 const Brand = require('../models/Brand');
+const Product = require('../models/Product');
 const asyncHandler = require('../utils/asyncHandler');
 
 const getBrands = asyncHandler(async (req, res) => {
@@ -37,6 +38,12 @@ const updateBrand = asyncHandler(async (req, res) => {
 const deleteBrand = asyncHandler(async (req, res) => {
   const brand = await Brand.findById(req.params.id);
   if (!brand) return res.status(404).json({ message: 'Không tìm thấy nhãn hàng' });
+  // Xoá cứng nhãn hàng còn sản phẩm tham chiếu sẽ để lại brandId "treo" trên các sản phẩm đó -
+  // chặn xoá thay vì cho phép tạo dữ liệu mồ côi.
+  const productCount = await Product.countDocuments({ brandId: brand._id, isActive: true });
+  if (productCount > 0) {
+    return res.status(400).json({ message: `Không thể xóa - còn ${productCount} sản phẩm thuộc nhãn hàng này` });
+  }
   await brand.deleteOne();
   res.json({ message: 'Đã xóa nhãn hàng' });
 });

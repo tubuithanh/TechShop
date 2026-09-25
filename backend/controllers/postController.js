@@ -59,9 +59,32 @@ const createPost = asyncHandler(async (req, res) => {
 const updatePost = asyncHandler(async (req, res) => {
   const post = await Post.findById(req.params.id);
   if (!post) return res.status(404).json({ message: 'Không tìm thấy bài viết' });
-  Object.assign(post, req.body);
-  await post.save();
-  res.json({ data: post });
+
+  // Chỉ cho phép sửa đúng các field nội dung - Object.assign(post, req.body) trước đây chấp nhận
+  // BẤT KỲ field nào client gửi lên, kể cả userId/nameAuthor (tác giả) hay viewCount (lượt xem).
+  const { title, category, shortDescription, content, featuredImage, relatedProductIds, isPublished, isFeatured } =
+    req.body;
+  if (category !== undefined) post.category = category;
+  if (shortDescription !== undefined) post.shortDescription = shortDescription;
+  if (content !== undefined) post.content = content;
+  if (featuredImage !== undefined) post.featuredImage = featuredImage;
+  if (relatedProductIds !== undefined) post.relatedProductIds = relatedProductIds;
+  if (isPublished !== undefined) post.isPublished = isPublished;
+  if (isFeatured !== undefined) post.isFeatured = isFeatured;
+  if (title !== undefined && title !== post.title) {
+    post.title = title;
+    // Đổi tiêu đề thì tạo lại slug (URL bài viết) để khớp tiêu đề mới - trước đây title đổi nhưng
+    // slug giữ nguyên vĩnh viễn, khiến URL không còn phản ánh đúng nội dung.
+    post.slug = slugify(title, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g }) + '-' + post._id.toString().slice(-5);
+  }
+
+  try {
+    await post.save();
+    res.json({ data: post });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'Tiêu đề bài viết trùng với bài viết khác, vui lòng đổi tiêu đề' });
+    throw err;
+  }
 });
 
 const deletePost = asyncHandler(async (req, res) => {

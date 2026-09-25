@@ -1,5 +1,31 @@
 const AuditLog = require('../models/AuditLog');
 
+// Trước đây audit log chỉ ghi "đã có hành động xảy ra" (method + path + statusCode), không ghi
+// GIÁ TRỊ đã gửi lên - không đủ để trả lời "admin đã đổi cái gì" khi xem lại sau này (VD: đổi
+// quyền, bật/tắt bảo trì). Đính kèm request body đã lọc bỏ field nhạy cảm vào metadata.
+// So khớp theo MẪU (không chỉ đúng tên tuyệt đối) để bắt được các biến thể như accessToken,
+// zaloAccessToken, refreshToken, appSecret, otpCode... mà danh sách tên cố định trước đây bỏ sót.
+const SENSITIVE_KEY_PATTERN = /password|secret|token|otp/i;
+const MAX_SANITIZE_DEPTH = 4;
+
+// Đệ quy vào các object/mảng lồng nhau - trước đây chỉ lọc field ở CẤP NGOÀI CÙNG của request body,
+// nên dữ liệu nhạy cảm nằm trong object lồng nhau (VD: { auth: { password: "..." } }) vẫn bị ghi
+// nguyên văn vào audit log.
+function sanitizeValue(value, depth) {
+  if (depth > MAX_SANITIZE_DEPTH || value == null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((v) => sanitizeValue(v, depth + 1));
+  const clean = {};
+  for (const [key, v] of Object.entries(value)) {
+    clean[key] = SENSITIVE_KEY_PATTERN.test(key) ? '[ẩn]' : sanitizeValue(v, depth + 1);
+  }
+  return clean;
+}
+
+function sanitizeBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+  return sanitizeValue(body, 0);
+}
+
 function inferAction(method, path) {
   const cleanPath = path.split('?')[0];
   if (method === 'POST') return `TAO_MOI [${cleanPath}]`;
@@ -33,7 +59,7 @@ function auditLogger(req, res, next) {
         path: req.originalUrl,
         targetId: req.params?.id || req.params?.productId || req.params?.orderId || null,
         ip: req.ip,
-        metadata: { statusCode: res.statusCode }
+        metadata: { statusCode: res.statusCode, requestBody: sanitizeBody(req.body) }
       }).catch((err) => console.error('[AuditLog] Lỗi ghi log:', err.message));
     }
   });

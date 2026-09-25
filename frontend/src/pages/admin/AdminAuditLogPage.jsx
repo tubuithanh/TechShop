@@ -42,24 +42,37 @@ export default function AdminAuditLogPage() {
               <th>Hành động</th>
               <th>Đường dẫn</th>
               <th>IP</th>
+              <th>Dữ liệu gửi lên</th>
             </tr>
           </thead>
           <tbody>
             {logs.map((log) => (
               <tr key={log._id}>
                 <td className="text-nowrap">{new Date(log.createdAt).toLocaleString('vi-VN')}</td>
-                <td>{log.userName}</td>
-                <td>{log.userRole}</td>
+                {/* Backend trả về adminName/adminRole (đúng tên field của model AuditLog) -
+                    trước đây đọc nhầm log.userName/log.userRole (không tồn tại) nên 2 cột này
+                    luôn hiển thị trống với mọi dòng. */}
+                <td>{log.adminName}</td>
+                <td>{log.adminRole}</td>
                 <td>
                   <Badge bg={actionBadgeVariant(log.action)}>{log.action}</Badge>
                 </td>
                 <td className="small text-muted">{log.path}</td>
                 <td className="small text-muted">{log.ip}</td>
+                <td className="small text-muted" style={{ maxWidth: 260 }}>
+                  {log.metadata?.requestBody ? (
+                    <code className="small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                      {JSON.stringify(log.metadata.requestBody)}
+                    </code>
+                  ) : (
+                    '-'
+                  )}
+                </td>
               </tr>
             ))}
             {logs.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-muted">
+                <td colSpan={7} className="p-4 text-center text-muted">
                   Chưa có nhật ký nào
                 </td>
               </tr>

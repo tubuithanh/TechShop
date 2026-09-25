@@ -42,7 +42,7 @@ function generateOrders(count, { customers, products, stores }) {
       items.push({
         productId: product._id,
         quantity: randInt(1, 2),
-        unitPrice: product.salePrice || product.price,
+        unitPrice: product.effectivePrice ?? (product.salePrice || product.price),
         name: product.title,
         image: product.featuredImage
       });

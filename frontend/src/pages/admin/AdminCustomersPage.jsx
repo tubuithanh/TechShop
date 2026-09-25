@@ -30,7 +30,13 @@ export default function AdminCustomersPage() {
     setPage(1);
   };
 
-  const handleToggleActive = async (id) => {
+  const handleToggleActive = async (id, isActive) => {
+    // Khóa tài khoản là hành động ảnh hưởng ngay tới khách hàng thật - trước đây bấm là khóa luôn,
+    // không có bước xác nhận nào (khác các thao tác xóa khác trong trang admin đều có confirm()).
+    const message = isActive
+      ? 'Khóa tài khoản khách hàng này? Họ sẽ không thể đăng nhập cho tới khi được mở khóa lại.'
+      : 'Mở khóa tài khoản khách hàng này?';
+    if (!confirm(message)) return;
     await userService.toggleCustomerActive(id);
     load();
   };
@@ -68,7 +74,7 @@ export default function AdminCustomersPage() {
                   </Badge>
                 </td>
                 <td className="p-3">
-                  <Button variant="outline-primary" size="sm" onClick={() => handleToggleActive(c._id)}>
+                  <Button variant="outline-primary" size="sm" onClick={() => handleToggleActive(c._id, c.isActive)}>
                     {c.isActive ? 'Khóa tài khoản' : 'Mở khóa'}
                   </Button>
                 </td>

@@ -1,5 +1,6 @@
 const Warranty = require('../models/Warranty');
 const Order = require('../models/Order');
+const Product = require('../models/Product');
 const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -24,6 +25,22 @@ const createWarrantyRequest = asyncHandler(async (req, res) => {
   const item = order.items.find((i) => i.productId.toString() === productId);
   if (!item) {
     return res.status(400).json({ message: 'Sản phẩm này không có trong đơn hàng đã chọn' });
+  }
+
+  // Kiểm tra sản phẩm còn trong thời hạn bảo hành (warrantyMonths tính từ ngày đơn hàng chuyển sang
+  // "delivered") - trước đây chỉ kiểm tra đơn hàng ĐÃ giao mà không kiểm tra ĐÃ GIAO BAO LÂU, nên
+  // đơn giao từ nhiều năm trước vẫn tạo được yêu cầu bảo hành hợp lệ.
+  const product = await Product.findById(productId);
+  if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+  const deliveredEntry = [...order.statusHistory].reverse().find((h) => h.status === 'delivered');
+  const deliveredAt = deliveredEntry?.changedAt || order.createdAt;
+  const warrantyMonths = product.warrantyMonths ?? 12;
+  const expiryDate = new Date(deliveredAt);
+  expiryDate.setMonth(expiryDate.getMonth() + warrantyMonths);
+  if (warrantyMonths > 0 && new Date() > expiryDate) {
+    return res.status(400).json({
+      message: `Sản phẩm đã hết hạn bảo hành (${warrantyMonths} tháng kể từ ngày giao hàng ${deliveredAt.toLocaleDateString('vi-VN')})`
+    });
   }
 
   const warranty = await Warranty.create({
