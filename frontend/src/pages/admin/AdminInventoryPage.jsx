@@ -5,13 +5,20 @@ import { storeService } from '../../services/storeService';
 import { productService } from '../../services/productService';
 import api from '../../services/api';
 import { useSettings } from '../../store/SettingsContext';
+import { useAuth } from '../../store/AuthContext';
 import AdminPagination from '../../components/admin/AdminPagination';
 
 export default function AdminInventoryPage() {
+  const { user } = useAuth();
+  // "Quản lý chi nhánh" (staff được gán storeId cụ thể) chỉ được thao tác đúng chi nhánh của mình -
+  // khóa cứng ô chọn cửa hàng ở giao diện (backend cũng tự chặn nếu cố gọi API với storeId khác, đây
+  // chỉ là lớp UX để họ không thấy 1 ô chọn có vẻ đổi được nhưng thực ra bị từ chối).
+  const scopedStoreId = user?.storeId?._id || (typeof user?.storeId === 'string' ? user.storeId : null);
+
   const [inventories, setInventories] = useState([]);
   const [stores, setStores] = useState([]);
   const [products, setProducts] = useState([]);
-  const [selectedStoreId, setSelectedStoreId] = useState('');
+  const [selectedStoreId, setSelectedStoreId] = useState(scopedStoreId || '');
   const [form, setForm] = useState({ productId: '', stock: 0, lowStockThreshold: 5 });
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -29,11 +36,12 @@ export default function AdminInventoryPage() {
   useEffect(() => {
     storeService.getStores().then((data) => {
       setStores(data);
-      if (data.length > 0) setSelectedStoreId(data[0]._id);
+      if (!scopedStoreId && data.length > 0) setSelectedStoreId(data[0]._id);
     });
     // Danh sách chọn sản phẩm khi thiết lập tồn kho: giữ số lượng lớn hơn kích thước trang
     // thông thường vì đây là ô chọn (dropdown), không phải danh sách cần phân trang.
     productService.getProducts({ limit: 200 }).then((res) => setProducts(res.data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -73,18 +81,25 @@ export default function AdminInventoryPage() {
         Mô hình đa chi nhánh: mỗi cửa hàng quản lý tồn kho riêng cho từng sản phẩm.
       </p>
 
-      <Form.Select
-        value={selectedStoreId}
-        onChange={(e) => handleStoreChange(e.target.value)}
-        className="mb-4"
-        style={{ maxWidth: 320 }}
-      >
-        {stores.map((s) => (
-          <option key={s._id} value={s._id}>
-            {s.name} — {s.city}
-          </option>
-        ))}
-      </Form.Select>
+      {scopedStoreId ? (
+        <div className="mb-4 small text-muted">
+          Chi nhánh phụ trách: <strong>{stores.find((s) => s._id === scopedStoreId)?.name || '...'}</strong>{' '}
+          <span className="fst-italic">(tài khoản của bạn chỉ quản lý được đúng chi nhánh này)</span>
+        </div>
+      ) : (
+        <Form.Select
+          value={selectedStoreId}
+          onChange={(e) => handleStoreChange(e.target.value)}
+          className="mb-4"
+          style={{ maxWidth: 320 }}
+        >
+          {stores.map((s) => (
+            <option key={s._id} value={s._id}>
+              {s.name} — {s.city}
+            </option>
+          ))}
+        </Form.Select>
+      )}
 
       <Form onSubmit={handleUpsert} className="bg-white rounded-3 p-3 shadow-sm mb-4">
         <Row className="g-3 align-items-end">

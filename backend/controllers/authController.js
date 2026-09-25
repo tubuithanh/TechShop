@@ -163,6 +163,7 @@ const login = asyncHandler(async (req, res) => {
       // Frontend có ngay danh sách quyền để lọc menu/route NGAY SAU KHI đăng nhập, không phải đợi
       // tới lần gọi /auth/me hoặc /auth/refresh kế tiếp mới có (tránh 1 khoảng hở hiển thị sai).
       await admin.populate('groupIds', 'name permissions');
+      await admin.populate('storeId', 'name city');
       return res.json({ message: 'Đăng nhập thành công', user: admin.toSafeObject(), accessToken });
     }
   }

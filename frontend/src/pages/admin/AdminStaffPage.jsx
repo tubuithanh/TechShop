@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react';
 import { Container, Row, Col, Table, Button, Form, Modal, Badge } from 'react-bootstrap';
 import { staffService } from '../../services/staffService';
 import { permissionGroupService } from '../../services/permissionGroupService';
+import { storeService } from '../../services/storeService';
 import { useAuth } from '../../store/AuthContext';
 
-const emptyForm = { name: '', email: '', password: '', role: 'staff', groupIds: [] };
+const emptyForm = { name: '', email: '', password: '', role: 'staff', groupIds: [], storeId: '' };
 
 export default function AdminStaffPage() {
   const { user } = useAuth();
   const [staff, setStaff] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [stores, setStores] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -19,6 +21,7 @@ export default function AdminStaffPage() {
   useEffect(() => {
     load();
     permissionGroupService.getAll().then(setGroups);
+    storeService.getStores().then(setStores);
   }, []);
 
   const toggleGroup = (id) => {
@@ -40,7 +43,8 @@ export default function AdminStaffPage() {
       email: s.email,
       password: '',
       role: s.role,
-      groupIds: (s.groupIds || []).map((g) => g._id || g)
+      groupIds: (s.groupIds || []).map((g) => g._id || g),
+      storeId: s.storeId?._id || s.storeId || ''
     });
     setEditingId(s._id);
     setShowForm(true);
@@ -50,11 +54,17 @@ export default function AdminStaffPage() {
     e.preventDefault();
     try {
       if (editingId) {
-        const payload = { name: form.name, email: form.email, role: form.role, groupIds: form.groupIds };
+        const payload = {
+          name: form.name,
+          email: form.email,
+          role: form.role,
+          groupIds: form.groupIds,
+          storeId: form.storeId || null
+        };
         if (form.password) payload.newPassword = form.password;
         await staffService.update(editingId, payload);
       } else {
-        await staffService.create(form);
+        await staffService.create({ ...form, storeId: form.storeId || null });
       }
       setShowForm(false);
       setForm(emptyForm);
@@ -147,6 +157,27 @@ export default function AdminStaffPage() {
               </Col>
               {form.role === 'staff' && (
                 <Col md={12}>
+                  <Form.Label>Chi nhánh phụ trách (tùy chọn - "Quản lý chi nhánh")</Form.Label>
+                  <Form.Select
+                    value={form.storeId}
+                    onChange={(e) => setForm({ ...form, storeId: e.target.value })}
+                    className="mb-3"
+                  >
+                    <option value="">-- Không giới hạn chi nhánh (áp dụng theo nhóm quyền như bình thường) --</option>
+                    {stores.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name} — {s.city}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Form.Text className="text-muted d-block mb-3">
+                    Nếu chọn 1 chi nhánh, nhân viên này chỉ được quản lý tồn kho của ĐÚNG chi nhánh đó, dù nhóm
+                    quyền có cấp "Quản lý tồn kho" cho toàn hệ thống.
+                  </Form.Text>
+                </Col>
+              )}
+              {form.role === 'staff' && (
+                <Col md={12}>
                   <Form.Label>Nhóm quyền</Form.Label>
                   <div className="border rounded-3 p-3 d-flex flex-column gap-2">
                     {groups.map((g) => (
@@ -186,6 +217,7 @@ export default function AdminStaffPage() {
               <th>Email</th>
               <th>Vai trò</th>
               <th>Nhóm quyền</th>
+              <th>Chi nhánh</th>
               <th>Trạng thái</th>
               <th>Thao tác</th>
             </tr>
@@ -218,6 +250,15 @@ export default function AdminStaffPage() {
                   )}
                 </td>
                 <td>
+                  {s.storeId ? (
+                    <Badge bg="warning" text="dark" className="fw-normal">
+                      {s.storeId.name || '...'}
+                    </Badge>
+                  ) : (
+                    <span className="small text-muted">Toàn hệ thống</span>
+                  )}
+                </td>
+                <td>
                   <Badge bg={s.isActive ? 'success' : 'danger'}>{s.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Badge>
                 </td>
                 <td>
@@ -241,7 +282,7 @@ export default function AdminStaffPage() {
             ))}
             {staff.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-muted">
+                <td colSpan={7} className="p-4 text-center text-muted">
                   Chưa có tài khoản nào
                 </td>
               </tr>

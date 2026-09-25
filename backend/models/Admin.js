@@ -15,6 +15,11 @@ const adminSchema = new mongoose.Schema(
     // Nhóm quyền được gán (chỉ áp dụng cho role='staff' - admin luôn có toàn quyền, không cần gán
     // nhóm). 1 staff có thể thuộc nhiều nhóm cùng lúc, quyền thực tế = hợp của mọi nhóm đã gán.
     groupIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PermissionGroup' }],
+    // Chi nhánh được gán (VD: cho "Quản lý chi nhánh") - khi có giá trị, các quyền dạng "manage" của
+    // staff này chỉ áp dụng được trong PHẠM VI cửa hàng này (hiện áp dụng cho inventory.manage - xem
+    // storeInventoryController.js). null = không giới hạn theo chi nhánh, thao tác trên mọi cửa hàng
+    // như quyền vốn có. Admin và staff không gán storeId không bị ảnh hưởng bởi field này.
+    storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', default: null },
     isActive: { type: Boolean, default: true },
     lastLoginAt: Date
   },

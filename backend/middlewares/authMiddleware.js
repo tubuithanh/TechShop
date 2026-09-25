@@ -20,8 +20,12 @@ const protect = async (req, res, next) => {
       account = await User.findById(decoded.id);
     } else if (decoded.role === 'staff') {
       // Nạp sẵn quyền của các nhóm mà staff này thuộc về - để middleware `can()` bên dưới kiểm tra
-      // ngay trong bộ nhớ (không phải query DB lại ở mỗi route riêng lẻ).
-      account = await Admin.findById(decoded.id).populate('groupIds', 'name permissions');
+      // ngay trong bộ nhớ (không phải query DB lại ở mỗi route riêng lẻ). Nạp thêm tên chi nhánh
+      // (storeId) để Frontend hiển thị được, dù bản thân việc so sánh giới hạn chi nhánh (getScopedStoreId)
+      // chỉ cần đúng ObjectId, không cần populate.
+      account = await Admin.findById(decoded.id)
+        .populate('groupIds', 'name permissions')
+        .populate('storeId', 'name city');
     } else {
       account = await Admin.findById(decoded.id);
     }
@@ -71,4 +75,17 @@ const can = (permission) => {
   };
 };
 
-module.exports = { protect, authorize, can, hasPermission };
+// Trả về storeId (dạng string) mà staff này bị giới hạn thao tác trong phạm vi đó, hoặc null nếu
+// không bị giới hạn theo chi nhánh (admin, hoặc staff không được gán chi nhánh cụ thể). Dùng ở các
+// controller cần thêm 1 lớp giới hạn "chỉ chi nhánh của mình" bên trên permission thông thường (VD:
+// quyền inventory.manage vẫn có, nhưng chỉ áp dụng được cho đúng 1 cửa hàng - xem storeInventoryController.js).
+function getScopedStoreId(req) {
+  if (req.accountRole !== 'staff') return null;
+  const storeId = req.account?.storeId;
+  if (!storeId) return null;
+  // req.account.storeId có thể là ObjectId thô HOẶC document đã populate ({_id, name, city}) tùy nơi
+  // gọi protect() - lấy đúng ._id nếu đã populate, tránh so sánh nhầm bằng .toString() của cả object.
+  return (storeId._id || storeId).toString();
+}
+
+module.exports = { protect, authorize, can, hasPermission, getScopedStoreId };
