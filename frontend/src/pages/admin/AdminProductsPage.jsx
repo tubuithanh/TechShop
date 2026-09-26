@@ -3,7 +3,7 @@ import { Button, Card, Col, Form, Row, Table, Alert, Spinner, Badge } from 'reac
 import api from '../../services/api';
 import { productService } from '../../services/productService';
 import { placeholderImage } from '../../utils/placeholderImage';
-import { resizeImageToDataUrl } from '../../utils/imageUpload';
+import { uploadService } from '../../services/uploadService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
 import SpecificationsEditor from '../../components/admin/SpecificationsEditor';
@@ -189,10 +189,13 @@ export default function AdminProductsPage() {
     }
     setUploading(true);
     try {
-      const dataUrls = await Promise.all(filesToUpload.map((f) => resizeImageToDataUrl(f)));
-      setForm((prev) => ({ ...prev, imageURLs: [...prev.imageURLs, ...dataUrls] }));
+      // Tải lên máy chủ (Cloudinary nếu đã cấu hình) và chỉ lưu ĐƯỜNG LINK vào sản phẩm - trước đây ảnh
+      // được nhúng thẳng dạng base64 vào document sản phẩm, làm dữ liệu phình to và tải trang chậm.
+      const urls = [];
+      for (let i = 0; i < filesToUpload.length; i += 5) urls.push(...(await uploadService.uploadImages(filesToUpload.slice(i, i + 5))));
+      setForm((prev) => ({ ...prev, imageURLs: [...prev.imageURLs.filter((u) => u.trim()), ...urls] }));
     } catch (err) {
-      alert(err.message || 'Tải ảnh lên thất bại');
+      alert(err.response?.data?.message || err.message || 'Tải ảnh lên thất bại');
     } finally {
       setUploading(false);
     }

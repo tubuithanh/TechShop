@@ -6,6 +6,7 @@ import { useAuth } from '../store/AuthContext';
 import { useSettings } from '../store/SettingsContext';
 import { orderService } from '../services/orderService';
 import { storeService } from '../services/storeService';
+import { paymentService } from '../services/paymentService';
 import api from '../services/api';
 
 function formatVND(value) {
@@ -82,6 +83,10 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     setError('');
+    if (cart.hasUnavailable) {
+      setError('Giỏ hàng có sản phẩm đã ngừng bán hoặc không đủ hàng - vui lòng quay lại giỏ hàng để điều chỉnh');
+      return;
+    }
     if (!selectedStoreId) {
       setError('Vui lòng chọn cửa hàng xử lý đơn hàng');
       return;
@@ -96,6 +101,18 @@ export default function CheckoutPage() {
         voucherCode: discount > 0 ? voucherCode : undefined
       });
       await refreshCart();
+      if (paymentMode === 'vnpay') {
+        try {
+          await paymentService.startVnpay(order._id); // chuyển sang cổng VNPay
+          return;
+        } catch (err) {
+          // Đơn đã tạo nhưng chưa mở được cổng thanh toán -> vào trang đơn hàng để thanh toán lại sau
+          navigate(`/account/orders/${order._id}`, {
+            state: { justPlaced: true, paymentError: err.response?.data?.message || 'Không mở được cổng VNPay' }
+          });
+          return;
+        }
+      }
       navigate(`/account/orders/${order._id}`, { state: { justPlaced: true } });
     } catch (err) {
       setError(err.response?.data?.message || 'Đặt hàng thất bại, vui lòng thử lại');
@@ -194,7 +211,7 @@ export default function CheckoutPage() {
               type="radio"
               id="payment-vnpay"
               name="paymentMode"
-              label="Thanh toán qua VNPay (demo/sandbox)"
+              label="Thanh toán online qua VNPay (thẻ ATM, Visa/Master, QR)"
               checked={paymentMode === 'vnpay'}
               onChange={() => setPaymentMode('vnpay')}
             />

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal } from 'react-bootstrap';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
+import { uploadService } from '../services/uploadService';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
 import ProductCard from '../components/ProductCard';
@@ -43,7 +44,9 @@ export default function ProductDetailPage() {
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('description');
   const [isWishlisted, setIsWishlisted] = useState(false);
-  const [newReview, setNewReview] = useState({ rating: 5, message: '' });
+  const [newReview, setNewReview] = useState({ rating: 5, message: '', images: [] });
+  const [reviewUploading, setReviewUploading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
@@ -146,11 +149,32 @@ export default function ProductDetailPage() {
     setIsWishlisted(res.added);
   };
 
+  const handleReviewPhotos = async (e) => {
+    const files = [...e.target.files].slice(0, 3 - newReview.images.length);
+    e.target.value = '';
+    if (!files.length) return;
+    setReviewUploading(true);
+    setReviewError('');
+    try {
+      const urls = await uploadService.uploadImages(files);
+      setNewReview((prev) => ({ ...prev, images: [...prev.images, ...urls].slice(0, 3) }));
+    } catch (err) {
+      setReviewError(err.response?.data?.message || 'Tải ảnh thất bại');
+    } finally {
+      setReviewUploading(false);
+    }
+  };
+
   const handleSubmitReview = async (e) => {
     e.preventDefault();
-    const created = await productService.createReview(product._id, newReview);
-    setReviews([created, ...reviews]);
-    setNewReview({ rating: 5, message: '' });
+    setReviewError('');
+    try {
+      const created = await productService.createReview(product._id, newReview);
+      setReviews([created, ...reviews]);
+      setNewReview({ rating: 5, message: '', images: [] });
+    } catch (err) {
+      setReviewError(err.response?.data?.message || 'Gửi đánh giá thất bại');
+    }
   };
 
   return (
@@ -403,7 +427,30 @@ export default function ProductDetailPage() {
                   className="small mb-2"
                   rows={3}
                 />
-                <Button type="submit" variant="primary" size="sm">
+                <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  {newReview.images.map((img) => (
+                    <div key={img} className="position-relative">
+                      <img src={img} alt="Ảnh đính kèm" className="rounded border" style={{ width: '4rem', height: '4rem', objectFit: 'cover' }} />
+                      <button
+                        type="button"
+                        aria-label="Bỏ ảnh"
+                        className="btn btn-sm btn-light border position-absolute top-0 end-0 p-0 lh-1"
+                        style={{ width: '1.25rem', height: '1.25rem' }}
+                        onClick={() => setNewReview((prev) => ({ ...prev, images: prev.images.filter((u) => u !== img) }))}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {newReview.images.length < 3 && (
+                    <Form.Label className="btn btn-outline-secondary btn-sm mb-0">
+                      {reviewUploading ? 'Đang tải...' : '📷 Thêm ảnh (tối đa 3)'}
+                      <input type="file" accept="image/*" multiple hidden disabled={reviewUploading} onChange={handleReviewPhotos} />
+                    </Form.Label>
+                  )}
+                </div>
+                {reviewError && <div className="small text-danger mb-2">{reviewError}</div>}
+                <Button type="submit" variant="primary" size="sm" disabled={reviewUploading}>
                   Gửi đánh giá
                 </Button>
               </Form>

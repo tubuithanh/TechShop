@@ -51,6 +51,14 @@ const orderSchema = new mongoose.Schema(
     voucherCode: { type: String, default: null },
     grandTotal: { type: Number, required: true },
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
+    // Thông tin giao dịch thanh toán online (VNPay): mã giao dịch lần thử gần nhất + kết quả VNPay trả về
+    paymentInfo: {
+      txnRef: String,
+      transactionNo: String,
+      bankCode: String,
+      responseCode: String,
+      paidAt: Date
+    },
     statusHistory: [
       {
         status: String,

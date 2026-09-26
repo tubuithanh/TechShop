@@ -1,4 +1,6 @@
-import { Table, Form, Button } from 'react-bootstrap';
+import { useState } from 'react';
+import { Table, Form, Button, InputGroup } from 'react-bootstrap';
+import { uploadService } from '../../services/uploadService';
 
 export const newVariant = () => ({
   color: '',
@@ -15,6 +17,19 @@ export const newVariant = () => ({
 // - vì vậy phiên bản còn hàng chỉ nên TẮT "Đang bán" thay vì xóa (backend cũng chặn xóa khi còn hàng).
 export default function VariantsEditor({ value, onChange }) {
   const variants = value || [];
+  const [uploadingIdx, setUploadingIdx] = useState(null);
+  const uploadImage = async (idx, file) => {
+    if (!file) return;
+    setUploadingIdx(idx);
+    try {
+      const [url] = await uploadService.uploadImages([file]);
+      update(idx, 'image', url);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Tải ảnh thất bại');
+    } finally {
+      setUploadingIdx(null);
+    }
+  };
   const update = (idx, field, fieldValue) =>
     onChange(variants.map((v, i) => (i === idx ? { ...v, [field]: fieldValue } : v)));
   const remove = (idx) => {
@@ -59,7 +74,22 @@ export default function VariantsEditor({ value, onChange }) {
                   <Form.Control size="sm" type="number" min={0} placeholder="Tùy chọn" value={v.salePrice} onChange={(e) => update(idx, 'salePrice', e.target.value)} />
                 </td>
                 <td>
-                  <Form.Control size="sm" placeholder="Dùng ảnh chung nếu trống" value={v.image} onChange={(e) => update(idx, 'image', e.target.value)} />
+                  <InputGroup size="sm">
+                    <Form.Control placeholder="Dùng ảnh chung nếu trống" value={v.image} onChange={(e) => update(idx, 'image', e.target.value)} />
+                    <Form.Label className="btn btn-outline-secondary mb-0" title="Tải ảnh lên">
+                      {uploadingIdx === idx ? '...' : '⬆'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        disabled={uploadingIdx !== null}
+                        onChange={(e) => {
+                          uploadImage(idx, e.target.files[0]);
+                          e.target.value = '';
+                        }}
+                      />
+                    </Form.Label>
+                  </InputGroup>
                 </td>
                 <td className="text-center">
                   <Form.Check checked={v.isActive} onChange={(e) => update(idx, 'isActive', e.target.checked)} />

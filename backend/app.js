@@ -29,6 +29,9 @@ const chatRoutes = require('./routes/chatRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const permissionGroupRoutes = require('./routes/permissionGroupRoutes');
 const staffRoutes = require('./routes/staffRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const { UPLOAD_DIR } = require('./controllers/uploadController');
 
 const app = express();
 
@@ -103,6 +106,10 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/permission-groups', permissionGroupRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/uploads', uploadRoutes);
+// Ảnh upload khi chưa cấu hình Cloudinary (xem controllers/uploadController.js)
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
 
 // ----- Xử lý lỗi -----
 app.use(notFound);

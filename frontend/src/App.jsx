@@ -14,6 +14,7 @@ import ProductListPage from './pages/ProductListPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
+import PaymentReturnPage from './pages/PaymentReturnPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ZaloFinishPage from './pages/ZaloFinishPage';
@@ -108,6 +109,17 @@ export default function App() {
                     <StorefrontLayout>
                       <PrivateRoute>
                         <CheckoutPage />
+                      </PrivateRoute>
+                    </StorefrontLayout>
+                  }
+                />
+
+                <Route
+                  path="/payment/vnpay-return"
+                  element={
+                    <StorefrontLayout>
+                      <PrivateRoute>
+                        <PaymentReturnPage />
                       </PrivateRoute>
                     </StorefrontLayout>
                   }

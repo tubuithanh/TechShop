@@ -305,7 +305,12 @@ const cancelOrder = asyncHandler(async (req, res) => {
   const updated = await Order.findOneAndUpdate(
     { _id: order._id, status: order.status },
     {
-      $set: { status: 'cancelled', cancelReason },
+      $set: {
+        status: 'cancelled',
+        cancelReason,
+        // Đơn đã thanh toán online bị hủy -> chuyển sang "đã hoàn tiền" (bản demo mô phỏng việc hoàn tiền)
+        ...(order.paymentStatus === 'paid' && order.paymentMode !== 'cod' ? { paymentStatus: 'refunded' } : {})
+      },
       $push: { statusHistory: { status: 'cancelled', note: cancelReason, changedBy: req.account._id } }
     },
     { new: true }
@@ -363,7 +368,10 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     {
       $set: {
         status,
-        ...(status === 'delivered' && order.paymentMode === 'cod' ? { paymentStatus: 'paid' } : {})
+        ...(status === 'delivered' && order.paymentMode === 'cod' ? { paymentStatus: 'paid' } : {}),
+        ...(RESTOCK_STATUSES.includes(status) && order.paymentStatus === 'paid' && order.paymentMode !== 'cod'
+          ? { paymentStatus: 'refunded' }
+          : {})
       },
       $push: { statusHistory: { status, note, changedBy: req.account._id } }
     },

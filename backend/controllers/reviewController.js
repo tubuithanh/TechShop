@@ -26,6 +26,10 @@ const getProductReviews = asyncHandler(async (req, res) => {
 const createReview = asyncHandler(async (req, res) => {
   const { rating, message, images, orderId } = req.body;
   const productId = req.params.productId;
+  // Ảnh đánh giá: chỉ nhận tối đa 5 đường link http(s) (ảnh khách đã tải lên qua /api/uploads)
+  if (images !== undefined && (!Array.isArray(images) || images.length > 5 || images.some((u) => typeof u !== 'string' || !/^https?:\/\//.test(u)))) {
+    return res.status(400).json({ message: 'Ảnh đánh giá không hợp lệ (tối đa 5 ảnh)' });
+  }
 
   // Mỗi khách chỉ được đánh giá 1 lần cho 1 sản phẩm - trước đây không kiểm tra, 1 khách có thể gửi
   // nhiều đánh giá liên tiếp cho cùng sản phẩm, làm sai lệch điểm trung bình (tính trùng nhiều lần

@@ -3,6 +3,7 @@ import { useParams, useLocation } from 'react-router-dom';
 import { Container, Alert, ListGroup, Card, Button, Form, Spinner } from 'react-bootstrap';
 import { orderService } from '../services/orderService';
 import { warrantyService } from '../services/warrantyService';
+import { paymentService } from '../services/paymentService';
 import { io } from 'socket.io-client';
 import { getAccessToken } from '../services/api';
 
@@ -17,6 +18,13 @@ const statusLabel = {
   returned: 'Đã hoàn trả'
 };
 
+const paymentStatusLabel = {
+  pending: { text: 'Chưa thanh toán', bg: 'warning' },
+  paid: { text: 'Đã thanh toán', bg: 'success' },
+  failed: { text: 'Thanh toán thất bại', bg: 'danger' },
+  refunded: { text: 'Đã hoàn tiền', bg: 'secondary' }
+};
+
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
 }
@@ -27,6 +35,19 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState(null);
   const [warrantyForm, setWarrantyForm] = useState({ productId: '', issueDescription: '' });
   const [warrantyMsg, setWarrantyMsg] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState(location.state?.paymentError || '');
+
+  const handlePay = async () => {
+    setPaying(true);
+    setPaymentError('');
+    try {
+      await paymentService.startVnpay(id);
+    } catch (err) {
+      setPaymentError(err.response?.data?.message || 'Không mở được cổng thanh toán VNPay');
+      setPaying(false);
+    }
+  };
 
   useEffect(() => {
     orderService.getOrderById(id).then(setOrder);
@@ -82,6 +103,25 @@ export default function OrderDetailPage() {
       <p className="small text-muted mb-4">
         Xử lý tại: <strong>{order.storeId?.name}</strong> ({order.storeId?.address})
       </p>
+
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-4 small">
+        <span>Thanh toán: {order.paymentMode === 'vnpay' ? 'VNPay' : order.paymentMode === 'cod' ? 'Khi nhận hàng (COD)' : order.paymentMode}</span>
+        <span className={`badge text-bg-${paymentStatusLabel[order.paymentStatus]?.bg || 'secondary'}`}>
+          {paymentStatusLabel[order.paymentStatus]?.text || order.paymentStatus}
+        </span>
+        {order.paymentMode === 'vnpay' &&
+          !['paid', 'refunded'].includes(order.paymentStatus) &&
+          !['cancelled', 'returned'].includes(order.status) && (
+            <Button size="sm" variant="primary" onClick={handlePay} disabled={paying}>
+              {paying ? 'Đang chuyển sang VNPay...' : order.paymentStatus === 'failed' ? 'Thanh toán lại' : 'Thanh toán ngay'}
+            </Button>
+          )}
+      </div>
+      {paymentError && (
+        <Alert variant="warning" className="small">
+          {paymentError}
+        </Alert>
+      )}
 
       {order.status !== 'cancelled' && order.status !== 'returned' && (
         <div className="d-flex justify-content-between mb-5" style={{ fontSize: '0.75rem' }}>

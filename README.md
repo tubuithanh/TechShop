@@ -1,4 +1,4 @@
-# TechShop — Website Thương mại điện tử Đa chi nhánh (Đồ án tốt nghiệp — MERN Stack)
+# TechShop — Website Thương mại điện tử Đa chi nhánh (TLCN — MERN Stack)
 
 Mô phỏng mô hình kinh doanh và chức năng cốt lõi của **thegioididong.com**, xây dựng bằng **MongoDB – Express.js – React.js – Node.js**.
 
@@ -51,7 +51,11 @@ cd backend
 npm install
 cp .env.example .env
 ```
-Mở file `.env` và chỉnh `MONGO_URI` trỏ đến MongoDB của bạn nếu cần. Các biến `ZALO_*`/`HTTPS_PORT` chỉ cần khi thử đăng nhập bằng Zalo; bỏ trống vẫn chạy bình thường. Nếu cổng HTTPS bị chiếm, server chỉ cảnh báo chứ không dừng.
+Mở file `.env` và chỉnh `MONGO_URI` trỏ đến MongoDB của bạn nếu cần.
+
+**Cấu hình tùy chọn** (bỏ trống vẫn chạy được):
+- **VNPay:** `VNP_TMN_CODE`, `VNP_HASH_SECRET` (đăng ký sandbox miễn phí tại https://sandbox.vnpayment.vn/devreg). Khai báo IPN URL trên VNPay là `<backend>/api/payments/vnpay/ipn`. Chưa cấu hình thì đơn VNPay vẫn tạo được, trang đơn hàng báo cổng thanh toán chưa sẵn sàng.
+- **Cloudinary:** `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`. Chưa cấu hình thì ảnh tải lên được lưu vào `backend/uploads` — trên Render ổ đĩa không bền (mất khi deploy lại), nên production cần Cloudinary. Các biến `ZALO_*`/`HTTPS_PORT` chỉ cần khi thử đăng nhập bằng Zalo; bỏ trống vẫn chạy bình thường. Nếu cổng HTTPS bị chiếm, server chỉ cảnh báo chứ không dừng.
 
 ```
 npm run seed
@@ -92,7 +96,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có 20 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng, đặt hàng, tồn kho theo phiên bản, giá theo phiên bản.
+Có 28 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, hoàn tiền), tải ảnh lên.
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 
@@ -127,10 +131,12 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 - **Chi tiết sản phẩm** — mục 1.1.4:
   - chọn **màu** (ô màu) và **dung lượng/kích thước**; giá, ảnh và tồn kho theo từng cửa hàng đổi theo phiên bản đã chọn;
   - thư viện ảnh, breadcrumb;
-  - 4 tab: mô tả, **thông số kỹ thuật chia theo nhóm**, đánh giá kèm ảnh (bấm để phóng to), hỏi đáp;
+  - 4 tab: mô tả, **thông số kỹ thuật chia theo nhóm**, đánh giá kèm ảnh (khách tải lên tối đa 3 ảnh, bấm để phóng to), hỏi đáp;
   - tính trả góp, danh sách yêu thích, thanh mua hàng cố định ở cuối trang.
 - **So sánh sản phẩm** song song, thông số chia theo nhóm, **tự làm nổi bật giá trị tốt nhất** ở mỗi dòng — mục 1.1.5
 - Giỏ hàng và đặt hàng theo phiên bản, áp mã giảm giá, chọn hình thức nhận hàng — mục 1.1.6
+  - giỏ hàng tự cảnh báo dòng hàng **ngừng bán** hoặc **không đủ hàng** ("Chỉ còn N sản phẩm") và khóa nút thanh toán cho tới khi khách điều chỉnh;
+  - **thanh toán online qua VNPay** (thẻ ATM, Visa/Master, QR): kiểm tra chữ ký giao dịch, nhận kết quả qua cả trang trả về và IPN, thanh toán lại khi thất bại, hủy đơn đã thanh toán thì chuyển "đã hoàn tiền".
 - **Trung tâm tài khoản**: thông tin cá nhân, đổi mật khẩu, sổ địa chỉ, danh sách yêu thích — mục 1.1.7
 - Đánh giá và hỏi đáp (Q&A) sản phẩm — mục 1.1.8
 - **Trang khuyến mãi** công khai (sao chép mã) — mục 1.1.9
@@ -144,7 +150,8 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 **Quản trị:**
 - **Quản lý sản phẩm** — mục 1.2.1:
   - bảng **phiên bản** (màu, mã màu, dung lượng, giá, giá khuyến mãi, ảnh riêng, đang bán/ngừng bán); không cho xóa phiên bản còn hàng trong kho;
-  - **thông số kỹ thuật theo mẫu của danh mục**.
+  - **thông số kỹ thuật theo mẫu của danh mục**;
+  - **tải ảnh lên** cho sản phẩm và từng phiên bản (lưu trên Cloudinary nếu đã cấu hình, nếu không thì lưu trên máy chủ).
 - **Quản lý tồn kho** theo chi nhánh và phiên bản, cảnh báo sắp hết hàng
 - Quản lý đơn hàng theo luồng trạng thái (chặn nhảy cóc trạng thái) — mục 1.2.2
 - **Quản lý khách hàng**: tìm kiếm, khóa/mở tài khoản — mục 1.2.3
@@ -187,8 +194,8 @@ MONGO_URI="<chuỗi-kết-nối>" node seed/<tên-script>.js    # database khác
 
 ## Còn thiếu so với tài liệu phân tích đầy đủ (chưa triển khai trong bản demo này)
 
-- Tích hợp cổng thanh toán thật (VNPay/Momo sandbox) — hiện chỉ mô phỏng lựa chọn
-- Upload ảnh trực tiếp qua Cloudinary/AWS S3 (hiện nhập ảnh bằng đường link)
+- Ví MoMo (VNPay đã tích hợp)
+- Tự hủy đơn VNPay quá hạn chưa thanh toán để trả lại tồn kho giữ chỗ
 - Chatbot tư vấn sản phẩm tự động (mục 1.1.22)
 - Gamification / vòng quay may mắn (mục 1.1.19)
 - Cache Redis, unit test Frontend (React Testing Library)
