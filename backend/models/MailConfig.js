@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// Cấu hình gửi email do admin nhập trong "Cấu hình hệ thống > Email". Lưu RIÊNG khỏi collection settings vì
+// Cấu hình gửi email do admin nhập trong "Cấu hình hệ thống > Cấu hình gửi email". Lưu RIÊNG khỏi collection settings vì
 // GET /api/settings là API công khai (header/footer đọc) - không được để lộ mật khẩu ra đó.
 // Mật khẩu SMTP và API key chỉ lưu dạng đã mã hóa (utils/secretBox.js), không bao giờ trả về trình duyệt.
 const mailConfigSchema = new mongoose.Schema(

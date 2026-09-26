@@ -9,10 +9,19 @@ beforeAll(async () => {
   process.env.JWT_REFRESH_SECRET = 'test_refresh_secret';
   process.env.NODE_ENV = 'test';
 
-  mongoServer = await MongoMemoryServer.create();
+  // Windows (Hyper-V/WSL) giữ riêng một số dải cổng: nếu cổng ngẫu nhiên rơi vào đó sẽ lỗi
+  // "listen EACCES" - thử lại với cổng khác thay vì làm hỏng cả file test.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      mongoServer = await MongoMemoryServer.create();
+      break;
+    } catch (err) {
+      if (attempt >= 5 || !/EACCES|EADDRINUSE/.test(String(err?.message))) throw err;
+    }
+  }
   const uri = mongoServer.getUri();
   await mongoose.connect(uri);
-});
+}, 60000);
 
 afterAll(async () => {
   await mongoose.disconnect();

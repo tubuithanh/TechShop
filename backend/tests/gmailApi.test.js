@@ -20,7 +20,7 @@ async function adminAgent() {
 }
 
 // Giả lập các API của Google; ghi lại mọi lời gọi để kiểm tra
-function mockGoogle({ tokenError } = {}) {
+function mockGoogle({ tokenError, noSendScope } = {}) {
   const calls = [];
   const realFetch = global.fetch;
   global.fetch = async (url, opts = {}) => {
@@ -29,7 +29,10 @@ function mockGoogle({ tokenError } = {}) {
     const json = (status, data) => ({ ok: status < 300, status, json: async () => data, text: async () => JSON.stringify(data) });
     if (String(url).startsWith('https://oauth2.googleapis.com/token')) {
       if (tokenError) return json(400, { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' });
-      if (body.grant_type === 'authorization_code') return json(200, { access_token: 'at-1', refresh_token: REFRESH, expires_in: 3599 });
+      if (body.grant_type === 'authorization_code') {
+        const scope = noSendScope ? 'openid email' : 'https://www.googleapis.com/auth/gmail.send openid email';
+        return json(200, { access_token: 'at-1', refresh_token: REFRESH, expires_in: 3599, scope });
+      }
       return json(200, { access_token: 'at-refreshed', expires_in: 3599 });
     }
     if (String(url).includes('/userinfo')) return json(200, { email: 'shop.techshop@gmail.com' });
@@ -111,6 +114,22 @@ describe('Gửi email bằng Gmail API (OAuth2)', () => {
       const off = await admin.post('/api/settings/mail/gmail/disconnect');
       expect(off.body.data.gmailConnected).toBe(false);
       expect(google.calls.some((c) => c.url.includes('/revoke'))).toBe(true);
+    } finally {
+      google.restore();
+    }
+    expect((await MailConfig.findOne().lean()).gmailRefreshTokenEnc).toBe('');
+  });
+
+  test('TC-64: Người dùng bỏ tích quyền gửi email khi cấp quyền -> báo rõ, không lưu kết nối', async () => {
+    const admin = await adminAgent();
+    await admin.put('/api/settings/mail', { provider: 'gmail', gmailClientId: CLIENT_ID, gmailClientSecret: CLIENT_SECRET });
+    const state = new URL((await admin.post('/api/settings/mail/gmail/connect')).body.data.url).searchParams.get('state');
+    const google = mockGoogle({ noSendScope: true });
+    try {
+      const cb = await request(app).get('/api/settings/mail/gmail/callback').query({ code: 'c', state });
+      const loc = new URL(cb.headers.location);
+      expect(loc.searchParams.get('gmail')).toBe('error');
+      expect(loc.searchParams.get('reason')).toMatch(/chưa cấp quyền gửi email/);
     } finally {
       google.restore();
     }

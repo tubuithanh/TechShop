@@ -206,6 +206,9 @@ function friendlyError(err) {
   if (/invalid_grant/i.test(msg)) {
     return 'quyền truy cập Gmail đã hết hạn hoặc bị thu hồi - bấm "Kết nối tài khoản Gmail" lại (nếu ứng dụng Google đang ở chế độ Testing, quyền chỉ có hiệu lực 7 ngày)';
   }
+  if (/MISSING_SEND_SCOPE|insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(msg)) {
+    return 'tài khoản Gmail chưa cấp quyền gửi email - bấm "Ngắt kết nối", rồi "Kết nối tài khoản Gmail" lại và TÍCH chọn ô "Send email on your behalf"';
+  }
   if (/invalid_client|unauthorized_client/i.test(msg)) return 'Client ID hoặc Client Secret không đúng';
   if (/redirect_uri_mismatch/i.test(msg)) return 'Redirect URI chưa khai báo đúng trong Google Cloud Console';
   if (/Gmail API has not been used|accessNotConfigured|SERVICE_DISABLED/i.test(msg)) return 'chưa bật Gmail API cho project trong Google Cloud Console';

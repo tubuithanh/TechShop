@@ -6,7 +6,7 @@ const { decrypt } = require('./secretBox');
 const { sendViaGmail } = require('./gmailApi');
 
 // Gửi email. Cấu hình lấy theo thứ tự ưu tiên:
-//   1. Cấu hình admin nhập trong "Cấu hình hệ thống > Email" (collection mail_configs)
+//   1. Cấu hình admin nhập trong "Cấu hình hệ thống > Cấu hình gửi email" (collection mail_configs)
 //   2. Biến môi trường: RESEND_API_KEY (gửi qua HTTPS) hoặc SMTP_HOST/PORT/USER/PASS (xem .env.example)
 //   3. Không có gì -> chế độ demo: chỉ in nội dung ra log máy chủ, không gửi thật
 const DEFAULT_FROM = 'TechShop <no-reply@techshop.demo>';

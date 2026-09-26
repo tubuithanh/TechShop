@@ -15,7 +15,7 @@ const TABS = [
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
   { key: 'seo', label: 'SEO', icon: Search },
   { key: 'maintenance', label: 'Bảo trì', icon: Tools },
-  { key: 'email', label: 'Email (SMTP)', icon: EnvelopeFill }
+  { key: 'email', label: 'Cấu hình gửi email', icon: EnvelopeFill }
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

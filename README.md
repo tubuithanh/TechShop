@@ -55,7 +55,7 @@ Mở file `.env` và chỉnh `MONGO_URI` trỏ đến MongoDB của bạn nếu 
 
 **Cấu hình tùy chọn** (bỏ trống vẫn chạy được):
 - **VNPay:** `VNP_TMN_CODE`, `VNP_HASH_SECRET` (đăng ký sandbox miễn phí tại https://sandbox.vnpayment.vn/devreg). Khai báo IPN URL trên VNPay là `<backend>/api/payments/vnpay/ipn`. Chưa cấu hình thì đơn VNPay vẫn tạo được, trang đơn hàng báo cổng thanh toán chưa sẵn sàng.
-- **Gửi email** (mã OTP đăng ký): cấu hình ngay trong **Admin → Cấu hình hệ thống → Email (SMTP)** với 3 cách gửi: SMTP, Resend, hoặc **Gmail API (OAuth2)** - gửi từ chính địa chỉ @gmail.com qua HTTPS nên chạy được cả khi máy chủ chặn cổng SMTP (có nút gửi thử; mật khẩu được mã hóa bằng `SETTINGS_SECRET`), hoặc bằng biến môi trường SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, ví dụ Gmail với "Mật khẩu ứng dụng") **hoặc** Resend (`RESEND_API_KEY`), cùng `MAIL_FROM`. Kiểm tra bằng `node scripts/testEmail.js <email-nhận>`. Chưa cấu hình thì chạy chế độ demo: mã OTP hiện ngay trên màn hình đăng ký.
+- **Gửi email** (mã OTP đăng ký): cấu hình ngay trong **Admin → Cấu hình hệ thống → Cấu hình gửi email** với 3 cách gửi: SMTP, Resend, hoặc **Gmail API (OAuth2)** - gửi từ chính địa chỉ @gmail.com qua HTTPS nên chạy được cả khi máy chủ chặn cổng SMTP (có nút gửi thử; mật khẩu được mã hóa bằng `SETTINGS_SECRET`), hoặc bằng biến môi trường SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, ví dụ Gmail với "Mật khẩu ứng dụng") **hoặc** Resend (`RESEND_API_KEY`), cùng `MAIL_FROM`. Kiểm tra bằng `node scripts/testEmail.js <email-nhận>`. Chưa cấu hình thì chạy chế độ demo: mã OTP hiện ngay trên màn hình đăng ký.
 - **Cloudinary:** `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`. Chưa cấu hình thì ảnh tải lên được lưu vào `backend/uploads` — trên Render ổ đĩa không bền (mất khi deploy lại), nên production cần Cloudinary. Các biến `ZALO_*`/`HTTPS_PORT` chỉ cần khi thử đăng nhập bằng Zalo; bỏ trống vẫn chạy bình thường. Nếu cổng HTTPS bị chiếm, server chỉ cảnh báo chứ không dừng.
 
 ```
@@ -98,7 +98,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có 63 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
+Có 64 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 

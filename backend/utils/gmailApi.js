@@ -53,6 +53,12 @@ async function exchangeCode({ clientId, clientSecret, redirectUri, code }) {
   });
   if (!res.ok) throw await googleError(res);
   const tokens = await res.json();
+  // Google cho người dùng bỏ tích từng quyền: thiếu quyền gửi thư thì báo ngay, không lưu kết nối "hỏng"
+  if (!String(tokens.scope || '').split(' ').includes(GMAIL_SCOPES[0])) {
+    const err = new Error('MISSING_SEND_SCOPE');
+    err.code = 'MISSING_SEND_SCOPE';
+    throw err;
+  }
   if (!tokens.refresh_token) throw new Error('Google không trả về refresh token - hãy thử kết nối lại');
   const info = await fetch(USERINFO_URL, { headers: { Authorization: `Bearer ${tokens.access_token}` } });
   if (!info.ok) throw await googleError(info);
