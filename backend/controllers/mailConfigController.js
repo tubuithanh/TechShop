@@ -117,6 +117,9 @@ function friendlyError(err) {
   if (/Invalid login|535|Username and Password not accepted|EAUTH/i.test(msg)) {
     return 'sai tài khoản hoặc mật khẩu SMTP (Gmail cần "Mật khẩu ứng dụng", không dùng mật khẩu đăng nhập)';
   }
+  if (/ENETUNREACH|EHOSTUNREACH/i.test(msg)) {
+    return 'máy chủ web không có đường mạng tới máy chủ SMTP (thường do IPv6) - thử cổng 465, hoặc dùng Resend';
+  }
   if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND|timeout|ECONNRESET/i.test(msg)) {
     return 'không kết nối được máy chủ SMTP (sai địa chỉ/cổng, hoặc máy chủ web chặn cổng SMTP - thử cổng khác hoặc dùng Resend)';
   }

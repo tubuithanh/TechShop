@@ -1,3 +1,5 @@
+const dns = require('dns').promises;
+const net = require('net');
 const nodemailer = require('nodemailer');
 const MailConfig = require('../models/MailConfig');
 const { decrypt } = require('./secretBox');
@@ -67,10 +69,24 @@ async function isMailConfigured() {
   return (await resolveMailConfig()).mode !== 'demo';
 }
 
-function createTransport(c) {
+// Nhiều máy chủ web (VD Render) không có đường mạng IPv6, nhưng smtp.gmail.com có cả địa chỉ IPv6 -> nếu
+// kết nối theo IPv6 sẽ lỗi "connect ENETUNREACH 2607:f8b0:...". Vì vậy tự tra địa chỉ IPv4 và kết nối bằng
+// IPv4, nhưng vẫn kiểm tra chứng chỉ TLS theo đúng tên máy chủ (servername). Không tra được IPv4 thì dùng tên gốc.
+async function resolveIPv4(host) {
+  if (net.isIP(host)) return host;
+  try {
+    return (await dns.lookup(host, { family: 4 })).address;
+  } catch {
+    return host;
+  }
+}
+
+async function createTransport(c) {
+  const address = await resolveIPv4(c.host);
   return nodemailer.createTransport({
-    host: c.host,
+    host: address,
     port: c.port,
+    tls: { servername: c.host },
     secure: c.port === 465, // 465: SSL ngay từ đầu; 587: STARTTLS
     auth: c.user ? { user: c.user, pass: c.pass } : undefined,
     connectionTimeout: 10000,
@@ -97,7 +113,7 @@ async function sendWithConfig(c, { to, subject, html, text }) {
   }
   if (!c.host) throw new Error('Thiếu máy chủ SMTP');
   if (c.user && !c.pass) throw new Error('Thiếu mật khẩu SMTP (hoặc không giải mã được mật khẩu đã lưu - hãy nhập lại)');
-  const info = await createTransport(c).sendMail({ from: c.from, to, subject, html, text });
+  const info = await (await createTransport(c)).sendMail({ from: c.from, to, subject, html, text });
   return { mode: c.mode, info };
 }
 
@@ -108,7 +124,7 @@ async function sendMail(mail) {
 // Kiểm tra kết nối/đăng nhập SMTP (script kiểm tra cấu hình)
 async function verifyMailConfig() {
   const c = await resolveMailConfig();
-  if (c.mode === 'smtp') await createTransport(c).verify();
+  if (c.mode === 'smtp') await (await createTransport(c)).verify();
   return c.mode;
 }
 
