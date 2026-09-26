@@ -7,8 +7,9 @@ async function registerUser(overrides = {}) {
   const defaultUser = {
     displayName: 'Test User',
     email: `user${Date.now()}${Math.floor(Math.random() * 100000)}@example.com`,
-    phoneNumber: '0900000000',
-    password: '123456'
+    // Mỗi tài khoản cần 1 số điện thoại riêng (số điện thoại không được trùng)
+    phoneNumber: `09${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`,
+    password: 'matkhau123'
   };
   const user = { ...defaultUser, ...overrides };
 
@@ -19,7 +20,7 @@ async function registerUser(overrides = {}) {
 
   return request(app)
     .post('/api/auth/register')
-    .send({ ...user, acceptTerms: true });
+    .send({ confirmPassword: user.password, acceptTerms: true, ...user });
 }
 
 module.exports = { registerUser };

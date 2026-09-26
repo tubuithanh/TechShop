@@ -89,7 +89,9 @@ export default function ProfilePage() {
               <Form.Control
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
+                pattern="(?=.*[A-Za-z])(?=.*\d).{8,64}"
+                title="Tối thiểu 8 ký tự, gồm cả chữ và số"
                 value={pwForm.newPassword}
                 onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
               />

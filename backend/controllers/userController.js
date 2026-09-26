@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
+const { normalizeName, validateName, normalizePhone, validatePhone } = require('../utils/customerValidation');
 
 // @route POST /api/users/wishlist/:productId - toggle favoriteProductIds
 const toggleWishlist = asyncHandler(async (req, res) => {
@@ -31,10 +32,20 @@ const updateProfile = asyncHandler(async (req, res) => {
   // vẫn báo "Cập nhật thành công" dù không có gì thay đổi, và họ tên rỗng không được coi là lỗi dù
   // đây là field bắt buộc phải có giá trị.
   if (displayName !== undefined) {
-    if (!displayName.trim()) return res.status(400).json({ message: 'Họ và tên không được để trống' });
-    user.displayName = displayName.trim();
+    const nameError = validateName(displayName);
+    if (nameError) return res.status(400).json({ message: nameError });
+    user.displayName = normalizeName(displayName);
   }
-  if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+  // Cùng quy tắc với lúc đăng ký: đúng định dạng di động VN và không trùng tài khoản khác
+  if (phoneNumber !== undefined && normalizePhone(phoneNumber) !== user.phoneNumber) {
+    const phoneError = validatePhone(phoneNumber);
+    if (phoneError) return res.status(400).json({ message: phoneError });
+    const normalized = normalizePhone(phoneNumber);
+    if (await User.exists({ phoneNumber: normalized, _id: { $ne: user._id } })) {
+      return res.status(409).json({ message: 'Số điện thoại đã được sử dụng cho tài khoản khác' });
+    }
+    user.phoneNumber = normalized;
+  }
   if (avatar !== undefined) user.avatar = avatar;
   if (gender !== undefined) user.gender = gender;
   if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth;

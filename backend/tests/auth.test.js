@@ -8,7 +8,7 @@ describe('Auth API', () => {
     displayName: 'Nguyễn Test',
     email: 'test@example.com',
     phoneNumber: '0900000099',
-    password: '123456'
+    password: 'matkhau123'
   };
 
   test('TC-01: Đăng ký tài khoản mới thành công', async () => {

@@ -97,7 +97,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có 34 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
+Có 41 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 
@@ -127,7 +127,10 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 ## Tính năng đã triển khai
 
 **Khách hàng:**
-- Đăng ký 3 bước (email → OTP → hoàn tất; có đo độ mạnh mật khẩu, bắt buộc đồng ý điều khoản) — mục 1.1.21
+- Đăng ký 3 bước (email → OTP → thông tin) — mục 1.1.21:
+  - bắt buộc: họ tên (2–50 ký tự, chỉ chữ cái), số điện thoại di động Việt Nam (10 số, đầu 03/05/07/08/09, không trùng tài khoản khác), mật khẩu tối thiểu 8 ký tự có chữ và số, nhập lại mật khẩu, đồng ý điều khoản;
+  - không bắt buộc: thêm tối đa 5 địa chỉ nhận hàng (Nhà riêng, Công ty hoặc tự đặt tên), chọn 1 địa chỉ mặc định;
+  - báo lỗi ngay dưới từng ô, khóa nút đăng ký tới khi hợp lệ; backend kiểm tra lại toàn bộ (kể cả khi sửa số điện thoại trong hồ sơ).
 - Đăng nhập JWT, phiên đăng nhập duy trì bằng refresh token lưu trong cookie httpOnly; đăng nhập bằng Zalo (tùy chọn)
 - Trang chủ, danh mục, tìm kiếm và lọc sản phẩm; **lọc theo thông số dạng số** (VD: RAM ≥ 8GB, màn hình 6–7 inch) — mục 1.1.1, 1.1.2, 1.1.3
 - **Chi tiết sản phẩm** — mục 1.1.4:

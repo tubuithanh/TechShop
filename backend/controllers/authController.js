@@ -8,6 +8,14 @@ const asyncHandler = require('../utils/asyncHandler');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const { sendOtp } = require('../utils/sendOtp');
 const { buildAuthUrl, exchangeCodeForToken } = require('../utils/zaloAuth');
+const {
+  normalizeName,
+  validateName,
+  normalizePhone,
+  validatePhone,
+  validatePassword,
+  normalizeAddresses
+} = require('../utils/customerValidation');
 
 const OTP_EXPIRES_MINUTES = 5;
 const MAX_OTP_ATTEMPTS = 5;
@@ -82,16 +90,28 @@ const verifyRegisterOtp = asyncHandler(async (req, res) => {
 });
 
 const register = asyncHandler(async (req, res) => {
-  const { displayName, email, phoneNumber, password, acceptTerms } = req.body;
+  const { email, password, confirmPassword, acceptTerms } = req.body;
 
-  if (!displayName || !email || !password) {
-    return res.status(400).json({ message: 'Vui lòng nhập đầy đủ họ tên, email, mật khẩu' });
-  }
+  if (!email) return res.status(400).json({ message: 'Vui lòng nhập email' });
+  // Kiểm tra đầy đủ ở backend (giao diện cũng kiểm tra, nhưng request có thể gửi thẳng tới API)
+  const fieldError =
+    validateName(req.body.displayName) ||
+    validatePhone(req.body.phoneNumber) ||
+    validatePassword(password) ||
+    (confirmPassword !== undefined && confirmPassword !== password ? 'Mật khẩu nhập lại không khớp' : null);
+  if (fieldError) return res.status(400).json({ message: fieldError });
   if (!acceptTerms) {
     return res.status(400).json({ message: 'Bạn cần đồng ý với Điều khoản sử dụng và Chính sách bảo mật' });
   }
-  const strength = getPasswordStrength(password);
-  if (!strength.valid) return res.status(400).json({ message: strength.message });
+  const { addresses, error: addressError } = normalizeAddresses(req.body.addresses);
+  if (addressError) return res.status(400).json({ message: addressError });
+
+  const displayName = normalizeName(req.body.displayName);
+  const phoneNumber = normalizePhone(req.body.phoneNumber);
+  // Mỗi số điện thoại chỉ gắn với 1 tài khoản (dùng để gọi xác nhận đơn, tra cứu bảo hành)
+  if (await User.exists({ phoneNumber })) {
+    return res.status(409).json({ message: 'Số điện thoại đã được sử dụng cho tài khoản khác' });
+  }
 
   const existed = await User.findOne({ email: email.toLowerCase() });
   if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' });
@@ -111,6 +131,7 @@ const register = asyncHandler(async (req, res) => {
     email,
     phoneNumber,
     password,
+    addresses,
     isEmailVerified: true,
     termsAcceptedAt: new Date()
   });
@@ -307,8 +328,9 @@ const changePassword = asyncHandler(async (req, res) => {
   const isMatch = await account.comparePassword(oldPassword);
   if (!isMatch) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
 
-  const strength = getPasswordStrength(newPassword);
-  if (!strength.valid) return res.status(400).json({ message: strength.message });
+  // Khách hàng áp quy tắc mật khẩu mới (8 ký tự, có chữ và số); tài khoản quản trị giữ quy tắc cũ
+  const passwordError = req.accountRole === 'customer' ? validatePassword(newPassword) : getPasswordStrength(newPassword).message;
+  if (passwordError) return res.status(400).json({ message: passwordError });
 
   account.password = newPassword;
   await account.save();
