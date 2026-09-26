@@ -64,7 +64,11 @@ function SectionTitle({ icon: Icon, children }) {
 export default function AdminSettingsPage() {
   const { settings, loading: settingsLoading, refreshSettings } = useSettings();
   const [form, setForm] = useState(settings);
-  const [activeTab, setActiveTab] = useState('general');
+  // ?tab=email: mở thẳng tab Email (VD khi quay về từ trang cấp quyền Gmail)
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    return TABS.some((t) => t.key === tab) ? tab : 'general';
+  });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'danger', message }
   const [showMaintenanceConfirm, setShowMaintenanceConfirm] = useState(false);

@@ -3,6 +3,7 @@ const net = require('net');
 const nodemailer = require('nodemailer');
 const MailConfig = require('../models/MailConfig');
 const { decrypt } = require('./secretBox');
+const { sendViaGmail } = require('./gmailApi');
 
 // Gửi email. Cấu hình lấy theo thứ tự ưu tiên:
 //   1. Cấu hình admin nhập trong "Cấu hình hệ thống > Email" (collection mail_configs)
@@ -32,6 +33,20 @@ function configFromEnv() {
 function configFromDoc(doc) {
   if (!doc || doc.provider === 'env') return null;
   if (doc.provider === 'off') return { mode: 'demo', source: 'admin' };
+  if (doc.provider === 'gmail') {
+    const email = doc.gmailEmail;
+    // Gmail luôn gửi từ đúng tài khoản đã kết nối - chỉ giữ phần tên hiển thị của ô "Người gửi"
+    const displayName = (String(doc.from || '').match(/^([^<]+)</)?.[1] || 'TechShop').trim();
+    return {
+      mode: 'gmail',
+      source: 'admin',
+      clientId: doc.gmailClientId,
+      clientSecret: decrypt(doc.gmailClientSecretEnc),
+      refreshToken: decrypt(doc.gmailRefreshTokenEnc),
+      email,
+      from: email ? `${displayName} <${email}>` : doc.from || DEFAULT_FROM
+    };
+  }
   if (doc.provider === 'resend') {
     return { mode: 'resend', source: 'admin', apiKey: decrypt(doc.resendApiKeyEnc), from: doc.from || DEFAULT_FROM };
   }
@@ -99,6 +114,12 @@ async function createTransport(c) {
 async function sendWithConfig(c, { to, subject, html, text }) {
   if (c.mode === 'demo') {
     console.log(`[MAIL DEMO] Tới: ${to} | Tiêu đề: ${subject}\n${text || ''}`);
+    return { mode: c.mode };
+  }
+  if (c.mode === 'gmail') {
+    if (!c.clientId || !c.clientSecret) throw new Error('Thiếu Client ID / Client Secret của Gmail API (hoặc không giải mã được - hãy nhập lại)');
+    if (!c.refreshToken) throw new Error('Chưa kết nối tài khoản Gmail - bấm "Kết nối tài khoản Gmail"');
+    await sendViaGmail(c, { to, subject, html, text });
     return { mode: c.mode };
   }
   if (c.mode === 'resend') {

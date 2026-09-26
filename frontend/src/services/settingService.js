@@ -21,5 +21,14 @@ export const settingService = {
   async testMailConfig(payload) {
     const { data } = await api.post('/settings/mail/test', payload);
     return data;
+  },
+  // Gmail API: lấy link đăng nhập Google để cấp quyền gửi email / ngắt kết nối
+  async startGmailConnect() {
+    const { data } = await api.post('/settings/mail/gmail/connect');
+    return data.data.url;
+  },
+  async disconnectGmail() {
+    const { data } = await api.post('/settings/mail/gmail/disconnect');
+    return data;
   }
 };

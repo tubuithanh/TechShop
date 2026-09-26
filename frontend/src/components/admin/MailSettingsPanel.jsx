@@ -8,6 +8,7 @@ const PROVIDERS = [
   { value: 'env', label: 'Dùng biến môi trường', hint: 'Lấy từ SMTP_* / RESEND_API_KEY trên máy chủ (cách cấu hình cũ)' },
   { value: 'smtp', label: 'SMTP', hint: 'Gmail, Outlook, Brevo, máy chủ mail riêng...' },
   { value: 'resend', label: 'Resend', hint: 'Gửi qua HTTPS - dùng khi máy chủ web chặn cổng SMTP' },
+  { value: 'gmail', label: 'Gmail API (OAuth2)', hint: 'Gửi từ chính địa chỉ @gmail.com qua HTTPS - dùng được trên Render' },
   { value: 'off', label: 'Tắt (demo)', hint: 'Không gửi email; mã OTP hiện ngay trên màn hình đăng ký' }
 ];
 const SMTP_PRESETS = [
@@ -30,8 +31,27 @@ export default function MailSettingsPanel() {
   const load = async () => {
     const data = await settingService.getMailConfig();
     setSaved(data);
-    setForm({ provider: data.provider, smtpHost: data.smtpHost, smtpPort: data.smtpPort, smtpUser: data.smtpUser, smtpPassword: '', resendApiKey: '', from: data.from });
+    setForm({
+      provider: data.provider,
+      smtpHost: data.smtpHost,
+      smtpPort: data.smtpPort,
+      smtpUser: data.smtpUser,
+      smtpPassword: '',
+      resendApiKey: '',
+      gmailClientId: data.gmailClientId,
+      gmailClientSecret: '',
+      from: data.from
+    });
   };
+  // Quay về từ trang cấp quyền Google: ?gmail=connected | error&reason=...
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('gmail');
+    if (result === 'connected') setFeedback({ type: 'success', message: 'Đã kết nối tài khoản Gmail. Hãy bấm "Gửi thử" để kiểm tra.' });
+    if (result === 'error') setFeedback({ type: 'danger', message: `Kết nối Gmail thất bại: ${params.get('reason') || 'không rõ lý do'}` });
+    if (result) window.history.replaceState(null, '', window.location.pathname);
+  }, []);
+
   useEffect(() => {
     load().catch((err) => setFeedback({ type: 'danger', message: err.response?.data?.message || 'Không tải được cấu hình email (cần quyền Admin)' }));
   }, []);
@@ -63,6 +83,19 @@ export default function MailSettingsPanel() {
       const res = await settingService.updateMailConfig(form);
       await load();
       setFeedback({ type: 'success', message: res.message || 'Đã lưu cấu hình email' });
+    });
+  // Lưu Client ID/Secret đang nhập (nếu có thay đổi) rồi chuyển sang trang đăng nhập Google để cấp quyền
+  const handleGmailConnect = () =>
+    run('connect', async () => {
+      if (form.gmailClientSecret || form.gmailClientId !== saved.gmailClientId) await settingService.updateMailConfig(form);
+      window.location.href = await settingService.startGmailConnect();
+    });
+  const handleGmailDisconnect = () =>
+    run('connect', async () => {
+      if (!confirm('Ngắt kết nối tài khoản Gmail? Website sẽ không gửi được email qua Gmail API cho tới khi kết nối lại.')) return;
+      const res = await settingService.disconnectGmail();
+      await load();
+      setFeedback({ type: 'success', message: res.message });
     });
   const handleTest = () =>
     run('test', async () => {
@@ -201,9 +234,96 @@ export default function MailSettingsPanel() {
         </Form.Group>
       )}
 
-      {(provider === 'smtp' || provider === 'resend') && (
+      {provider === 'gmail' && (
+        <>
+          <Alert variant="info" className="small py-2">
+            <div className="fw-semibold mb-1">Gửi bằng Gmail API (OAuth2) - qua HTTPS cổng 443, không bị chặn như SMTP</div>
+            <ol className="mb-0 ps-3">
+              <li>
+                Vào{' '}
+                <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noreferrer">
+                  Google Cloud Console
+                </a>
+                , tạo project và bật <strong>Gmail API</strong>.
+              </li>
+              <li>
+                <strong>OAuth consent screen</strong>: chọn External, thêm Gmail của bạn vào Test users, rồi bấm{' '}
+                <strong>Publish app</strong> (để ở Testing thì quyền chỉ có hiệu lực 7 ngày).
+              </li>
+              <li>
+                <strong>Credentials → Create credentials → OAuth client ID</strong>, loại <em>Web application</em>, thêm
+                Authorized redirect URI bên dưới.
+              </li>
+              <li>Dán Client ID, Client Secret vào đây, bấm <strong>Lưu</strong>, rồi bấm <strong>Kết nối tài khoản Gmail</strong>.</li>
+            </ol>
+          </Alert>
+          <Form.Group controlId="gmail-redirect" className="mb-2">
+            <Form.Label className="small fw-medium">Authorized redirect URI (khai báo trong Google Cloud Console)</Form.Label>
+            <InputGroup>
+              <Form.Control readOnly value={saved.gmailRedirectUri} />
+              <Button variant="outline-secondary" onClick={() => navigator.clipboard?.writeText(saved.gmailRedirectUri)}>
+                Sao chép
+              </Button>
+            </InputGroup>
+          </Form.Group>
+          <Row className="g-2 mb-2">
+            <Col sm={7}>
+              <Form.Group controlId="gmail-client-id">
+                <Form.Label className="small fw-medium">Client ID</Form.Label>
+                <Form.Control
+                  value={form.gmailClientId}
+                  placeholder="xxxx.apps.googleusercontent.com"
+                  autoComplete="off"
+                  onChange={(e) => set('gmailClientId', e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col sm={5}>
+              <Form.Group controlId="gmail-client-secret">
+                <Form.Label className="small fw-medium">
+                  Client Secret {saved.hasGmailClientSecret && <Badge bg="success" className="fw-normal ms-1">đã lưu</Badge>}
+                </Form.Label>
+                <Form.Control
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.gmailClientSecret}
+                  placeholder={saved.hasGmailClientSecret ? 'Để trống = giữ giá trị đã lưu' : 'GOCSPX-...'}
+                  onChange={(e) => set('gmailClientSecret', e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+          </Row>
+          <div className="border rounded-3 p-3 mb-3 d-flex flex-wrap align-items-center gap-2">
+            {saved.gmailConnected ? (
+              <>
+                <Badge bg="success" className="fw-normal py-2">✓ Đã kết nối</Badge>
+                <span className="small">
+                  Gửi từ <strong>{saved.gmailEmail}</strong>
+                </span>
+                <Button size="sm" variant="outline-danger" className="ms-auto" disabled={!!busy} onClick={handleGmailDisconnect}>
+                  Ngắt kết nối
+                </Button>
+                <Button size="sm" variant="outline-primary" disabled={!!busy} onClick={handleGmailConnect}>
+                  Kết nối tài khoản khác
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="small text-muted">Chưa kết nối tài khoản Gmail.</span>
+                <Button size="sm" variant="primary" className="ms-auto" disabled={!!busy || !saved.hasGmailClientSecret || !saved.gmailClientId} onClick={handleGmailConnect}>
+                  Kết nối tài khoản Gmail
+                </Button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {(provider === 'smtp' || provider === 'resend' || provider === 'gmail') && (
         <Form.Group controlId="mail-from" className="mb-3">
-          <Form.Label className="small fw-medium">Người gửi (hiển thị trong email)</Form.Label>
+          <Form.Label className="small fw-medium">
+            {provider === 'gmail' ? 'Tên người gửi (địa chỉ luôn là Gmail đã kết nối)' : 'Người gửi (hiển thị trong email)'}
+          </Form.Label>
           <Form.Control value={form.from} placeholder="TechShop <tenban@gmail.com>" onChange={(e) => set('from', e.target.value)} />
         </Form.Group>
       )}

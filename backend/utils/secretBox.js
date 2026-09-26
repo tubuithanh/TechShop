@@ -34,4 +34,23 @@ function decrypt(box) {
   }
 }
 
-module.exports = { encrypt, decrypt, keySource };
+// Ký / kiểm tra dữ liệu ngắn (VD tham số "state" của OAuth) để chống giả mạo; hết hạn sau maxAgeMs
+function signPayload(obj) {
+  const data = Buffer.from(JSON.stringify({ ...obj, t: Date.now() })).toString('base64url');
+  const mac = crypto.createHmac('sha256', getKey()).update(data).digest('base64url');
+  return `${data}.${mac}`;
+}
+function verifyPayload(token, maxAgeMs) {
+  const [data, mac] = String(token || '').split('.');
+  if (!data || !mac) return null;
+  const expected = crypto.createHmac('sha256', getKey()).update(data).digest('base64url');
+  if (mac.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(expected))) return null;
+  try {
+    const obj = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+    return Date.now() - obj.t <= maxAgeMs ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { encrypt, decrypt, keySource, signPayload, verifyPayload };
