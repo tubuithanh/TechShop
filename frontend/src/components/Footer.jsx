@@ -1,6 +1,22 @@
+import { Link } from 'react-router-dom';
 import { Container, Row, Col } from 'react-bootstrap';
 import { Facebook, Youtube, Instagram, Chat } from 'react-bootstrap-icons';
 import { useSettings } from '../store/SettingsContext';
+
+// Danh sách liên kết trong footer (chữ sáng, gạch chân khi rê chuột)
+function FooterLinks({ links }) {
+  return (
+    <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+      {links.map(([to, label]) => (
+        <li key={to}>
+          <Link to={to} className="footer-link">
+            {label}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function Footer() {
   const { settings } = useSettings();
@@ -41,23 +57,43 @@ export default function Footer() {
           </Col>
           <Col xs={12} md={3}>
             <h6 className="text-white fw-semibold mb-2">Hỗ trợ khách hàng</h6>
-            <ul className="list-unstyled mb-0">
-              <li>Tra cứu bảo hành</li>
-              <li>Chính sách đổi trả</li>
-              <li>Hướng dẫn mua hàng</li>
-            </ul>
+            <FooterLinks
+              links={[
+                ['/huong-dan-mua-hang', 'Hướng dẫn mua hàng'],
+                ['/tra-cuu-bao-hanh', 'Tra cứu bảo hành'],
+                ['/stores', 'Hệ thống cửa hàng'],
+                ['/promotions', 'Chương trình khuyến mãi'],
+                ['/account/orders', 'Tra cứu đơn hàng']
+              ]}
+            />
           </Col>
           <Col xs={12} md={3}>
             <h6 className="text-white fw-semibold mb-2">Chính sách</h6>
-            <ul className="list-unstyled mb-0">
-              <li>Chính sách bảo mật</li>
-              <li>Điều khoản sử dụng</li>
-            </ul>
+            <FooterLinks
+              links={[
+                ['/chinh-sach-doi-tra', 'Chính sách đổi trả'],
+                ['/chinh-sach-bao-hanh', 'Chính sách bảo hành'],
+                ['/chinh-sach-giao-hang', 'Chính sách giao hàng'],
+                ['/chinh-sach-thanh-toan', 'Chính sách thanh toán'],
+                ['/privacy', 'Chính sách bảo mật'],
+                ['/terms', 'Điều khoản sử dụng']
+              ]}
+            />
           </Col>
           <Col xs={12} md={3}>
             <h6 className="text-white fw-semibold mb-2">Liên hệ</h6>
-            <p className="mb-0">Hotline: {settings.hotline}</p>
-            <p className="mb-0">Email: {settings.contactEmail}</p>
+            <p className="mb-1">
+              Hotline:{' '}
+              <a href={`tel:${String(settings.hotline).replace(/\s/g, '')}`} className="footer-link fw-semibold">
+                {settings.hotline}
+              </a>
+            </p>
+            <p className="mb-1">
+              Email:{' '}
+              <a href={`mailto:${settings.contactEmail}`} className="footer-link">
+                {settings.contactEmail}
+              </a>
+            </p>
             {settings.contactAddress && <p className="mb-0">Địa chỉ: {settings.contactAddress}</p>}
           </Col>
         </Row>

@@ -15,6 +15,8 @@ import ProductDetailPage from './pages/ProductDetailPage';
 import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
 import PaymentReturnPage from './pages/PaymentReturnPage';
+import WarrantyLookupPage from './pages/WarrantyLookupPage';
+import { ReturnPolicyPage, WarrantyPolicyPage, ShippingPolicyPage, PaymentPolicyPage, BuyingGuidePage } from './pages/PolicyPages';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ZaloFinishPage from './pages/ZaloFinishPage';
@@ -97,6 +99,12 @@ export default function App() {
                 <Route path="/zalo-finish" element={<ZaloFinishPage />} />
                 <Route path="/terms" element={<StorefrontLayout><TermsPage /></StorefrontLayout>} />
                 <Route path="/privacy" element={<StorefrontLayout><PrivacyPage /></StorefrontLayout>} />
+                <Route path="/tra-cuu-bao-hanh" element={<StorefrontLayout><WarrantyLookupPage /></StorefrontLayout>} />
+                <Route path="/chinh-sach-doi-tra" element={<StorefrontLayout><ReturnPolicyPage /></StorefrontLayout>} />
+                <Route path="/chinh-sach-bao-hanh" element={<StorefrontLayout><WarrantyPolicyPage /></StorefrontLayout>} />
+                <Route path="/chinh-sach-giao-hang" element={<StorefrontLayout><ShippingPolicyPage /></StorefrontLayout>} />
+                <Route path="/chinh-sach-thanh-toan" element={<StorefrontLayout><PaymentPolicyPage /></StorefrontLayout>} />
+                <Route path="/huong-dan-mua-hang" element={<StorefrontLayout><BuyingGuidePage /></StorefrontLayout>} />
                 <Route path="/stores" element={<StorefrontLayout><StoreLocatorPage /></StorefrontLayout>} />
                 <Route path="/promotions" element={<StorefrontLayout><PromotionsPage /></StorefrontLayout>} />
                 <Route path="/tin-tuc" element={<StorefrontLayout><ArticleListPage /></StorefrontLayout>} />

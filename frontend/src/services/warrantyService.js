@@ -9,8 +9,9 @@ export const warrantyService = {
     const { data } = await api.get('/warranties');
     return data.data;
   },
-  async track(code) {
-    const { data } = await api.get(`/warranties/track/${code}`);
+  // Tra cứu công khai: cần mã phiếu + số điện thoại đặt hàng
+  async track(code, phone) {
+    const { data } = await api.get(`/warranties/track/${encodeURIComponent(code.trim())}`, { params: { phone } });
     return data.data;
   },
   async updateWarranty(id, payload) {

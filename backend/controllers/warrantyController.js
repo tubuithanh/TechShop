@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
+const { normalizePhone } = require('../utils/customerValidation');
 
 function generateTicketCode() {
   const rand = Math.floor(1000 + Math.random() * 9000);
@@ -64,10 +65,37 @@ const getMyWarranties = asyncHandler(async (req, res) => {
   res.json({ data: warranties });
 });
 
+// @route GET /api/warranties/track/:code?phone= - tra cứu công khai (trang "Tra cứu bảo hành", không cần
+// đăng nhập). Bắt buộc kèm số điện thoại của đơn hàng/tài khoản để người khác đoán được mã phiếu cũng không
+// xem được; chỉ trả về thông tin cần cho khách theo dõi (không lộ mô tả lỗi, ảnh, mã nội bộ, nhân viên xử lý).
 const trackWarranty = asyncHandler(async (req, res) => {
-  const warranty = await Warranty.findOne({ ticketCode: req.params.code }).populate('productId', 'title featuredImage');
-  if (!warranty) return res.status(404).json({ message: 'Không tìm thấy phiếu bảo hành' });
-  res.json({ data: warranty });
+  const code = String(req.params.code || '').trim().toUpperCase();
+  const phone = normalizePhone(req.query.phone);
+  const notFound = () => res.status(404).json({ message: 'Không tìm thấy phiếu bảo hành khớp mã phiếu và số điện thoại' });
+  if (!code || !phone) return res.status(400).json({ message: 'Vui lòng nhập mã phiếu bảo hành và số điện thoại' });
+
+  const warranty = await Warranty.findOne({ ticketCode: code })
+    .populate('productId', 'title featuredImage')
+    .populate('orderId', 'orderCode deliveryAddress.phone')
+    .populate('userId', 'phoneNumber');
+  if (!warranty) return notFound();
+  const phones = [warranty.orderId?.deliveryAddress?.phone, warranty.userId?.phoneNumber].map(normalizePhone).filter(Boolean);
+  if (!phones.includes(phone)) return notFound(); // cùng thông báo - không tiết lộ mã phiếu có tồn tại hay không
+
+  res.json({
+    data: {
+      ticketCode: warranty.ticketCode,
+      productName: warranty.productId?.title || warranty.productName,
+      productImage: warranty.productId?.featuredImage || '',
+      orderCode: warranty.orderId?.orderCode,
+      method: warranty.method,
+      status: warranty.status,
+      cost: warranty.cost,
+      createdAt: warranty.createdAt,
+      updatedAt: warranty.updatedAt,
+      timeline: (warranty.statusHistory || []).map((h) => ({ status: h.status, note: h.note, changedAt: h.changedAt }))
+    }
+  });
 });
 
 const submitWarrantyFeedback = asyncHandler(async (req, res) => {
