@@ -8,5 +8,18 @@ export const settingService = {
   async updateSettings(payload) {
     const { data } = await api.put('/settings', payload);
     return data.data;
+  },
+  // Cấu hình gửi email (chỉ admin) - không bao giờ trả về mật khẩu/API key
+  async getMailConfig() {
+    const { data } = await api.get('/settings/mail');
+    return data.data;
+  },
+  async updateMailConfig(payload) {
+    const { data } = await api.put('/settings/mail', payload);
+    return data;
+  },
+  async testMailConfig(payload) {
+    const { data } = await api.post('/settings/mail/test', payload);
+    return data;
   }
 };

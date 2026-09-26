@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, InputGroup, Nav, Badge, Modal, Spinner } from 'react-bootstrap';
 import {
   Gear, TelephoneFill, GridFill, Truck, Search, Tools,
-  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image
+  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill
 } from 'react-bootstrap-icons';
+import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
 import { settingService } from '../../services/settingService';
 import { useSettings } from '../../store/SettingsContext';
 
@@ -13,7 +14,8 @@ const TABS = [
   { key: 'display', label: 'Hiển thị & phân trang', icon: GridFill },
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
   { key: 'seo', label: 'SEO', icon: Search },
-  { key: 'maintenance', label: 'Bảo trì', icon: Tools }
+  { key: 'maintenance', label: 'Bảo trì', icon: Tools },
+  { key: 'email', label: 'Email (SMTP)', icon: EnvelopeFill }
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -370,6 +372,8 @@ export default function AdminSettingsPage() {
                   </>
                 )}
 
+                {activeTab === 'email' && <MailSettingsPanel />}
+
                 {activeTab === 'maintenance' && (
                   <>
                     <SectionTitle icon={Tools}>Chế độ bảo trì</SectionTitle>
@@ -401,7 +405,7 @@ export default function AdminSettingsPage() {
               </Card.Body>
             </Card>
 
-            <div className="d-flex gap-2 mt-3">
+            <div className={`d-flex gap-2 mt-3 ${activeTab === 'email' ? 'd-none' : ''}`}>
               <Button type="submit" variant="primary" disabled={saving || !isDirty}>
                 {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
               </Button>

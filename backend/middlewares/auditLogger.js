@@ -5,7 +5,7 @@ const AuditLog = require('../models/AuditLog');
 // quyền, bật/tắt bảo trì). Đính kèm request body đã lọc bỏ field nhạy cảm vào metadata.
 // So khớp theo MẪU (không chỉ đúng tên tuyệt đối) để bắt được các biến thể như accessToken,
 // zaloAccessToken, refreshToken, appSecret, otpCode... mà danh sách tên cố định trước đây bỏ sót.
-const SENSITIVE_KEY_PATTERN = /password|secret|token|otp/i;
+const SENSITIVE_KEY_PATTERN = /password|secret|token|otp|apikey|api_key|pass$/i;
 const MAX_SANITIZE_DEPTH = 4;
 
 // Đệ quy vào các object/mảng lồng nhau - trước đây chỉ lọc field ở CẤP NGOÀI CÙNG của request body,

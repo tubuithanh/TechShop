@@ -7,6 +7,8 @@ const Otp = require('../models/Otp');
 const asyncHandler = require('../utils/asyncHandler');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const { sendOtp } = require('../utils/sendOtp');
+const { isMailConfigured } = require('../utils/mailer');
+const Setting = require('../models/Setting');
 const { buildAuthUrl, exchangeCodeForToken } = require('../utils/zaloAuth');
 const {
   normalizeName,
@@ -56,11 +58,21 @@ const requestRegisterOtp = asyncHandler(async (req, res) => {
     purpose: 'register',
     expiresAt: new Date(Date.now() + OTP_EXPIRES_MINUTES * 60 * 1000)
   });
-  await sendOtp(email, code, 'register');
+  try {
+    const setting = await Setting.findOne().select('siteName').lean();
+    await sendOtp(email, code, 'register', { expiresMinutes: OTP_EXPIRES_MINUTES, shopName: setting?.siteName || 'TechShop' });
+  } catch (err) {
+    // Gửi email thất bại: xóa mã vừa tạo và báo lỗi rõ ràng (không để khách chờ một email không bao giờ tới)
+    console.error('[OTP] Gửi email thất bại:', err.message);
+    await Otp.deleteMany({ email: email.toLowerCase(), purpose: 'register' });
+    return res.status(502).json({ message: 'Không gửi được email xác thực, vui lòng thử lại sau ít phút' });
+  }
 
   res.json({
     message: `Mã OTP đã được gửi tới ${email} (có hiệu lực ${OTP_EXPIRES_MINUTES} phút)`,
-    devOtpPreview: process.env.NODE_ENV !== 'production' ? code : undefined
+    // Hiện mã ngay trên màn hình khi CHƯA cấu hình gửi email (chế độ demo - nếu không, không ai đăng ký
+    // được) hoặc khi chạy ở máy lập trình. Đã cấu hình email ở production thì chỉ gửi qua email.
+    devOtpPreview: !(await isMailConfigured()) || process.env.NODE_ENV !== 'production' ? code : undefined
   });
 });
 
