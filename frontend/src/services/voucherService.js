@@ -6,8 +6,8 @@ export const voucherService = {
     return data.data;
   },
   // Admin
-  async getAll() {
-    const { data } = await api.get('/vouchers');
+  async getAll(params = {}) {
+    const { data } = await api.get('/vouchers', { params });
     return data.data;
   },
   async create(payload) {

@@ -1,6 +1,7 @@
 const Voucher = require('../models/Voucher');
 const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 
 // @route GET /api/vouchers/active - danh sách voucher công khai đang áp dụng (mục 1.1.9)
 const getActiveVouchers = asyncHandler(async (req, res) => {
@@ -47,8 +48,16 @@ const validateVoucher = asyncHandler(async (req, res) => {
 });
 
 // ---------- ADMIN ----------
+// ?q= mã/mô tả (không dấu); ?state=running|upcoming|expired|disabled
 const getVouchers = asyncHandler(async (req, res) => {
-  const vouchers = await Voucher.find().sort({ createdAt: -1 });
+  const { q, state } = req.query;
+  const now = new Date();
+  const filter = { ...searchFilter(q) };
+  if (state === 'running') Object.assign(filter, { isActive: true, startDate: { $lte: now }, endDate: { $gte: now } });
+  if (state === 'upcoming') Object.assign(filter, { isActive: true, startDate: { $gt: now } });
+  if (state === 'expired') filter.endDate = { $lt: now };
+  if (state === 'disabled') filter.isActive = false;
+  const vouchers = await Voucher.find(filter).sort({ createdAt: -1 });
   res.json({ data: vouchers });
 });
 

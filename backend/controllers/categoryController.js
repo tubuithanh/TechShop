@@ -1,4 +1,4 @@
-const slugify = require('slugify');
+const { makeSlug } = require('../utils/slug');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 const asyncHandler = require('../utils/asyncHandler');
@@ -12,7 +12,7 @@ const getCategories = asyncHandler(async (req, res) => {
 // "remove" so với createCategory, khiến đổi tên 1 danh mục có thể ra slug khác dạng (giữ dấu câu)
 // so với tạo mới danh mục cùng tên đó.
 function buildCategorySlug(name) {
-  return slugify(name, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g });
+  return makeSlug(name);
 }
 
 const createCategory = asyncHandler(async (req, res) => {

@@ -1,7 +1,8 @@
-const slugify = require('slugify');
+const { makeSlug } = require('../utils/slug');
 const Product = require('../models/Product');
 const StoreInventory = require('../models/StoreInventory');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 const { NUMERIC_KEYS } = require('../utils/specNumbers');
 
 // @route GET /api/products
@@ -20,11 +21,15 @@ const getProducts = asyncHandler(async (req, res) => {
     cursor,
     page,
     limit = 12,
-    includeInactive
+    includeInactive,
+    isActive
   } = req.query;
 
   const filter = includeInactive === 'true' ? {} : { isActive: true };
-  if (keyword) filter.$text = { $search: keyword };
+  // Admin lọc theo trạng thái bán (chỉ có tác dụng khi includeInactive=true)
+  if (includeInactive === 'true' && (isActive === 'true' || isActive === 'false')) filter.isActive = isActive === 'true';
+  // Tìm không dấu theo tên, thương hiệu, màu/dung lượng (thay cho $text - vốn phải gõ đúng dấu và đủ từ)
+  Object.assign(filter, searchFilter(keyword));
   if (categoryId) filter.categoryId = categoryId;
   if (brandId) filter.brandId = { $in: brandId.split(',') };
   // Lọc/sắp xếp theo effectivePrice (giá THẬT khách trả = salePrice||price), không phải "price"
@@ -168,7 +173,7 @@ const compareProducts = asyncHandler(async (req, res) => {
 
 const createProduct = asyncHandler(async (req, res) => {
   const body = req.body;
-  const slug = slugify(body.title, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g }) + '-' + Date.now().toString().slice(-5);
+  const slug = makeSlug(body.title) + '-' + Date.now().toString().slice(-5);
   const product = await Product.create({ ...body, slug });
   res.status(201).json({ data: product });
 });

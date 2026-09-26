@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
 
 const voucherSchema = new mongoose.Schema(
   {
@@ -27,5 +28,8 @@ voucherSchema.methods.isValidNow = function () {
     (this.usageLimit === 0 || this.usedCount < this.usageLimit)
   );
 };
+
+// Tìm kiếm không dấu: mã và mô tả chương trình
+voucherSchema.plugin(searchablePlugin, { getParts: (doc) => [doc.code, doc.description] });
 
 module.exports = mongoose.model('Voucher', voucherSchema);

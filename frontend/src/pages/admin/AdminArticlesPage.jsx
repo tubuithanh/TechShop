@@ -1,33 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Container, Row, Col, Table, Button, Form, Modal, Badge } from 'react-bootstrap';
 import { postService } from '../../services/postService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 
 const emptyForm = { title: '', shortDescription: '', content: '', category: 'tin_tuc', featuredImage: '', isPublished: true };
 
 export default function AdminArticlesPage() {
-  const [posts, setPosts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
-
-  const load = () =>
-    postService.getAllAdmin({ page, limit: pageSize }).then((res) => {
-      setPosts(res.data);
-      setTotalPages(res.totalPages || 1);
-      setTotal(res.total || 0);
-    });
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
+  const query = useListQuery(['category', 'published']);
+  const { data: posts, total, totalPages, loading, reload: load } = useAdminList(postService.getAllAdmin, {
+    ...query.apiParams,
+    limit: pageSize
+  });
+  const page = query.values.page;
+  const setPage = query.setPage;
+  const filters = [
+    {
+      key: 'category',
+      label: 'Chuyên mục',
+      options: [
+        { value: 'tin_tuc', label: 'Tin tức' },
+        { value: 'tu_van', label: 'Tư vấn' },
+        { value: 'danh_gia', label: 'Đánh giá' },
+        { value: 'thu_thuat', label: 'Thủ thuật' }
+      ]
+    },
+    { key: 'published', label: 'Trạng thái', options: [{ value: 'true', label: 'Đã đăng' }, { value: 'false', label: 'Bản nháp' }] }
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -147,6 +154,7 @@ export default function AdminArticlesPage() {
         </Form>
       </Modal>
 
+      <AdminSearchBar query={query} placeholder="Tiêu đề, mô tả, tác giả..." filters={filters} total={total} loading={loading} />
       <div className="bg-white rounded-3 shadow-sm">
         <Table striped hover responsive className="mb-0 align-middle">
           <thead>
@@ -181,6 +189,13 @@ export default function AdminArticlesPage() {
                 </td>
               </tr>
             ))}
+            {!loading && posts.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center text-muted p-4">
+                  Không tìm thấy kết quả phù hợp
+                </td>
+              </tr>
+            )}
           </tbody>
         </Table>
         <div className="p-3 pt-0">

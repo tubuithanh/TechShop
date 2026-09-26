@@ -1,26 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Card, Form, Table, Button, Modal, Row, Col, Badge, Alert, Spinner } from 'react-bootstrap';
 import { PencilSquare, Image as ImageIcon } from 'react-bootstrap-icons';
 import api from '../../services/api';
 import { warrantyService } from '../../services/warrantyService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 import { resizeImageToDataUrl } from '../../utils/imageUpload';
 import {
   RETURN_REASON_OPTIONS,
   WARRANTY_STATUS_LABEL,
   WARRANTY_STATUS_VARIANT,
   WARRANTY_STATUS_OPTIONS,
+  WARRANTY_METHOD_LABEL,
   MAX_WARRANTY_IMAGES
 } from '../../constants/warranty';
 
 export default function AdminWarrantiesPage() {
-  const [warranties, setWarranties] = useState([]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
+  const query = useListQuery(['status', 'method']);
+  const { data: warranties, total, totalPages, loading, reload: loadWarranties } = useAdminList(
+    (params) => api.get('/warranties/admin/all', { params }).then((res) => res.data),
+    { ...query.apiParams, limit: pageSize }
+  );
+  const page = query.values.page;
+  const setPage = query.setPage;
+  const filters = [
+    { key: 'status', label: 'Trạng thái', options: WARRANTY_STATUS_OPTIONS.map((s) => ({ value: s, label: WARRANTY_STATUS_LABEL[s] })) },
+    { key: 'method', label: 'Hình thức', options: Object.entries(WARRANTY_METHOD_LABEL).map(([value, label]) => ({ value, label })) }
+  ];
 
   const [editing, setEditing] = useState(null); // phiếu bảo hành đang sửa
   const [editForm, setEditForm] = useState(null);
@@ -28,17 +39,6 @@ export default function AdminWarrantiesPage() {
   const [saveError, setSaveError] = useState('');
   const [uploadingImages, setUploadingImages] = useState(false);
 
-  const loadWarranties = () =>
-    api.get('/warranties/admin/all', { params: { page, limit: pageSize } }).then((res) => {
-      setWarranties(res.data.data);
-      setTotalPages(res.data.totalPages || 1);
-      setTotal(res.data.total || 0);
-    });
-
-  useEffect(() => {
-    loadWarranties();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
 
   const handleChangeStatus = async (id, status) => {
     await api.put(`/warranties/${id}/status`, { status, note: `Cập nhật: ${WARRANTY_STATUS_LABEL[status]}` });
@@ -111,6 +111,7 @@ export default function AdminWarrantiesPage() {
   return (
     <div>
       <h1 className="fs-4 fw-bold mb-4">Quản lý yêu cầu bảo hành</h1>
+      <AdminSearchBar query={query} placeholder="Mã phiếu, mã đơn, SĐT, tên sản phẩm..." filters={filters} total={total} loading={loading} />
       <Card className="shadow-sm">
         <Table striped hover responsive className="mb-0 align-middle">
           <thead>
@@ -165,6 +166,13 @@ export default function AdminWarrantiesPage() {
                 </td>
               </tr>
             ))}
+            {!loading && warranties.length === 0 && (
+              <tr>
+                <td colSpan={7} className="text-center text-muted p-4">
+                  Không tìm thấy kết quả phù hợp
+                </td>
+              </tr>
+            )}
           </tbody>
         </Table>
         <Card.Body className="pt-0">

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
 
 const reviewSchema = new mongoose.Schema(
   {
@@ -25,5 +26,13 @@ const reviewSchema = new mongoose.Schema(
 );
 
 reviewSchema.index({ productId: 1 });
+
+// Tìm kiếm không dấu: tên khách, nội dung, tên sản phẩm
+reviewSchema.plugin(searchablePlugin, {
+  getParts: async (doc) => {
+    const product = doc.productId?.title !== undefined ? doc.productId : doc.productId ? await mongoose.model('Product').findById(doc.productId).select('title').lean() : null;
+    return [doc.displayName, doc.message, product?.title];
+  }
+});
 
 module.exports = mongoose.model('Review', reviewSchema);

@@ -97,7 +97,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có 45 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
+Có 52 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 
@@ -172,6 +172,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 - **Tin tức (CMS)** — mục 1.2.6
 - **Quản lý đánh giá**: ẩn/hiện, phản hồi (tự tính lại điểm trung bình) — mục 1.2.7
 - Dashboard thống kê (MongoDB Aggregation + Recharts) — mục 1.2.8
+- **Tìm kiếm tiếng Việt không dấu** ở 8 trang quản lý (đơn hàng, sản phẩm, tồn kho, khách hàng, bảo hành, đánh giá, khuyến mãi, tin tức): gõ "nguyen van" vẫn ra "Nguyễn Văn", tìm theo mã đơn/mã phiếu/SĐT theo phần đầu; kèm bộ lọc (trạng thái, chi nhánh, khoảng ngày...), từ khóa và bộ lọc lưu trên đường link, phím tắt "/"
 - Quản lý bảo hành, trả lời chat khách hàng, cấu hình hệ thống
 - **Nhật ký thao tác (Audit Log)**: tự động ghi mọi thao tác tạo/sửa/xóa — mục 1.2.0
 
@@ -200,6 +201,8 @@ MONGO_URI="<chuỗi-kết-nối>" node seed/<tên-script>.js    # database khác
 | `seedProductReviews.js` | Bổ sung cho đủ 10 đánh giá kèm ảnh mỗi sản phẩm, tính lại điểm đánh giá |
 | `backfillOnlinePaymentStatus.js` | Sửa trạng thái thanh toán của đơn mẫu thanh toán online: đơn đã xác nhận trở đi thành "đã thanh toán", đơn hủy/trả thành "đã hoàn tiền" (**chạy trước khi deploy** bản chặn xử lý đơn VNPay chưa thanh toán) |
 | `seedStoreManager.js` | Tạo nhóm quyền "Quản lý cửa hàng" và tài khoản `manager@example.com` / `manager123` quản lý chi nhánh TechShop Quận 1 |
+| `backfillSearchTokens.js` | Tạo dữ liệu tìm kiếm không dấu (`searchTokens` + index) cho sản phẩm, khách hàng, đơn hàng, bảo hành, đánh giá, voucher, bài viết đang có. **Chạy trước khi deploy** bản có tìm kiếm mới |
+| `fixSlugs.js` | Sửa đường dẫn (slug) chứa ký tự không hợp lệ như "/" (VD bài viết "32GB/1TB SSD" mở ra trang trắng) cho bài viết, sản phẩm, danh mục, thương hiệu |
 | `fixProductImages.js` | Cập nhật ảnh sản phẩm theo đúng loại sản phẩm (loa, tai nghe, chuột, cáp...), đồng bộ ảnh phiên bản và ảnh đánh giá |
 
 **Ghi chú về ảnh mẫu:** ảnh sản phẩm là ảnh stock từ Unsplash, chọn đúng **loại** sản phẩm, không phải ảnh chính hãng của từng mẫu máy. Admin có thể thay bằng link ảnh thật trong trang quản lý sản phẩm; `fixProductImages.js` giữ nguyên các ảnh admin đã tự nhập.

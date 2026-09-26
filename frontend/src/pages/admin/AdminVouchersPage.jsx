@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Container, Row, Col, Table, Button, Form, Modal, Badge } from 'react-bootstrap';
 import { voucherService } from '../../services/voucherService';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 
 const emptyForm = {
   code: '',
@@ -15,15 +18,23 @@ const emptyForm = {
 };
 
 export default function AdminVouchersPage() {
-  const [vouchers, setVouchers] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
-
-  const load = () => voucherService.getAll().then(setVouchers);
-
-  useEffect(() => {
-    load();
-  }, []);
+  const query = useListQuery(['state']);
+  const { q, state } = query.apiParams;
+  const { data: vouchers, total, loading, reload: load } = useAdminList(voucherService.getAll, { q, state });
+  const filters = [
+    {
+      key: 'state',
+      label: 'Tình trạng',
+      options: [
+        { value: 'running', label: 'Đang diễn ra' },
+        { value: 'upcoming', label: 'Sắp diễn ra' },
+        { value: 'expired', label: 'Đã hết hạn' },
+        { value: 'disabled', label: 'Đã vô hiệu hóa' }
+      ]
+    }
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -175,6 +186,7 @@ export default function AdminVouchersPage() {
         </Form>
       </Modal>
 
+      <AdminSearchBar query={query} placeholder="Mã voucher, mô tả chương trình..." filters={filters} total={total} loading={loading} />
       <div className="bg-white rounded-3 shadow-sm">
         <Table striped hover responsive className="mb-0 align-middle">
           <thead>
@@ -212,6 +224,13 @@ export default function AdminVouchersPage() {
                 </td>
               </tr>
             ))}
+            {!loading && vouchers.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center text-muted p-4">
+                  Không tìm thấy kết quả phù hợp
+                </td>
+              </tr>
+            )}
           </tbody>
         </Table>
       </div>

@@ -1,4 +1,4 @@
-const slugify = require('slugify');
+const { makeSlug } = require('../utils/slug');
 const { buildExtraSpecs } = require('./extraSpecs');
 
 function pick(arr) {
@@ -479,7 +479,7 @@ function generateProducts({ categoryIdBySlug, brandIdByName, categoryLabelBySlug
         });
       });
 
-      const slug = `${slugify(title, { lower: true, locale: 'vi' })}-${String(globalIndex).padStart(4, '0')}`;
+      const slug = `${makeSlug(title)}-${String(globalIndex).padStart(4, '0')}`;
 
       products.push({
         title,

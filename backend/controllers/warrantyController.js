@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 const { normalizePhone } = require('../utils/customerValidation');
 
 function generateTicketCode() {
@@ -111,8 +112,10 @@ const submitWarrantyFeedback = asyncHandler(async (req, res) => {
 });
 
 const getAllWarranties = asyncHandler(async (req, res) => {
-  const { status, page = 1, limit = 20 } = req.query;
+  const { status, method, q, page = 1, limit = 20 } = req.query;
   const filter = status ? { status } : {};
+  if (method) filter.method = method;
+  Object.assign(filter, searchFilter(q)); // mã phiếu, mã đơn, SĐT, tên sản phẩm (không dấu)
   const warranties = await Warranty.find(filter)
     .populate('userId', 'displayName phoneNumber email')
     .populate('productId', 'title')

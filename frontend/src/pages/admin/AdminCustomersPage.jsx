@@ -1,34 +1,24 @@
-import { useEffect, useState } from 'react';
 import { Badge, Button, Card, Form, Table } from 'react-bootstrap';
 import { userService } from '../../services/userService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 
 export default function AdminCustomersPage() {
-  const [customers, setCustomers] = useState([]);
-  const [keyword, setKeyword] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
-
-  const load = () =>
-    userService.getAllCustomers({ keyword, page, limit: pageSize }).then((res) => {
-      setCustomers(res.data);
-      setTotalPages(res.totalPages || 1);
-      setTotal(res.total || 0);
-    });
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, page, pageSize]);
-
-  const handleKeywordChange = (value) => {
-    setKeyword(value);
-    setPage(1);
-  };
+  const query = useListQuery(['isActive']);
+  const { data: customers, total, totalPages, loading, reload: load } = useAdminList(userService.getAllCustomers, {
+    ...query.apiParams,
+    limit: pageSize
+  });
+  const page = query.values.page;
+  const setPage = query.setPage;
+  const filters = [
+    { key: 'isActive', label: 'Tài khoản', options: [{ value: 'true', label: 'Đang hoạt động' }, { value: 'false', label: 'Đã khóa' }] }
+  ];
 
   const handleToggleActive = async (id, isActive) => {
     // Khóa tài khoản là hành động ảnh hưởng ngay tới khách hàng thật - trước đây bấm là khóa luôn,
@@ -44,13 +34,7 @@ export default function AdminCustomersPage() {
   return (
     <div>
       <h1 className="fs-4 fw-bold mb-4">Quản lý khách hàng</h1>
-      <Form.Control
-        placeholder="Tìm theo tên, email, số điện thoại..."
-        value={keyword}
-        onChange={(e) => handleKeywordChange(e.target.value)}
-        className="mb-4"
-        style={{ maxWidth: '24rem' }}
-      />
+      <AdminSearchBar query={query} placeholder="Tên, email, số điện thoại..." filters={filters} total={total} loading={loading} />
       <Card className="shadow-sm">
         <Table striped hover responsive className="mb-0">
           <thead>
@@ -80,6 +64,13 @@ export default function AdminCustomersPage() {
                 </td>
               </tr>
             ))}
+            {!loading && customers.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center text-muted p-4">
+                  Không tìm thấy kết quả phù hợp
+                </td>
+              </tr>
+            )}
           </tbody>
         </Table>
         <Card.Body className="pt-0">

@@ -1,29 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Container, Card, Badge, Form, Button, InputGroup } from 'react-bootstrap';
 import { reviewService } from '../../services/reviewService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 
 export default function AdminReviewsPage() {
-  const [reviews, setReviews] = useState([]);
   const [replyDrafts, setReplyDrafts] = useState({});
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
-
-  const load = () =>
-    reviewService.getAllAdmin({ page, limit: pageSize }).then((res) => {
-      setReviews(res.data);
-      setTotalPages(res.totalPages || 1);
-      setTotal(res.total || 0);
-    });
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
+  const query = useListQuery(['status', 'rating', 'replied']);
+  const { data: reviews, total, totalPages, loading, reload: load } = useAdminList(reviewService.getAllAdmin, {
+    ...query.apiParams,
+    limit: pageSize
+  });
+  const page = query.values.page;
+  const setPage = query.setPage;
+  const filters = [
+    { key: 'status', label: 'Hiển thị', options: [{ value: 'visible', label: 'Đang hiển thị' }, { value: 'hidden', label: 'Đã ẩn' }] },
+    { key: 'rating', label: 'Số sao', options: [5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: `${n} sao` })) },
+    { key: 'replied', label: 'Phản hồi', options: [{ value: 'false', label: 'Chưa phản hồi' }, { value: 'true', label: 'Đã phản hồi' }] }
+  ];
 
   const handleHide = async (id) => {
     if (!confirm('Ẩn đánh giá này khỏi trang sản phẩm?')) return;
@@ -42,7 +41,9 @@ export default function AdminReviewsPage() {
   return (
     <Container fluid>
       <h1 className="fs-4 fw-bold mb-4">Quản lý đánh giá sản phẩm</h1>
+      <AdminSearchBar query={query} placeholder="Tên khách, nội dung, tên sản phẩm..." filters={filters} total={total} loading={loading} />
       <div className="d-flex flex-column gap-3">
+        {!loading && reviews.length === 0 && <div className="text-center text-muted py-5">Không tìm thấy đánh giá phù hợp</div>}
         {reviews.map((r) => (
           <Card key={r._id} className="shadow-sm">
             <Card.Body>

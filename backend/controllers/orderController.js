@@ -6,6 +6,7 @@ const Voucher = require('../models/Voucher');
 const Notification = require('../models/Notification');
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 const { hasPermission, getScopedStoreId } = require('../middlewares/authMiddleware');
 
 const SHIPPING_FEE_DEFAULT = 30000;
@@ -23,6 +24,15 @@ const ORDER_STATUS_TRANSITIONS = {
   returned: []
 };
 const RESTOCK_STATUSES = ['cancelled', 'returned'];
+
+
+// Lọc theo khoảng ngày tạo: from/to dạng YYYY-MM-DD (to tính tới hết ngày đó)
+function dateRange(from, to) {
+  const range = {};
+  if (from && !Number.isNaN(Date.parse(from))) range.$gte = new Date(from);
+  if (to && !Number.isNaN(Date.parse(to))) range.$lte = new Date(new Date(to).getTime() + 24 * 3600 * 1000 - 1);
+  return Object.keys(range).length ? range : null;
+}
 
 // Đơn có thuộc phạm vi chi nhánh của tài khoản đang thao tác không (admin/staff không gắn chi nhánh: luôn đúng)
 function inScope(req, order) {
@@ -336,10 +346,15 @@ const cancelOrder = asyncHandler(async (req, res) => {
 
 // @route GET /api/orders/admin/all?storeId=
 const getAllOrders = asyncHandler(async (req, res) => {
-  const { status, storeId, page = 1, limit = 20 } = req.query;
+  const { status, storeId, paymentStatus, paymentMode, from, to, q, page = 1, limit = 20 } = req.query;
   const filter = {};
   if (status) filter.status = status;
   if (storeId) filter.storeId = storeId;
+  if (paymentStatus) filter.paymentStatus = paymentStatus;
+  if (paymentMode) filter.paymentMode = paymentMode;
+  const created = dateRange(from, to);
+  if (created) filter.createdAt = created;
+  Object.assign(filter, searchFilter(q)); // mã đơn, người nhận, SĐT, sản phẩm (không dấu)
   // Quản lý chi nhánh chỉ thấy đơn của chi nhánh mình (bỏ qua storeId gửi lên nếu khác)
   const scopedStoreId = getScopedStoreId(req);
   if (scopedStoreId) filter.storeId = scopedStoreId;

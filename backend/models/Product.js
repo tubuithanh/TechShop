@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
 const { computeSpecNumbers } = require('../utils/specNumbers');
 
 // Phiên bản bán ra của sản phẩm (màu × dung lượng/kích thước) - mỗi phiên bản có giá, ảnh và TỒN
@@ -96,6 +97,15 @@ productSchema.pre('validate', async function () {
       ? await mongoose.model('Category').findById(this.categoryId).select('slug').lean()
       : null;
     this.specNumbers = computeSpecNumbers(this.specifications, category?.slug);
+  }
+});
+
+// Tìm kiếm không dấu: tên, thương hiệu, màu/dung lượng các phiên bản, nhãn (xem utils/search.js)
+productSchema.plugin(searchablePlugin, {
+  getParts: async (doc) => {
+    // brandId có thể đã được populate sẵn (script cập nhật dữ liệu) - khi đó không cần truy vấn lại
+    const brand = doc.brandId?.name !== undefined ? doc.brandId : doc.brandId ? await mongoose.model('Brand').findById(doc.brandId).select('name').lean() : null;
+    return [doc.title, brand?.name, (doc.variants || []).map((v) => [v.color, v.storage]), doc.tags];
   }
 });
 

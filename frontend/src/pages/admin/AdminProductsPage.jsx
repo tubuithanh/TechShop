@@ -6,6 +6,9 @@ import { placeholderImage } from '../../utils/placeholderImage';
 import { uploadService } from '../../services/uploadService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 import SpecificationsEditor from '../../components/admin/SpecificationsEditor';
 import VariantsEditor, { newVariant } from '../../components/admin/VariantsEditor';
 
@@ -34,33 +37,31 @@ function cleanSpecs(specs) {
 }
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const { settings } = useSettings();
   const maxImages = settings.maxImagesPerProduct || 10;
   const pageSize = settings.productsPerPage || 20;
-
-  const loadProducts = () =>
-    productService
-      .getProducts({ page, limit: pageSize, includeInactive: true })
-      .then((res) => {
-        setProducts(res.data);
-        setTotalPages(res.totalPages || 1);
-        setTotal(res.total || 0);
-      });
-
-  useEffect(() => {
-    loadProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
+  const query = useListQuery(['categoryId', 'brandId', 'isActive']);
+  // API sản phẩm dùng tham số "keyword" cho từ khóa tìm kiếm
+  const { q, ...productFilters } = query.apiParams;
+  const { data: products, total, totalPages, loading, reload: loadProducts } = useAdminList(productService.getProducts, {
+    ...productFilters,
+    ...(q ? { keyword: q } : {}),
+    limit: pageSize,
+    includeInactive: true
+  });
+  const page = query.values.page;
+  const setPage = query.setPage;
+  const filters = [
+    { key: 'categoryId', label: 'Danh mục', options: categories.map((c) => ({ value: c._id, label: c.name })) },
+    { key: 'brandId', label: 'Thương hiệu', options: brands.map((b) => ({ value: b._id, label: b.name })) },
+    { key: 'isActive', label: 'Trạng thái', options: [{ value: 'true', label: 'Đang bán' }, { value: 'false', label: 'Ngừng bán' }] }
+  ];
 
   useEffect(() => {
     productService.getCategories().then(setCategories);
@@ -377,6 +378,7 @@ export default function AdminProductsPage() {
         </Card>
       )}
 
+      <AdminSearchBar query={query} placeholder="Tên sản phẩm, thương hiệu, màu, dung lượng..." filters={filters} total={total} loading={loading} />
       <Card className="shadow-sm">
         <Table striped hover responsive className="mb-0">
           <thead>

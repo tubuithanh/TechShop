@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
 const bcrypt = require('bcryptjs');
 
 const addressSchema = new mongoose.Schema(
@@ -57,5 +58,8 @@ userSchema.methods.toSafeObject = function () {
   obj.role = 'customer'; // hằng số, giúp code phía client dùng chung logic phân quyền với Admin
   return obj;
 };
+
+// Tìm kiếm không dấu: họ tên, email, số điện thoại (xem utils/search.js)
+userSchema.plugin(searchablePlugin, { getParts: (doc) => [doc.displayName, doc.email, doc.phoneNumber] });
 
 module.exports = mongoose.model('User', userSchema);

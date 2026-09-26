@@ -1,12 +1,13 @@
-const slugify = require('slugify');
+const { makeSlug } = require('../utils/slug');
 const Post = require('../models/Post');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 
 const getPosts = asyncHandler(async (req, res) => {
   const { category, keyword, limit = 12 } = req.query;
   const filter = { isPublished: true };
   if (category) filter.category = category;
-  if (keyword) filter.$text = { $search: keyword };
+  Object.assign(filter, searchFilter(keyword)); // tìm không dấu theo tiêu đề, mô tả
 
   const posts = await Post.find(filter).sort({ createdAt: -1 }).limit(Number(limit)).select('-content -comments');
   res.json({ data: posts });
@@ -40,18 +41,21 @@ const addComment = asyncHandler(async (req, res) => {
 // ---------- ADMIN (CMS) ----------
 
 const getPostsAdmin = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
-  const posts = await Post.find()
+  const { q, category, published, page = 1, limit = 20 } = req.query;
+  const filter = { ...searchFilter(q) };
+  if (category) filter.category = category;
+  if (published === 'true' || published === 'false') filter.isPublished = published === 'true';
+  const posts = await Post.find(filter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(Number(limit));
-  const total = await Post.countDocuments();
+  const total = await Post.countDocuments(filter);
   res.json({ data: posts, total, page: Number(page), totalPages: Math.ceil(total / limit) });
 });
 
 const createPost = asyncHandler(async (req, res) => {
   const { title } = req.body;
-  const slug = slugify(title, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g }) + '-' + Date.now().toString().slice(-5);
+  const slug = makeSlug(title) + '-' + Date.now().toString().slice(-5);
   const post = await Post.create({ ...req.body, slug, userId: req.account._id, nameAuthor: req.account.name });
   res.status(201).json({ data: post });
 });
@@ -75,7 +79,7 @@ const updatePost = asyncHandler(async (req, res) => {
     post.title = title;
     // Đổi tiêu đề thì tạo lại slug (URL bài viết) để khớp tiêu đề mới - trước đây title đổi nhưng
     // slug giữ nguyên vĩnh viễn, khiến URL không còn phản ánh đúng nội dung.
-    post.slug = slugify(title, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g }) + '-' + post._id.toString().slice(-5);
+    post.slug = makeSlug(title) + '-' + post._id.toString().slice(-5);
   }
 
   try {

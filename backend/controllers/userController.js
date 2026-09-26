@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 const { normalizeName, validateName, normalizePhone, validatePhone } = require('../utils/customerValidation');
 
 // @route POST /api/users/wishlist/:productId - toggle favoriteProductIds
@@ -119,15 +120,11 @@ const deleteAddress = asyncHandler(async (req, res) => {
 // ---------- ADMIN: Quản lý khách hàng ----------
 
 const getAllCustomers = asyncHandler(async (req, res) => {
-  const { keyword, page = 1, limit = 20 } = req.query;
+  const { keyword, q, isActive, page = 1, limit = 20 } = req.query;
   const filter = {};
-  if (keyword) {
-    filter.$or = [
-      { displayName: { $regex: keyword, $options: 'i' } },
-      { email: { $regex: keyword, $options: 'i' } },
-      { phoneNumber: { $regex: keyword, $options: 'i' } }
-    ];
-  }
+  // Tìm không dấu theo họ tên, email, SĐT (nhận cả tham số cũ "keyword")
+  Object.assign(filter, searchFilter(q ?? keyword));
+  if (isActive === 'true' || isActive === 'false') filter.isActive = isActive === 'true';
   const customers = await User.find(filter)
     .select('-password')
     .sort({ createdAt: -1 })

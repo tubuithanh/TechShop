@@ -2,6 +2,7 @@ const Review = require('../models/Review');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 
 // Dùng chung cho createReview và hideReview - trước đây chỉ createReview tính lại điểm trung bình,
 // nên ẩn 1 đánh giá không cập nhật lại ratingAverage/ratingCount, để lại số liệu sai vĩnh viễn.
@@ -130,8 +131,12 @@ const replyReview = asyncHandler(async (req, res) => {
 });
 
 const getAllReviewsAdmin = asyncHandler(async (req, res) => {
-  const { status, page = 1, limit = 20 } = req.query;
+  const { status, rating, replied, q, page = 1, limit = 20 } = req.query;
   const filter = status ? { status } : {};
+  if (rating && Number(rating) >= 1 && Number(rating) <= 5) filter.rating = Number(rating);
+  if (replied === 'true') filter['reply.content'] = { $exists: true, $ne: '' };
+  if (replied === 'false') filter.$or = [{ 'reply.content': { $exists: false } }, { 'reply.content': '' }];
+  Object.assign(filter, searchFilter(q)); // tên khách, nội dung, tên sản phẩm (không dấu)
   const reviews = await Review.find(filter)
     .populate('userId', 'displayName email')
     .populate('productId', 'title slug')

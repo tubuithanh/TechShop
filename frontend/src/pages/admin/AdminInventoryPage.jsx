@@ -7,6 +7,9 @@ import api from '../../services/api';
 import { useSettings } from '../../store/SettingsContext';
 import { useAuth } from '../../store/AuthContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 
 export default function AdminInventoryPage() {
   const { user } = useAuth();
@@ -15,23 +18,22 @@ export default function AdminInventoryPage() {
   // chỉ là lớp UX để họ không thấy 1 ô chọn có vẻ đổi được nhưng thực ra bị từ chối).
   const scopedStoreId = user?.storeId?._id || (typeof user?.storeId === 'string' ? user.storeId : null);
 
-  const [inventories, setInventories] = useState([]);
   const [stores, setStores] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(scopedStoreId || '');
   const [form, setForm] = useState({ productId: '', variantId: '', stock: 0, lowStockThreshold: 5 });
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
-
-  const loadInventories = (storeId) =>
-    storeInventoryService.getInventories({ ...(storeId ? { storeId } : {}), page, limit: pageSize }).then((res) => {
-      setInventories(res.data);
-      setTotalPages(res.totalPages || 1);
-      setTotal(res.total || 0);
-    });
+  const query = useListQuery(['lowStock']);
+  // Chưa chọn cửa hàng (đang tải danh sách cửa hàng) thì chưa gọi API
+  const { data: inventories, total, totalPages, loading, reload } = useAdminList(
+    (params) => (params.storeId ? storeInventoryService.getInventories(params) : Promise.resolve([])),
+    { ...query.apiParams, storeId: selectedStoreId, limit: pageSize }
+  );
+  const loadInventories = () => reload();
+  const page = query.values.page;
+  const setPage = query.setPage;
+  const filters = [{ key: 'lowStock', label: 'Tồn kho', options: [{ value: 'true', label: 'Sắp hết hàng' }] }];
 
   useEffect(() => {
     storeService.getStores().then((data) => {
@@ -43,11 +45,6 @@ export default function AdminInventoryPage() {
     productService.getProducts({ limit: 200 }).then((res) => setProducts(res.data));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (selectedStoreId) loadInventories(selectedStoreId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStoreId, page, pageSize]);
 
   const handleStoreChange = (storeId) => {
     setSelectedStoreId(storeId);
@@ -172,6 +169,7 @@ export default function AdminInventoryPage() {
         </Row>
       </Form>
 
+      <AdminSearchBar query={query} placeholder="Tên sản phẩm, thương hiệu, màu, dung lượng..." filters={filters} total={total} loading={loading} />
       <div className="bg-white rounded-3 shadow-sm">
         <Table striped hover responsive className="mb-0 align-middle">
           <thead>

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
 
 const warrantySchema = new mongoose.Schema(
   {
@@ -43,5 +44,25 @@ const warrantySchema = new mongoose.Schema(
   },
   { timestamps: true, collection: 'warranties' }
 );
+
+// Tìm kiếm không dấu: mã phiếu, sản phẩm, mã đơn, người nhận, SĐT (lấy từ đơn hàng)
+warrantySchema.plugin(searchablePlugin, {
+  getParts: async (doc) => {
+    const order =
+      doc.orderId?.orderCode !== undefined
+        ? doc.orderId
+        : doc.orderId
+          ? await mongoose.model('Order').findById(doc.orderId).select('orderCode deliveryAddress').lean()
+          : null;
+    return [
+      doc.ticketCode,
+      String(doc.ticketCode || '').replace(/^BH/i, ''),
+      doc.productName,
+      order?.orderCode,
+      order?.deliveryAddress?.fullName,
+      order?.deliveryAddress?.phone
+    ];
+  }
+});
 
 module.exports = mongoose.model('Warranty', warrantySchema);

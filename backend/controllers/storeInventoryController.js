@@ -2,6 +2,7 @@ const StoreInventory = require('../models/StoreInventory');
 const Product = require('../models/Product');
 const Store = require('../models/Store');
 const asyncHandler = require('../utils/asyncHandler');
+const { searchFilter } = require('../utils/search');
 const { getScopedStoreId } = require('../middlewares/authMiddleware');
 
 // Chi nhánh được gán cho 1 staff không tự động biến mất khi cửa hàng đó bị ẩn (isActive=false) -
@@ -28,6 +29,14 @@ const getInventories = asyncHandler(async (req, res) => {
   } else if (req.query.storeId) {
     filter.storeId = req.query.storeId;
   }
+
+  // Tìm theo tên sản phẩm / màu / dung lượng: tìm sản phẩm khớp trước (qua index), rồi lấy tồn kho của chúng
+  const productSearch = searchFilter(req.query.q);
+  if (productSearch) {
+    const ids = await Product.find(productSearch).distinct('_id');
+    filter.productId = filter.productId ? { $in: ids.filter((id) => String(id) === String(filter.productId)) } : { $in: ids };
+  }
+  if (req.query.lowStock === 'true') filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
 
   const inventories = await StoreInventory.find(filter)
     .populate('storeId', 'name city address')

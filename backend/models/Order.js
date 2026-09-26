@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
 
 const orderItemSchema = new mongoose.Schema(
   {
@@ -78,5 +79,17 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ storeId: 1, createdAt: -1 });
 orderSchema.index({ userId: 1 });
+
+// Tìm kiếm không dấu: mã đơn (cả phần số, VD "000123"), người nhận, SĐT, sản phẩm, mã giảm giá
+orderSchema.plugin(searchablePlugin, {
+  getParts: (doc) => [
+    doc.orderCode,
+    String(doc.orderCode || '').replace(/^DH/i, ''),
+    doc.deliveryAddress?.fullName,
+    doc.deliveryAddress?.phone,
+    (doc.items || []).map((i) => [i.name, i.variantLabel]),
+    doc.voucherCode
+  ]
+});
 
 module.exports = mongoose.model('Order', orderSchema);

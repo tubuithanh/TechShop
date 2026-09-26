@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
 
 const commentSchema = new mongoose.Schema(
   {
@@ -33,5 +34,8 @@ const postSchema = new mongoose.Schema(
 );
 
 postSchema.index({ title: 'text', shortDescription: 'text' });
+
+// Tìm kiếm không dấu: tiêu đề, mô tả ngắn, tác giả
+postSchema.plugin(searchablePlugin, { getParts: (doc) => [doc.title, doc.shortDescription, doc.nameAuthor] });
 
 module.exports = mongoose.model('Post', postSchema);

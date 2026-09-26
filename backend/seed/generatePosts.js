@@ -1,4 +1,4 @@
-const slugify = require('slugify');
+const { makeSlug } = require('../utils/slug');
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -123,9 +123,9 @@ function generatePosts(count, { admins, products, categoryNames, brandNames }) {
       `theo thời gian khi có thông tin mới. Nếu có bất kỳ thắc mắc nào, đừng ngần ngại để lại bình luận hoặc liên hệ ` +
       `trực tiếp với đội ngũ tư vấn của TechShop qua hotline hoặc tại các cửa hàng trên toàn quốc.`;
     const author = pick(admins);
-    // slugify mặc định không loại bỏ dấu ":" nên phải tự loại bỏ thêm dấu câu còn sót lại
+    // makeSlug chỉ giữ chữ, số, gạch ngang (xem utils/slug.js)
     // (tiêu đề bài viết có thể chứa ":", "?"...) để slug luôn là URL hợp lệ.
-    const slug = `${slugify(title, { lower: true, locale: 'vi', remove: /[:?!,.;'"()]/g })}-${String(i).padStart(4, '0')}`;
+    const slug = `${makeSlug(title)}-${String(i).padStart(4, '0')}`;
 
     posts.push({
       userId: author._id,

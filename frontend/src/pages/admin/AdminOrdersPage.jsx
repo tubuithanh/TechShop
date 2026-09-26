@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Card, Form, Table } from 'react-bootstrap';
 import { orderService } from '../../services/orderService';
+import { storeService } from '../../services/storeService';
 import { useSettings } from '../../store/SettingsContext';
+import { useAuth } from '../../store/AuthContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
 
 const statusOptions = ['pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled', 'returned'];
 
@@ -35,30 +40,50 @@ function formatVND(value) {
 }
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState([]);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const { settings } = useSettings();
+  const { user } = useAuth();
   const pageSize = settings.productsPerPage || 20;
+  const query = useListQuery(['status', 'paymentStatus', 'paymentMode', 'storeId', 'from', 'to']);
+  const { data: orders, total, totalPages, loading, reload: loadOrders } = useAdminList(orderService.getAllOrdersAdmin, {
+    ...query.apiParams,
+    limit: pageSize
+  });
+  const page = query.values.page;
+  const setPage = query.setPage;
 
-  const loadOrders = () =>
-    orderService.getAllOrdersAdmin({ status: filterStatus, page, limit: pageSize }).then((res) => {
-      setOrders(res.data);
-      setTotalPages(res.totalPages || 1);
-      setTotal(res.total || 0);
-    });
-
+  // Quản lý chi nhánh chỉ thấy đơn chi nhánh mình (backend tự lọc) -> không cần bộ lọc chi nhánh
+  const [stores, setStores] = useState([]);
+  const scoped = Boolean(user?.storeId);
   useEffect(() => {
-    loadOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterStatus, page, pageSize]);
+    if (!scoped) storeService.getStores().then(setStores);
+  }, [scoped]);
 
-  const handleFilterChange = (status) => {
-    setFilterStatus(status);
-    setPage(1);
-  };
+  const filters = [
+    { key: 'status', label: 'Trạng thái', options: statusOptions.map((s) => ({ value: s, label: statusLabel[s] })) },
+    {
+      key: 'paymentStatus',
+      label: 'Thanh toán',
+      options: [
+        { value: 'pending', label: 'Chưa thanh toán' },
+        { value: 'paid', label: 'Đã thanh toán' },
+        { value: 'failed', label: 'Thất bại' },
+        { value: 'refunded', label: 'Đã hoàn tiền' }
+      ]
+    },
+    {
+      key: 'paymentMode',
+      label: 'Hình thức',
+      options: [
+        { value: 'cod', label: 'COD' },
+        { value: 'vnpay', label: 'VNPay' },
+        { value: 'bank_transfer', label: 'Chuyển khoản' },
+        { value: 'momo', label: 'MoMo' }
+      ]
+    },
+    ...(scoped ? [] : [{ key: 'storeId', label: 'Chi nhánh', options: stores.map((st) => ({ value: st._id, label: st.name })) }]),
+    { key: 'from', label: 'Từ ngày', type: 'date' },
+    { key: 'to', label: 'Đến ngày', type: 'date' }
+  ];
 
   const handleChangeStatus = async (orderId, status) => {
     try {
@@ -75,19 +100,13 @@ export default function AdminOrdersPage() {
     <div>
       <h1 className="fs-4 fw-bold mb-4">Quản lý đơn hàng</h1>
 
-      <Form.Select
-        value={filterStatus}
-        onChange={(e) => handleFilterChange(e.target.value)}
-        className="mb-4"
-        style={{ maxWidth: '20rem' }}
-      >
-        <option value="">Tất cả trạng thái</option>
-        {statusOptions.map((s) => (
-          <option key={s} value={s}>
-            {statusLabel[s]}
-          </option>
-        ))}
-      </Form.Select>
+      <AdminSearchBar
+        query={query}
+        placeholder="Mã đơn, tên người nhận, SĐT, tên sản phẩm..."
+        filters={filters}
+        total={total}
+        loading={loading}
+      />
 
       <Card className="shadow-sm">
         <Table striped hover responsive className="mb-0">
