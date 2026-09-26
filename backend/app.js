@@ -109,7 +109,14 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/uploads', uploadRoutes);
 // Ảnh upload khi chưa cấu hình Cloudinary (xem controllers/uploadController.js)
-app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+app.use(
+  '/uploads',
+  express.static(UPLOAD_DIR, {
+    maxAge: '7d',
+    // Không cho trình duyệt "đoán" lại kiểu file - file tải lên chỉ được hiểu đúng là ảnh
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff')
+  })
+);
 
 // ----- Xử lý lỗi -----
 app.use(notFound);

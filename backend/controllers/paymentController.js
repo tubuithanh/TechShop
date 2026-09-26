@@ -21,13 +21,19 @@ const createVnpayPayment = asyncHandler(async (req, res) => {
   const ipAddr = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
   const { txnRef, paymentUrl } = vnpay.buildPaymentUrl({ order, ipAddr });
   // Lưu mã giao dịch của lần thử này - chỉ kết quả VNPay trả về khớp ĐÚNG mã này mới được ghi nhận
-  await Order.updateOne({ _id: order._id }, { $set: { 'paymentInfo.txnRef': txnRef, paymentStatus: 'pending' } });
+  // Chỉ đặt lại "pending" nếu CHƯA thanh toán (điều kiện nguyên tử - tránh đè kết quả "paid" vừa về)
+  await Order.updateOne(
+    { _id: order._id, paymentStatus: { $nin: ['paid', 'refunded'] } },
+    { $set: { 'paymentInfo.txnRef': txnRef, paymentStatus: 'pending' }, $push: { 'paymentInfo.txnRefs': txnRef } }
+  );
   res.json({ data: { paymentUrl } });
 });
 
 // Ghi nhận kết quả thanh toán (dùng chung cho trang return và IPN). Idempotent: đơn đã "paid" giữ nguyên.
+// Kết quả THẤT BẠI của 1 lần thử cũ không được ghi đè lần thử mới hơn đang chờ (chỉ lần thử hiện tại
+// mới được đánh dấu "failed"); kết quả THÀNH CÔNG thì luôn ghi nhận, dù đến từ lần thử nào.
 async function applyResult(result, io) {
-  const order = await Order.findOne({ 'paymentInfo.txnRef': result.txnRef });
+  const order = await Order.findOne({ 'paymentInfo.txnRefs': result.txnRef });
   if (!order) return { code: '01', message: 'Order not found' };
   if (Math.round(order.grandTotal) !== Math.round(result.amount)) return { code: '04', message: 'Invalid amount', order };
   if (order.paymentStatus === 'paid' || order.paymentStatus === 'refunded') return { code: '02', message: 'Order already confirmed', order };
@@ -37,13 +43,20 @@ async function applyResult(result, io) {
     'paymentInfo.bankCode': result.bankCode,
     'paymentInfo.responseCode': result.responseCode
   };
+  if (!result.success && order.paymentInfo?.txnRef !== result.txnRef) return { code: '00', message: 'Confirm Success', order };
   let paymentStatus = result.success ? 'paid' : 'failed';
   // Thanh toán thành công nhưng đơn đã bị hủy trong lúc khách đang thanh toán -> cần hoàn tiền
   if (result.success && ['cancelled', 'returned'].includes(order.status)) paymentStatus = 'refunded';
 
   const updated = await Order.findOneAndUpdate(
     { _id: order._id, paymentStatus: { $nin: ['paid', 'refunded'] } },
-    { $set: { ...info, paymentStatus, ...(result.success ? { 'paymentInfo.paidAt': new Date() } : {}) } },
+    {
+      $set: {
+        ...info,
+        paymentStatus,
+        ...(result.success ? { 'paymentInfo.paidAt': new Date(), 'paymentInfo.txnRef': result.txnRef } : {})
+      }
+    },
     { new: true }
   );
   if (updated && result.success) {

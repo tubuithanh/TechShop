@@ -353,6 +353,12 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
 
+  // Đơn chọn VNPay phải thanh toán xong mới được xác nhận/giao - nếu không có thể giao hàng khi chưa nhận
+  // được tiền. Đơn chưa thanh toán chỉ có thể hủy (khách/admin) hoặc chờ khách thanh toán lại.
+  if (order.paymentMode === 'vnpay' && order.paymentStatus !== 'paid' && !RESTOCK_STATUSES.includes(status)) {
+    return res.status(400).json({ message: 'Đơn thanh toán qua VNPay chưa được thanh toán, chưa thể xử lý tiếp' });
+  }
+
   const allowedNext = ORDER_STATUS_TRANSITIONS[order.status] || [];
   if (!allowedNext.includes(status)) {
     return res.status(400).json({

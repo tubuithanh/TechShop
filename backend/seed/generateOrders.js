@@ -21,10 +21,17 @@ function orderCode(index) {
   return `DH${String(index).padStart(6, '0')}`;
 }
 
-function paymentStatusFor(status) {
-  if (status === 'delivered') return 'paid';
-  if (status === 'cancelled' || status === 'returned') return 'failed';
-  return 'pending';
+// COD: thu tiền khi giao. Thanh toán online (VNPay/MoMo/chuyển khoản): phải trả xong mới được xác nhận đơn,
+// nên đơn đã qua bước "chờ xác nhận" luôn là "đã thanh toán", đơn hủy/trả hàng sau khi trả là "đã hoàn tiền".
+function paymentStatusFor(status, paymentMode) {
+  if (paymentMode === 'cod') {
+    if (status === 'delivered') return 'paid';
+    if (status === 'cancelled' || status === 'returned') return 'failed';
+    return 'pending';
+  }
+  if (status === 'pending') return 'pending';
+  if (status === 'cancelled' || status === 'returned') return 'refunded';
+  return 'paid';
 }
 
 /**
@@ -57,6 +64,7 @@ function generateOrders(count, { customers, products, stores }) {
     const discountAmount = hasVoucher ? Math.min(500000, Math.round((itemsTotal * 0.1) / 10000) * 10000) : 0;
     const grandTotal = Math.max(itemsTotal + shippingFee - discountAmount, 0);
     const status = pick(STATUS_WEIGHTED);
+    const paymentMode = pick(PAYMENT_MODES);
     const createdAt = randomPastDate();
     const address = customer.addresses?.[0];
 
@@ -73,7 +81,7 @@ function generateOrders(count, { customers, products, stores }) {
         fullName: customer.displayName,
         phone: customer.phoneNumber
       },
-      paymentMode: pick(PAYMENT_MODES),
+      paymentMode,
       status,
       items,
       deliveryMethod,
@@ -82,7 +90,7 @@ function generateOrders(count, { customers, products, stores }) {
       discountAmount,
       voucherCode: hasVoucher ? 'WELCOME10' : null,
       grandTotal,
-      paymentStatus: paymentStatusFor(status),
+      paymentStatus: paymentStatusFor(status, paymentMode),
       statusHistory: [{ status, note: 'Khởi tạo dữ liệu mẫu', changedAt: createdAt }],
       note: '',
       createdAt

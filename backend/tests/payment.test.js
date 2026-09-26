@@ -116,6 +116,37 @@ describe('Thanh toán VNPay', () => {
     expect(cancel.body.data.paymentStatus).toBe('refunded');
   });
 
+  test('TC-29: Thanh toán lại rồi hoàn tất ở lần thử CŨ -> vẫn ghi nhận đúng đơn; kết quả lỗi cũ không đè', async () => {
+    const ctx = await setup();
+    const order = await placeVnpayOrder(ctx);
+    await auth(request(app).post(`/api/payments/vnpay/${order._id}`), ctx.token);
+    const firstRef = (await Order.findById(order._id)).paymentInfo.txnRef;
+    await new Promise((r) => setTimeout(r, 5)); // mã giao dịch mới khác mã cũ
+    await auth(request(app).post(`/api/payments/vnpay/${order._id}`), ctx.token);
+    const secondRef = (await Order.findById(order._id)).paymentInfo.txnRef;
+    expect(secondRef).not.toBe(firstRef);
+
+    // Lần thử mới đang chờ: kết quả "hủy" của lần cũ không được đánh dấu thất bại
+    await request(app).get(`/api/payments/vnpay/ipn${vnpayResponse(firstRef, order.grandTotal, '24')}`);
+    expect((await Order.findById(order._id)).paymentStatus).toBe('pending');
+    // Khách hoàn tất thanh toán ở tab cũ -> vẫn tìm ra đơn và ghi nhận
+    const ipn = await request(app).get(`/api/payments/vnpay/ipn${vnpayResponse(firstRef, order.grandTotal)}`);
+    expect(ipn.body.RspCode).toBe('00');
+    expect((await Order.findById(order._id)).paymentStatus).toBe('paid');
+  });
+
+  test('TC-30: Admin không xác nhận được đơn VNPay chưa thanh toán, nhưng hủy được', async () => {
+    const Admin = require('../models/Admin');
+    const ctx = await setup();
+    const order = await placeVnpayOrder(ctx);
+    await Admin.create({ name: 'Admin test', email: 'admin-test@example.com', password: 'admin123', role: 'admin' });
+    const adminToken = (await request(app).post('/api/auth/login').send({ email: 'admin-test@example.com', password: 'admin123' })).body.accessToken;
+    const confirm = await auth(request(app).put(`/api/orders/${order._id}/status`), adminToken).send({ status: 'confirmed' });
+    expect(confirm.statusCode).toBe(400);
+    const cancel = await auth(request(app).put(`/api/orders/${order._id}/status`), adminToken).send({ status: 'cancelled' });
+    expect(cancel.statusCode).toBe(200);
+  });
+
   test('TC-25: Không cho tạo link thanh toán cho đơn của người khác', async () => {
     const ctx = await setup();
     const order = await placeVnpayOrder(ctx);

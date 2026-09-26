@@ -54,6 +54,9 @@ const orderSchema = new mongoose.Schema(
     // Thông tin giao dịch thanh toán online (VNPay): mã giao dịch lần thử gần nhất + kết quả VNPay trả về
     paymentInfo: {
       txnRef: String,
+      // MỌI mã giao dịch đã cấp cho đơn này - khách có thể mở cổng VNPay nhiều lần (thanh toán lại) rồi
+      // hoàn tất ở lần cũ; kết quả mang mã cũ vẫn phải tìm ra đúng đơn, nếu không tiền đã trả bị "thất lạc".
+      txnRefs: { type: [String], index: true },
       transactionNo: String,
       bankCode: String,
       responseCode: String,
