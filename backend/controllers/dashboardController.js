@@ -1,15 +1,23 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const asyncHandler = require('../utils/asyncHandler');
+const { getScopedStoreId } = require('../middlewares/authMiddleware');
+
+// Tài khoản quản lý chi nhánh (staff gắn storeId) chỉ thấy số liệu đơn hàng/doanh thu của CHI NHÁNH MÌNH
+function storeMatch(req) {
+  const storeId = getScopedStoreId(req);
+  return storeId ? { storeId: new mongoose.Types.ObjectId(storeId) } : {};
+}
 
 const getSummary = asyncHandler(async (req, res) => {
   const [totalOrders, totalCustomers, totalProducts, revenueAgg] = await Promise.all([
-    Order.countDocuments(),
+    Order.countDocuments(storeMatch(req)),
     User.countDocuments(),
     Product.countDocuments({ isActive: true }),
     Order.aggregate([
-      { $match: { status: 'delivered' } },
+      { $match: { status: 'delivered', ...storeMatch(req) } },
       { $group: { _id: null, totalRevenue: { $sum: '$grandTotal' } } }
     ])
   ]);
@@ -30,7 +38,7 @@ const getRevenueByDay = asyncHandler(async (req, res) => {
   fromDate.setDate(fromDate.getDate() - days);
 
   const data = await Order.aggregate([
-    { $match: { createdAt: { $gte: fromDate }, status: { $ne: 'cancelled' } } },
+    { $match: { createdAt: { $gte: fromDate }, status: { $ne: 'cancelled' }, ...storeMatch(req) } },
     {
       $group: {
         // Không truyền timezone, $dateToString mặc định gộp theo ngày UTC - đơn đặt buổi tối giờ
@@ -57,6 +65,7 @@ const getBestSellingProducts = asyncHandler(async (req, res) => {
 
 const getOrderStatusStats = asyncHandler(async (req, res) => {
   const stats = await Order.aggregate([
+    { $match: storeMatch(req) },
     { $group: { _id: '$status', count: { $sum: 1 } } },
     { $sort: { count: -1 } }
   ]);
@@ -66,7 +75,7 @@ const getOrderStatusStats = asyncHandler(async (req, res) => {
 // Thống kê doanh thu THEO TỪNG CỬA HÀNG (mô hình multi-store)
 const getRevenueByStore = asyncHandler(async (req, res) => {
   const data = await Order.aggregate([
-    { $match: { status: 'delivered' } },
+    { $match: { status: 'delivered', ...storeMatch(req) } },
     { $group: { _id: '$storeId', revenue: { $sum: '$grandTotal' }, orderCount: { $sum: 1 } } },
     { $lookup: { from: 'stores', localField: '_id', foreignField: '_id', as: 'store' } },
     // preserveNullAndEmptyArrays: true - nếu cửa hàng đã bị xoá hẳn khỏi database (không phải chỉ

@@ -6,7 +6,7 @@ const Voucher = require('../models/Voucher');
 const Notification = require('../models/Notification');
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
-const { hasPermission } = require('../middlewares/authMiddleware');
+const { hasPermission, getScopedStoreId } = require('../middlewares/authMiddleware');
 
 const SHIPPING_FEE_DEFAULT = 30000;
 
@@ -23,6 +23,12 @@ const ORDER_STATUS_TRANSITIONS = {
   returned: []
 };
 const RESTOCK_STATUSES = ['cancelled', 'returned'];
+
+// Đơn có thuộc phạm vi chi nhánh của tài khoản đang thao tác không (admin/staff không gắn chi nhánh: luôn đúng)
+function inScope(req, order) {
+  const scopedStoreId = getScopedStoreId(req);
+  return !scopedStoreId || String(order.storeId?._id || order.storeId) === scopedStoreId;
+}
 
 function generateOrderCode() {
   const rand = Math.floor(100000 + Math.random() * 900000);
@@ -283,6 +289,9 @@ const getOrderById = asyncHandler(async (req, res) => {
   if (!isOwner && !hasPermission(req, 'orders.manage')) {
     return res.status(403).json({ message: 'Bạn không có quyền xem đơn hàng này' });
   }
+  if (!isOwner && !inScope(req, order)) {
+    return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác, bạn không có quyền xem' });
+  }
   res.json({ data: order });
 });
 
@@ -331,6 +340,9 @@ const getAllOrders = asyncHandler(async (req, res) => {
   const filter = {};
   if (status) filter.status = status;
   if (storeId) filter.storeId = storeId;
+  // Quản lý chi nhánh chỉ thấy đơn của chi nhánh mình (bỏ qua storeId gửi lên nếu khác)
+  const scopedStoreId = getScopedStoreId(req);
+  if (scopedStoreId) filter.storeId = scopedStoreId;
 
   const orders = await Order.find(filter)
     .populate('userId', 'displayName email phoneNumber')
@@ -352,6 +364,9 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   }
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+  if (!inScope(req, order)) {
+    return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác, bạn không có quyền xử lý' });
+  }
 
   // Đơn chọn VNPay phải thanh toán xong mới được xác nhận/giao - nếu không có thể giao hàng khi chưa nhận
   // được tiền. Đơn chưa thanh toán chỉ có thể hủy (khách/admin) hoặc chờ khách thanh toán lại.

@@ -5,6 +5,7 @@ import { CashStack, ReceiptCutoff, People, BoxSeam, ShopWindow } from 'react-boo
 import { dashboardService } from '../../services/dashboardService';
 import { placeholderImage } from '../../utils/placeholderImage';
 import AnimatedCounter from '../../components/AnimatedCounter';
+import { useAuth } from '../../store/AuthContext';
 
 function formatVND(value) {
   return (value || 0).toLocaleString('vi-VN') + 'đ';
@@ -42,6 +43,9 @@ const STAT_CARDS = [
 ];
 
 export default function AdminDashboardPage() {
+  const { user } = useAuth();
+  // Quản lý chi nhánh chỉ nhận số liệu đơn hàng/doanh thu của chi nhánh mình (backend đã lọc sẵn)
+  const scopedStoreName = user?.storeId?.name;
   const [summary, setSummary] = useState(null);
   const [revenueData, setRevenueData] = useState([]);
   const [bestSelling, setBestSelling] = useState([]);
@@ -60,14 +64,18 @@ export default function AdminDashboardPage() {
   const maxSold = Math.max(1, ...bestSelling.map((p) => p.soldCount));
   const totalOrdersForStatus = orderStatusStats.reduce((sum, s) => sum + s.count, 0) || 1;
   const avgRevenuePerDay = revenueData.length
-    ? revenueData.reduce((sum, d) => sum + d.revenue, 0) / revenueData.length
+    ? Math.round(revenueData.reduce((sum, d) => sum + d.revenue, 0) / revenueData.length)
     : 0;
 
   return (
     <div>
       <div className="mb-4 fade-in-up">
-        <h1 className="fs-4 fw-bold mb-1">Tổng quan hệ thống</h1>
-        <p className="text-muted small mb-0">Số liệu kinh doanh cập nhật theo thời gian thực từ toàn bộ chi nhánh</p>
+        <h1 className="fs-4 fw-bold mb-1">{scopedStoreName ? `Tổng quan chi nhánh ${scopedStoreName}` : 'Tổng quan hệ thống'}</h1>
+        <p className="text-muted small mb-0">
+          {scopedStoreName
+            ? 'Đơn hàng và doanh thu của chi nhánh bạn phụ trách (khách hàng, sản phẩm, bán chạy: số liệu toàn hệ thống)'
+            : 'Số liệu kinh doanh cập nhật theo thời gian thực từ toàn bộ chi nhánh'}
+        </p>
       </div>
 
       <Row className="g-3 mb-4">

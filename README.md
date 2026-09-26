@@ -76,6 +76,7 @@ Backend chạy tại `http://localhost:5000`.
 |---|---|---|---|
 | Quản trị viên | admins | admin@example.com | admin123 |
 | Nhân viên | admins | staff@example.com | staff123 |
+| Quản lý cửa hàng (chi nhánh TechShop Quận 1) | admins | manager@example.com | manager123 |
 | Khách hàng | users | customer@example.com | customer123 |
 
 **Lưu ý:** `admins` và `users` là 2 collection tách biệt. API đăng nhập tìm trong `users` trước, nếu không thấy mới tìm trong `admins`.
@@ -96,7 +97,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có 30 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên.
+Có 34 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 
@@ -161,7 +162,8 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 - **Quản lý khách hàng**: tìm kiếm, khóa/mở tài khoản — mục 1.2.3
 - **Quản lý nhân viên và nhóm quyền** — mục 1.2.4:
   - phân quyền chi tiết theo từng chức năng;
-  - "quản lý chi nhánh" chỉ thao tác được trên chi nhánh của mình.
+  - tài khoản gắn chi nhánh chỉ thao tác được trên chi nhánh của mình: tồn kho, đơn hàng (xem, xử lý) và thống kê đơn hàng/doanh thu;
+  - nhóm quyền mẫu **"Quản lý cửa hàng"**: tồn kho, đơn hàng, thống kê, xem khuyến mãi. Không gồm các quyền toàn hệ thống (sản phẩm, đánh giá, bảo hành, tin tức, chat, danh sách khách hàng).
 - **Khuyến mãi/voucher**: tạo, xem, vô hiệu hóa, giới hạn số lần dùng mỗi khách — mục 1.2.5
 - **Tin tức (CMS)** — mục 1.2.6
 - **Quản lý đánh giá**: ẩn/hiện, phản hồi (tự tính lại điểm trung bình) — mục 1.2.7
@@ -193,6 +195,7 @@ MONGO_URI="<chuỗi-kết-nối>" node seed/<tên-script>.js    # database khác
 | `migrateVariants.js [--demo-colors]` | Chuyển sang mô hình phiên bản: tạo phiên bản mặc định, gắn tồn kho/đơn hàng/giỏ hàng cũ vào phiên bản (`--demo-colors`: thêm màu mẫu kèm tồn kho) |
 | `seedProductReviews.js` | Bổ sung cho đủ 10 đánh giá kèm ảnh mỗi sản phẩm, tính lại điểm đánh giá |
 | `backfillOnlinePaymentStatus.js` | Sửa trạng thái thanh toán của đơn mẫu thanh toán online: đơn đã xác nhận trở đi thành "đã thanh toán", đơn hủy/trả thành "đã hoàn tiền" (**chạy trước khi deploy** bản chặn xử lý đơn VNPay chưa thanh toán) |
+| `seedStoreManager.js` | Tạo nhóm quyền "Quản lý cửa hàng" và tài khoản `manager@example.com` / `manager123` quản lý chi nhánh TechShop Quận 1 |
 | `fixProductImages.js` | Cập nhật ảnh sản phẩm theo đúng loại sản phẩm (loa, tai nghe, chuột, cáp...), đồng bộ ảnh phiên bản và ảnh đánh giá |
 
 **Ghi chú về ảnh mẫu:** ảnh sản phẩm là ảnh stock từ Unsplash, chọn đúng **loại** sản phẩm, không phải ảnh chính hãng của từng mẫu máy. Admin có thể thay bằng link ảnh thật trong trang quản lý sản phẩm; `fixProductImages.js` giữ nguyên các ảnh admin đã tự nhập.

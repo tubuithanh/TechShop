@@ -16,6 +16,7 @@ const { generatePosts } = require('./generatePosts');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const PermissionGroup = require('../models/PermissionGroup');
+const { ensureStoreManager } = require('./storeManager');
 const { SPEC_TEMPLATES } = require('../utils/specTemplates');
 const Brand = require('../models/Brand');
 const Category = require('../models/Category');
@@ -190,6 +191,10 @@ async function run() {
 
   // ----- Store Inventories (tồn kho riêng theo từng cửa hàng - mô hình multi-store) -----
   const stores = [store1, store2, store3];
+
+  // ----- Quản lý cửa hàng: nhóm quyền giới hạn theo chi nhánh + tài khoản quản lý chi nhánh 1 -----
+  const { group: storeManagerGroup } = await ensureStoreManager(store1);
+  console.log('[Seed] Đã tạo nhóm quyền', storeManagerGroup.name, '| tài khoản manager@example.com (chi nhánh:', store1.name + ')');
   const inventoryDocs = [];
   for (const product of createdProducts) {
     for (const variant of product.variants) {
@@ -344,6 +349,7 @@ async function run() {
   console.log('\n===== TÀI KHOẢN DEMO =====');
   console.log('Admin (collection admins):    admin@example.com    / admin123');
   console.log('Staff (collection admins):    staff@example.com    / staff123');
+  console.log('Quản lý cửa hàng (admins):    manager@example.com  / manager123 (chỉ chi nhánh 1)');
   console.log('Customer (collection users):  customer@example.com / customer123');
   console.log('1000 khách hàng mẫu:           <email trong DB>     / customer123 (mật khẩu dùng chung)');
   console.log('===========================\n');
