@@ -1,4 +1,4 @@
-# MỤC TIÊU VÀ YÊU CẦU ĐỒ ÁN TỐT NGHIỆP
+# MỤC TIÊU VÀ YÊU CẦU TIỂU LUẬN CHUYÊN NGÀNH
 
 ## Đề tài: Xây dựng website thương mại điện tử bán lẻ thiết bị công nghệ theo mô hình thegioididong.com
 ### Công nghệ triển khai: MERN Stack (MongoDB – Express.js – React.js – Node.js)

@@ -12,7 +12,7 @@
 
 ### Giới thiệu
 
-Tài liệu này là kết quả **Bước 1 – Khảo sát hiện trạng** của đồ án tốt nghiệp "Xây dựng website thương mại điện tử theo mô hình thegioididong.com", triển khai bằng công nghệ **MERN Stack** (MongoDB – Express.js – React.js – Node.js). Nội dung gồm:
+Tài liệu này là kết quả **Bước 1 – Khảo sát hiện trạng** của tiểu luận chuyên ngành "Xây dựng website thương mại điện tử theo mô hình thegioididong.com", triển khai bằng công nghệ **MERN Stack** (MongoDB – Express.js – React.js – Node.js). Nội dung gồm:
 
 - Phân tích chi tiết toàn bộ chức năng của thegioididong.com (cả phía khách hàng và quản trị)
 - Khảo sát, so sánh ưu/nhược điểm với 2 website cùng lĩnh vực (FPT Shop, CellphoneS)
@@ -507,7 +507,7 @@ Tài liệu này là kết quả **Bước 1 – Khảo sát hiện trạng** c�
 
 ## 5. Yêu cầu phi chức năng (Non-functional Requirements) — bắt buộc phải có để đạt điểm cao
 
-Đồ án tốt nghiệp không chỉ được đánh giá qua *số lượng chức năng*, mà còn qua *chất lượng hệ thống*. Hội đồng chấm thường hỏi sâu vào các tiêu chí sau — nên trình bày rõ trong báo cáo:
+Tiểu luận chuyên ngành không chỉ được đánh giá qua *số lượng chức năng*, mà còn qua *chất lượng hệ thống*. Hội đồng chấm thường hỏi sâu vào các tiêu chí sau — nên trình bày rõ trong báo cáo:
 
 | Nhóm | Yêu cầu cụ thể |
 |---|---|

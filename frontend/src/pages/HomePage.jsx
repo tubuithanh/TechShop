@@ -26,7 +26,7 @@ const CATEGORY_STYLE = {
 const HERO_SLIDES = [
   {
     gradient: 'linear-gradient(135deg, #dc2626, #f97316)',
-    eyebrow: '🎓 Đồ án tốt nghiệp MERN Stack',
+    eyebrow: '🎓 Tiểu luận chuyên ngành MERN Stack',
     title: 'Chào mừng đến với TechShop',
     subtitle: 'Website thương mại điện tử đa chi nhánh (multi-store) — mua sắm thiết bị công nghệ chính hãng, nhanh chóng và tin cậy',
     cta: { label: 'Khám phá ngay', to: '/products' }

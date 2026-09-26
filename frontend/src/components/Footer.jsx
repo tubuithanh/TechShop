@@ -99,7 +99,7 @@ export default function Footer() {
         </Row>
       </Container>
       <div className="text-center small py-3 border-top border-secondary">
-        © 2026 {settings.siteName} - Đồ án tốt nghiệp. Dữ liệu và giao dịch chỉ mang tính minh họa.
+        © 2026 {settings.siteName} - Tiểu luận chuyên ngành. Dữ liệu và giao dịch chỉ mang tính minh họa.
       </div>
     </footer>
   );

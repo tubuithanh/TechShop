@@ -5,7 +5,7 @@ function formatVND(value) {
   return Math.round(value).toLocaleString('vi-VN') + 'đ';
 }
 
-// Công cụ tính trả góp đơn giản (lãi suất giả định 0% cho một số kỳ hạn, minh họa cho đồ án)
+// Công cụ tính trả góp đơn giản (lãi suất giả định 0% cho một số kỳ hạn, minh họa cho tiểu luận)
 const TERMS = [
   { months: 3, interestRate: 0 },
   { months: 6, interestRate: 0.015 },
@@ -56,7 +56,7 @@ export default function InstallmentCalculator({ price }) {
               </div>
             </div>
             <p className="text-muted mt-2 mb-0" style={{ fontSize: '0.75rem' }}>
-              * Số liệu chỉ mang tính minh họa cho đồ án, chưa bao gồm phí thẩm định của đối tác tài chính thực tế.
+              * Số liệu chỉ mang tính minh họa cho tiểu luận, chưa bao gồm phí thẩm định của đối tác tài chính thực tế.
             </p>
           </div>
         )}

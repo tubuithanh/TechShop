@@ -1,4 +1,4 @@
-# KẾ HOẠCH DỰ ÁN ĐỒ ÁN TỐT NGHIỆP
+# KẾ HOẠCH DỰ ÁN TIỂU LUẬN CHUYÊN NGÀNH
 ## Đề tài: Xây dựng website thương mại điện tử theo mô hình thegioididong.com (MERN Stack)
 
 ---
@@ -302,7 +302,7 @@
 - In ấn, đóng quyển theo yêu cầu, nộp đúng hạn
 
 **Kết quả bàn giao**
-- Quyển báo cáo đồ án tốt nghiệp hoàn chỉnh (file Word/PDF)
+- Quyển báo cáo tiểu luận chuyên ngành hoàn chỉnh (file Word/PDF)
 - Slide thuyết trình bảo vệ
 - Video demo hệ thống (dự phòng)
 
