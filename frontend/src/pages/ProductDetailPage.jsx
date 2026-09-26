@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal } from 'react-bootstrap';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
-import { uploadService } from '../services/uploadService';
+import ReviewForm from '../components/ReviewForm';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
 import ProductCard from '../components/ProductCard';
@@ -44,9 +44,7 @@ export default function ProductDetailPage() {
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('description');
   const [isWishlisted, setIsWishlisted] = useState(false);
-  const [newReview, setNewReview] = useState({ rating: 5, message: '', images: [] });
-  const [reviewUploading, setReviewUploading] = useState(false);
-  const [reviewError, setReviewError] = useState('');
+  const [editingReviewId, setEditingReviewId] = useState(null); // đánh giá của khách đang được sửa
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
@@ -149,32 +147,29 @@ export default function ProductDetailPage() {
     setIsWishlisted(res.added);
   };
 
-  const handleReviewPhotos = async (e) => {
-    const files = [...e.target.files].slice(0, 3 - newReview.images.length);
-    e.target.value = '';
-    if (!files.length) return;
-    setReviewUploading(true);
-    setReviewError('');
-    try {
-      const urls = await uploadService.uploadImages(files);
-      setNewReview((prev) => ({ ...prev, images: [...prev.images, ...urls].slice(0, 3) }));
-    } catch (err) {
-      setReviewError(err.response?.data?.message || 'Tải ảnh thất bại');
-    } finally {
-      setReviewUploading(false);
-    }
+  // Đánh giá của chính khách đang đăng nhập (mỗi khách chỉ có 1 đánh giá/sản phẩm)
+  const reviewOwnerId = (r) => r.userId?._id || r.userId;
+  const myReview = user ? reviews.find((r) => reviewOwnerId(r) === user._id) : null;
+
+  // Cập nhật lại điểm trung bình hiển thị trên trang theo danh sách đánh giá mới (backend đã tự tính lại)
+  const syncRating = (list) => {
+    const avg = list.length ? Math.round((list.reduce((sum, r) => sum + r.rating, 0) / list.length) * 10) / 10 : 0;
+    setProduct((p) => ({ ...p, ratingAverage: avg, ratingCount: list.length }));
   };
 
-  const handleSubmitReview = async (e) => {
-    e.preventDefault();
-    setReviewError('');
-    try {
-      const created = await productService.createReview(product._id, newReview);
-      setReviews([created, ...reviews]);
-      setNewReview({ rating: 5, message: '', images: [] });
-    } catch (err) {
-      setReviewError(err.response?.data?.message || 'Gửi đánh giá thất bại');
-    }
+  const handleCreateReview = async (values) => {
+    const created = await productService.createReview(product._id, values);
+    const next = [created, ...reviews];
+    setReviews(next);
+    syncRating(next);
+  };
+
+  const handleUpdateReview = async (values) => {
+    const updated = await productService.updateReview(product._id, editingReviewId, values);
+    const next = reviews.map((r) => (r._id === updated._id ? updated : r));
+    setReviews(next);
+    syncRating(next);
+    setEditingReviewId(null);
   };
 
   return (
@@ -403,63 +398,27 @@ export default function ProductDetailPage() {
 
         {activeTab === 'reviews' && (
           <div>
-            {user && (
-              <Form onSubmit={handleSubmitReview} className="border rounded-3 p-4 mb-4" style={{ maxWidth: '32rem' }}>
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <span className="small">Chấm điểm:</span>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Button
-                      type="button"
-                      variant="link"
-                      key={star}
-                      onClick={() => setNewReview({ ...newReview, rating: star })}
-                      className={`p-0 text-decoration-none ${star <= newReview.rating ? 'text-warning' : 'text-secondary'}`}
-                    >
-                      ★
-                    </Button>
-                  ))}
-                </div>
-                <Form.Control
-                  as="textarea"
-                  value={newReview.message}
-                  onChange={(e) => setNewReview({ ...newReview, message: e.target.value })}
-                  placeholder="Chia sẻ cảm nhận của bạn về sản phẩm..."
-                  className="small mb-2"
-                  rows={3}
-                />
-                <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-                  {newReview.images.map((img) => (
-                    <div key={img} className="position-relative">
-                      <img src={img} alt="Ảnh đính kèm" className="rounded border" style={{ width: '4rem', height: '4rem', objectFit: 'cover' }} />
-                      <button
-                        type="button"
-                        aria-label="Bỏ ảnh"
-                        className="btn btn-sm btn-light border position-absolute top-0 end-0 p-0 lh-1"
-                        style={{ width: '1.25rem', height: '1.25rem' }}
-                        onClick={() => setNewReview((prev) => ({ ...prev, images: prev.images.filter((u) => u !== img) }))}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                  {newReview.images.length < 3 && (
-                    <Form.Label className="btn btn-outline-secondary btn-sm mb-0">
-                      {reviewUploading ? 'Đang tải...' : '📷 Thêm ảnh (tối đa 3)'}
-                      <input type="file" accept="image/*" multiple hidden disabled={reviewUploading} onChange={handleReviewPhotos} />
-                    </Form.Label>
-                  )}
-                </div>
-                {reviewError && <div className="small text-danger mb-2">{reviewError}</div>}
-                <Button type="submit" variant="primary" size="sm" disabled={reviewUploading}>
-                  Gửi đánh giá
-                </Button>
-              </Form>
+            {user && !myReview && (
+              <div className="mb-4">
+                <ReviewForm onSubmit={handleCreateReview} />
+              </div>
+            )}
+            {myReview && !editingReviewId && (
+              <div className="small text-muted mb-3">
+                Bạn đã đánh giá sản phẩm này. Có thể sửa lại số sao, nội dung và hình ảnh ngay trong đánh giá của bạn bên dưới.
+              </div>
             )}
 
             <div className="d-flex flex-column gap-4">
-              {reviews.map((r) => (
+              {reviews.map((r) =>
+                editingReviewId === r._id ? (
+                  <div key={r._id} className="border-bottom pb-3">
+                    <div className="small fw-medium mb-2">Sửa đánh giá của bạn</div>
+                    <ReviewForm initial={r} submitLabel="Lưu thay đổi" onSubmit={handleUpdateReview} onCancel={() => setEditingReviewId(null)} />
+                  </div>
+                ) : (
                 <div key={r._id} className="border-bottom pb-3">
-                  <div className="d-flex align-items-center gap-2">
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
                     <span className="fw-medium small">{r.displayName || r.userId?.displayName || 'Ẩn danh'}</span>
                     <span className="text-warning" style={{ fontSize: '0.75rem' }}>
                       {'★'.repeat(r.rating)}
@@ -468,6 +427,12 @@ export default function ProductDetailPage() {
                       <Badge bg="success" className="bg-opacity-10 text-success fw-normal" style={{ fontSize: '0.75rem' }}>
                         Đã mua hàng
                       </Badge>
+                    )}
+                    {r.editedAt && <span className="text-muted" style={{ fontSize: '0.75rem' }}>(đã chỉnh sửa)</span>}
+                    {myReview?._id === r._id && (
+                      <Button variant="link" size="sm" className="p-0 ms-auto" onClick={() => setEditingReviewId(r._id)}>
+                        ✎ Sửa đánh giá
+                      </Button>
                     )}
                   </div>
                   <p className="small mt-1">{r.message}</p>
@@ -494,7 +459,8 @@ export default function ProductDetailPage() {
                     </div>
                   )}
                 </div>
-              ))}
+                )
+              )}
               {reviews.length === 0 && <div className="small text-muted">Chưa có đánh giá nào</div>}
             </div>
           </div>

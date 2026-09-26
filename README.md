@@ -97,7 +97,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có 41 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
+Có 45 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên, giới hạn theo chi nhánh của quản lý cửa hàng (đơn hàng, thống kê, quyền).
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 
@@ -147,7 +147,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
     - trang kết quả không bắt đăng nhập lại (phiên có thể hết hạn trong lúc thanh toán);
     - hủy đơn đã thanh toán thì chuyển "đã hoàn tiền" (mô phỏng).
 - **Trung tâm tài khoản**: thông tin cá nhân, đổi mật khẩu, sổ địa chỉ, danh sách yêu thích — mục 1.1.7
-- Đánh giá và hỏi đáp (Q&A) sản phẩm — mục 1.1.8
+- Đánh giá (kèm tối đa 3 ảnh) và hỏi đáp (Q&A) sản phẩm; khách **sửa lại được đánh giá của mình** (số sao, nội dung, ảnh - hiện nhãn "đã chỉnh sửa", không sửa được đánh giá đã bị ẩn) — mục 1.1.8
 - **Trang khuyến mãi** công khai (sao chép mã) — mục 1.1.9
 - **Tin tức & Cẩm nang công nghệ** — mục 1.1.10
 - **Hệ thống cửa hàng**: tra cứu theo tỉnh/thành, chỉ đường Google Maps — mục 1.1.11

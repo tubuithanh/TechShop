@@ -9,7 +9,7 @@ const {
   updateProduct,
   deleteProduct
 } = require('../controllers/productController');
-const { getProductReviews, createReview } = require('../controllers/reviewController');
+const { getProductReviews, createReview, updateReview } = require('../controllers/reviewController');
 const { getQuestions, createQuestion, answerQuestion } = require('../controllers/questionController');
 const { protect, authorize, can } = require('../middlewares/authMiddleware');
 
@@ -20,6 +20,7 @@ router.get('/:id/related', getRelatedProducts);
 
 router.get('/:productId/reviews', getProductReviews);
 router.post('/:productId/reviews', protect, createReview);
+router.put('/:productId/reviews/:reviewId', protect, updateReview);
 
 router.get('/:productId/questions', getQuestions);
 router.post('/:productId/questions', protect, createQuestion);

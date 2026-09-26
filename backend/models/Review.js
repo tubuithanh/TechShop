@@ -14,6 +14,7 @@ const reviewSchema = new mongoose.Schema(
     images: [String],
     isVerifiedPurchase: { type: Boolean, default: false },
     status: { type: String, enum: ['visible', 'hidden'], default: 'visible' },
+    editedAt: { type: Date, default: null }, // lần khách sửa đánh giá gần nhất (hiển thị "Đã chỉnh sửa")
     reply: {
       content: String,
       repliedAt: Date,

@@ -25,6 +25,10 @@ export const productService = {
     const { data } = await api.post(`/products/${productId}/reviews`, payload);
     return data.data;
   },
+  async updateReview(productId, reviewId, payload) {
+    const { data } = await api.put(`/products/${productId}/reviews/${reviewId}`, payload);
+    return data.data;
+  },
   async getQuestions(productId) {
     const { data } = await api.get(`/products/${productId}/questions`);
     return data.data;
