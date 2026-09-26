@@ -100,12 +100,15 @@ productSchema.pre('validate', async function () {
   }
 });
 
-// Tìm kiếm không dấu: tên, thương hiệu, màu/dung lượng các phiên bản, nhãn (xem utils/search.js)
+// Tìm kiếm không dấu: tên, danh mục, thương hiệu, mô tả ngắn, màu/dung lượng các phiên bản, nhãn - để
+// khách gõ "điện thoại samsung" vẫn ra "Galaxy S24" dù tên sản phẩm không có chữ "điện thoại" (xem utils/search.js)
 productSchema.plugin(searchablePlugin, {
   getParts: async (doc) => {
-    // brandId có thể đã được populate sẵn (script cập nhật dữ liệu) - khi đó không cần truy vấn lại
-    const brand = doc.brandId?.name !== undefined ? doc.brandId : doc.brandId ? await mongoose.model('Brand').findById(doc.brandId).select('name').lean() : null;
-    return [doc.title, brand?.name, (doc.variants || []).map((v) => [v.color, v.storage]), doc.tags];
+    // brandId/categoryId có thể đã được populate sẵn (script cập nhật dữ liệu) - khi đó không cần truy vấn lại
+    const lookup = async (ref, model) =>
+      ref?.name !== undefined ? ref : ref ? await mongoose.model(model).findById(ref).select('name').lean() : null;
+    const [brand, category] = await Promise.all([lookup(doc.brandId, 'Brand'), lookup(doc.categoryId, 'Category')]);
+    return [doc.title, category?.name, brand?.name, doc.shortDescription, (doc.variants || []).map((v) => [v.color, v.storage]), doc.tags];
   }
 });
 

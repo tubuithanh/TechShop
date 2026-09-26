@@ -61,16 +61,18 @@ describe('Tìm kiếm không dấu trong trang quản trị', () => {
     expect(res.body.data).toEqual([]);
   });
 
-  test('TC-51: Sản phẩm (trang khách và admin): tìm không dấu theo tên, thương hiệu, màu', async () => {
+  test('TC-51: Sản phẩm (trang khách và admin): tìm không dấu theo tên, danh mục, thương hiệu, màu', async () => {
     const category = await Category.create({ name: 'Điện thoại', slug: 'dien-thoai' });
     const brand = await Brand.create({ name: 'Samsung', slug: 'samsung' });
     await Product.create({ title: 'Điện thoại Galaxy S24', slug: 'galaxy-s24', categoryId: category._id, brandId: brand._id, price: 1, variants: [{ color: 'Tím Oải Hương', price: 1 }] });
-    await Product.create({ title: 'Máy tính bảng', slug: 'may-tinh-bang', categoryId: category._id, price: 1, variants: [{ color: 'Xám', price: 1 }] });
+    const tablets = await Category.create({ name: 'Máy tính bảng', slug: 'may-tinh-bang' });
+    await Product.create({ title: 'Tab P11', slug: 'tab-p11', categoryId: tablets._id, price: 1, variants: [{ color: 'Xám', price: 1 }] });
     const titles = async (q) => (await request(app).get(`/api/products?keyword=${encodeURIComponent(q)}`)).body.data.map((p) => p.title);
     expect(await titles('dien thoai')).toEqual(['Điện thoại Galaxy S24']);
     expect(await titles('samsung')).toEqual(['Điện thoại Galaxy S24']);
     expect(await titles('tim oai')).toEqual(['Điện thoại Galaxy S24']);
-    expect(await titles('may tinh')).toEqual(['Máy tính bảng']);
+    expect(await titles('may tinh')).toEqual(['Tab P11']); // theo tên danh mục
+    expect(await titles('dien thoai samsung')).toEqual(['Điện thoại Galaxy S24']);
   });
 
   test('TC-52: Khách hàng và voucher: tìm không dấu + lọc trạng thái', async () => {

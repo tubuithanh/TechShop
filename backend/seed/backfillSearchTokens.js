@@ -3,7 +3,7 @@
  * utils/search.js). Không xóa hay sửa dữ liệu nào khác; chạy lại nhiều lần an toàn (tính lại toàn bộ).
  * Chạy lại script này sau khi đổi các trường được tìm kiếm của một model.
  *
- * Chạy:        node seed/backfillSearchTokens.js
+ * Chạy:        node seed/backfillSearchTokens.js [--only=Product,Order]
  * Trên Atlas:  MONGO_URI="<atlas-connection-string>" node seed/backfillSearchTokens.js
  */
 require('dotenv').config();
@@ -16,10 +16,11 @@ const Review = require('../models/Review');
 const Voucher = require('../models/Voucher');
 const Post = require('../models/Post');
 require('../models/Brand');
+require('../models/Category');
 
 // populate: nạp sẵn bản ghi liên quan cho cả lô, tránh mỗi bản ghi phải truy vấn riêng
 const TARGETS = [
-  { Model: Product, populate: { path: 'brandId', select: 'name' } },
+  { Model: Product, populate: [{ path: 'brandId', select: 'name' }, { path: 'categoryId', select: 'name' }] },
   { Model: User },
   { Model: Order },
   { Model: Warranty, populate: { path: 'orderId', select: 'orderCode deliveryAddress' } },
@@ -33,7 +34,10 @@ async function run() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log('Đã kết nối MongoDB:', mongoose.connection.db.databaseName);
 
-  for (const { Model, populate } of TARGETS) {
+  // --only=Product,Order: chỉ cập nhật các model được liệt kê (VD sau khi đổi trường tìm kiếm của sản phẩm)
+  const onlyArg = process.argv.find((a) => a.startsWith('--only='));
+  const only = onlyArg ? onlyArg.slice(7).split(',') : null;
+  for (const { Model, populate } of TARGETS.filter((t) => !only || only.includes(t.Model.modelName))) {
     await Model.createIndexes(); // chỉ TẠO index còn thiếu (searchTokens), không xóa index nào đang có
     const total = await Model.countDocuments();
     let done = 0;
