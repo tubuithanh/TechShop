@@ -96,7 +96,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có 28 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, hoàn tiền), tải ảnh lên.
+Có 30 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, thanh toán VNPay (chữ ký, sai số tiền, thanh toán lại, trả tiền ở lần thử cũ, hoàn tiền, chặn xác nhận đơn chưa thanh toán), tải ảnh lên.
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 
@@ -136,7 +136,11 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 - **So sánh sản phẩm** song song, thông số chia theo nhóm, **tự làm nổi bật giá trị tốt nhất** ở mỗi dòng — mục 1.1.5
 - Giỏ hàng và đặt hàng theo phiên bản, áp mã giảm giá, chọn hình thức nhận hàng — mục 1.1.6
   - giỏ hàng tự cảnh báo dòng hàng **ngừng bán** hoặc **không đủ hàng** ("Chỉ còn N sản phẩm") và khóa nút thanh toán cho tới khi khách điều chỉnh;
-  - **thanh toán online qua VNPay** (thẻ ATM, Visa/Master, QR): kiểm tra chữ ký giao dịch, nhận kết quả qua cả trang trả về và IPN, thanh toán lại khi thất bại, hủy đơn đã thanh toán thì chuyển "đã hoàn tiền".
+  - **thanh toán online qua VNPay** (thẻ ATM, Visa/Master, QR):
+    - kiểm tra chữ ký và số tiền của mọi kết quả VNPay gửi về, nhận kết quả qua cả trang trả về và IPN (ghi nhận 1 lần, không trùng);
+    - thanh toán lại khi thất bại; khách trả tiền ở lần thử cũ (tab cũ) vẫn được ghi nhận đúng đơn;
+    - trang kết quả không bắt đăng nhập lại (phiên có thể hết hạn trong lúc thanh toán);
+    - hủy đơn đã thanh toán thì chuyển "đã hoàn tiền" (mô phỏng).
 - **Trung tâm tài khoản**: thông tin cá nhân, đổi mật khẩu, sổ địa chỉ, danh sách yêu thích — mục 1.1.7
 - Đánh giá và hỏi đáp (Q&A) sản phẩm — mục 1.1.8
 - **Trang khuyến mãi** công khai (sao chép mã) — mục 1.1.9
@@ -151,9 +155,9 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 - **Quản lý sản phẩm** — mục 1.2.1:
   - bảng **phiên bản** (màu, mã màu, dung lượng, giá, giá khuyến mãi, ảnh riêng, đang bán/ngừng bán); không cho xóa phiên bản còn hàng trong kho;
   - **thông số kỹ thuật theo mẫu của danh mục**;
-  - **tải ảnh lên** cho sản phẩm và từng phiên bản (lưu trên Cloudinary nếu đã cấu hình, nếu không thì lưu trên máy chủ).
+  - **tải ảnh lên** cho sản phẩm và từng phiên bản (lưu trên Cloudinary nếu đã cấu hình, nếu không thì lưu trên máy chủ; giới hạn 5 ảnh × 5MB mỗi lần, 30 lần mỗi 15 phút).
 - **Quản lý tồn kho** theo chi nhánh và phiên bản, cảnh báo sắp hết hàng
-- Quản lý đơn hàng theo luồng trạng thái (chặn nhảy cóc trạng thái) — mục 1.2.2
+- Quản lý đơn hàng theo luồng trạng thái (chặn nhảy cóc trạng thái; đơn VNPay chưa thanh toán không được xác nhận/giao, chỉ được hủy) — mục 1.2.2
 - **Quản lý khách hàng**: tìm kiếm, khóa/mở tài khoản — mục 1.2.3
 - **Quản lý nhân viên và nhóm quyền** — mục 1.2.4:
   - phân quyền chi tiết theo từng chức năng;
@@ -188,6 +192,7 @@ MONGO_URI="<chuỗi-kết-nối>" node seed/<tên-script>.js    # database khác
 | `backfillSpecTemplates.js [--fill-products]` | Nạp mẫu thông số cho danh mục (và bổ sung thông số cho sản phẩm) |
 | `migrateVariants.js [--demo-colors]` | Chuyển sang mô hình phiên bản: tạo phiên bản mặc định, gắn tồn kho/đơn hàng/giỏ hàng cũ vào phiên bản (`--demo-colors`: thêm màu mẫu kèm tồn kho) |
 | `seedProductReviews.js` | Bổ sung cho đủ 10 đánh giá kèm ảnh mỗi sản phẩm, tính lại điểm đánh giá |
+| `backfillOnlinePaymentStatus.js` | Sửa trạng thái thanh toán của đơn mẫu thanh toán online: đơn đã xác nhận trở đi thành "đã thanh toán", đơn hủy/trả thành "đã hoàn tiền" (**chạy trước khi deploy** bản chặn xử lý đơn VNPay chưa thanh toán) |
 | `fixProductImages.js` | Cập nhật ảnh sản phẩm theo đúng loại sản phẩm (loa, tai nghe, chuột, cáp...), đồng bộ ảnh phiên bản và ảnh đánh giá |
 
 **Ghi chú về ảnh mẫu:** ảnh sản phẩm là ảnh stock từ Unsplash, chọn đúng **loại** sản phẩm, không phải ảnh chính hãng của từng mẫu máy. Admin có thể thay bằng link ảnh thật trong trang quản lý sản phẩm; `fixProductImages.js` giữ nguyên các ảnh admin đã tự nhập.
@@ -195,7 +200,9 @@ MONGO_URI="<chuỗi-kết-nối>" node seed/<tên-script>.js    # database khác
 ## Còn thiếu so với tài liệu phân tích đầy đủ (chưa triển khai trong bản demo này)
 
 - Ví MoMo (VNPay đã tích hợp)
-- Tự hủy đơn VNPay quá hạn chưa thanh toán để trả lại tồn kho giữ chỗ
+- Tự hủy đơn VNPay quá hạn chưa thanh toán để trả lại tồn kho giữ chỗ (hiện khách hoặc admin hủy thủ công)
+- Gọi API hoàn tiền thật của VNPay (hiện chỉ chuyển trạng thái "đã hoàn tiền")
+- Tải ảnh lên cho yêu cầu bảo hành (vẫn lưu ảnh dạng base64 trong dữ liệu)
 - Chatbot tư vấn sản phẩm tự động (mục 1.1.22)
 - Gamification / vòng quay may mắn (mục 1.1.19)
 - Cache Redis, unit test Frontend (React Testing Library)
