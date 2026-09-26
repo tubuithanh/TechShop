@@ -101,6 +101,7 @@ Có 34 test case, bao gồm: đăng ký/đăng nhập, giỏ hàng (kể cả c�
 
 Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nhớ. Lần chạy đầu cần có kết nối internet để tải MongoDB.
 
+
 ## Cấu trúc Database (ecommerce_multistore_db)
 
 | Collection | Vai trò |
