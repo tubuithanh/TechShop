@@ -386,14 +386,17 @@ export default function RegisterPage() {
               label={
                 <span>
                   Tôi đồng ý với{' '}
-                  <Link to="/terms" className="text-primary text-decoration-underline">
+                  <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-primary text-decoration-underline">
                     Điều khoản sử dụng
                   </Link>{' '}
                   và{' '}
-                  <Link to="/privacy" className="text-primary text-decoration-underline">
+                  <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary text-decoration-underline">
                     Chính sách bảo mật
                   </Link>{' '}
                   của TechShop <span className="text-danger">*</span>
+                  <span className="d-block text-muted" style={{ fontSize: '0.7rem' }}>
+                    (mở trong tab mới, thông tin bạn đang nhập vẫn được giữ nguyên)
+                  </span>
                 </span>
               }
             />
