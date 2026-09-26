@@ -115,3 +115,83 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .fade-in-up, .fade-in-up-1, .fade-in-up-2, .fade-in-up-3, .fade-in-up-4 { animation: none; }
 }
+
+/* ===== Ảnh sản phẩm ===== */
+/* Hiệu ứng "đang tải" (shimmer) trong lúc ảnh chưa về */
+@keyframes skeleton-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f1f3f5 25%, #e6e8eb 37%, #f1f3f5 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+.product-image { background-color: #f6f7f9; }
+
+/* Thẻ sản phẩm: ảnh thứ 2 hiện dần khi rê chuột */
+.card-media { position: relative; }
+.card-media .card-media-alt {
+  position: absolute !important; /* thắng class position-relative của ProductImage */
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.card-media:hover .card-media-alt { opacity: 1; }
+
+/* Thư viện ảnh trang chi tiết */
+.gallery-main { cursor: zoom-in; touch-action: pan-y; }
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.15);
+  font-size: 1.25rem;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 2;
+}
+.gallery-wrap:hover .gallery-arrow,
+.gallery-arrow:focus-visible { opacity: 1; }
+@media (hover: none) { .gallery-arrow { opacity: 1; } }
+.gallery-counter {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 1rem;
+  z-index: 2;
+}
+.gallery-thumb {
+  width: 4.5rem;
+  flex-shrink: 0;
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, border-color 0.2s ease;
+  background: none;
+}
+.gallery-thumb:hover { opacity: 1; }
+.gallery-thumb.active { border-color: var(--bs-primary); opacity: 1; }
+.gallery-thumbs { scrollbar-width: thin; }
+
+/* Xem ảnh toàn màn hình */
+.lightbox .modal-content { background: #111; border: 0; }
+.lightbox-img { max-height: 80vh; object-fit: contain; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .img-zoom img, .card-media .card-media-alt { transition: none; }
+}
+.lightbox .gallery-arrow { opacity: 1; }

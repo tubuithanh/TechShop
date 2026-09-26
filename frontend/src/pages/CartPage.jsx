@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Card, Button, Badge } from 'react-bootstrap';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
-import { placeholderImage } from '../utils/placeholderImage';
+import ProductImage from '../components/ProductImage';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -55,11 +55,7 @@ export default function CartPage() {
           {cart.items.map((item) => (
             <Card key={item._id} className={item.availability && item.availability !== 'ok' ? 'border-danger' : ''}>
               <Card.Body className="d-flex align-items-center gap-3 p-3">
-                <img
-                  src={item.image || placeholderImage(80, 80)}
-                  alt={item.name}
-                  style={{ width: '5rem', height: '5rem', objectFit: 'contain' }}
-                />
+                <ProductImage src={item.image} alt={item.name} size={96} className="rounded flex-shrink-0" style={{ width: '5rem' }} />
                 <div className="flex-grow-1">
                   <div className="fw-medium small">{item.name}</div>
                   {item.variantLabel && <div className="text-muted small">Phiên bản: {item.variantLabel}</div>}

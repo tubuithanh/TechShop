@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { Container, Row, Col, Table, Button, Form } from 'react-bootstrap';
 import { productService } from '../services/productService';
 import { buildCompareGroups, getBestSpecValue } from '../utils/specs';
+import ProductImage from '../components/ProductImage';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -59,7 +60,7 @@ export default function ComparePage() {
                 <th className="bg-light text-start">Thông số</th>
                 {compareResult.map((p) => (
                   <th key={p._id} className="bg-light text-center">
-                    <img src={p.featuredImage} alt={p.title} className="mx-auto mb-1 d-block" style={{ width: '5rem', height: '5rem', objectFit: 'contain' }} />
+                    <ProductImage src={p.featuredImage} alt={p.title} size={160} className="mx-auto mb-1 rounded" style={{ width: '5rem' }} />
                     {p.title}
                   </th>
                 ))}

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Card, Badge } from 'react-bootstrap';
-import { placeholderImage } from '../utils/placeholderImage';
+import ProductImage from './ProductImage';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -14,6 +14,7 @@ export default function ProductCard({ product }) {
   const activeVariants = (product.variants || []).filter((v) => v.isActive);
   const colors = activeVariants.filter((v, i, arr) => arr.findIndex((x) => x.color === v.color) === i);
   const hasPriceRange = new Set(activeVariants.map((v) => v.effectivePrice)).size > 1;
+  const secondImage = (product.imageURLs || []).find((u) => u && u !== product.featuredImage);
   const discountPercent =
     product.salePrice != null && product.salePrice < product.price
       ? Math.round(100 - (product.salePrice / product.price) * 100)
@@ -30,17 +31,13 @@ export default function ProductCard({ product }) {
           -{discountPercent}%
         </Badge>
       )}
-      <div className="img-zoom">
-        <Card.Img
-          variant="top"
-          src={product.featuredImage || placeholderImage(300, 300)}
-          alt={product.title}
-          className="p-3"
-          style={{ height: '10rem', objectFit: 'contain' }}
-        />
+      {/* Ảnh vuông phủ kín khung; rê chuột thì hiện dần ảnh thứ 2 của sản phẩm (nếu có) */}
+      <div className="img-zoom card-media rounded-top">
+        <ProductImage src={product.featuredImage} alt={product.title} size={320} />
+        {secondImage && <ProductImage src={secondImage} alt="" size={320} className="card-media-alt" />}
       </div>
       <Card.Body className="pt-0">
-        <Card.Title as="h3" className="fs-6 fw-medium line-clamp-2" style={{ height: '2.5rem' }}>
+        <Card.Title as="h3" className="fs-6 fw-medium line-clamp-2 mt-3" style={{ height: '2.5rem' }}>
           {product.title}
         </Card.Title>
         <div className="mt-1">

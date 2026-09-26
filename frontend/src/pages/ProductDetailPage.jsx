@@ -4,13 +4,14 @@ import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinn
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
 import ReviewForm from '../components/ReviewForm';
+import ProductGallery from '../components/ProductGallery';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
 import ProductCard from '../components/ProductCard';
 import InstallmentCalculator from '../components/InstallmentCalculator';
 import ProductQnA from '../components/ProductQnA';
-import { placeholderImage } from '../utils/placeholderImage';
 import { groupSpecs } from '../utils/specs';
+import { sizedImage } from '../utils/imageUrl';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -186,40 +187,23 @@ export default function ProductDetailPage() {
 
       <Row className="g-4 g-md-5">
         <Col xs={12} md={6}>
-          <div className="border rounded-3 overflow-hidden mb-2 position-relative">
-            <img
-              src={images?.[activeImage] || placeholderImage(500, 500)}
-              alt={product.title}
-              className="w-100"
-              style={{ aspectRatio: '1 / 1', objectFit: 'contain' }}
-            />
-            <Button
-              onClick={handleToggleWishlist}
-              variant={isWishlisted ? 'primary' : 'light'}
-              className="position-absolute top-0 end-0 mt-3 me-3 rounded-circle d-flex align-items-center justify-content-center p-0 shadow-sm"
-              style={{ width: '2.25rem', height: '2.25rem' }}
-              title="Thêm vào yêu thích"
-            >
-              {isWishlisted ? '♥' : '♡'}
-            </Button>
-          </div>
-          {images?.length > 1 && (
-            <div className="d-flex gap-2 overflow-auto">
-              {images.map((img, idx) => (
-                <Button
-                  key={idx}
-                  variant="light"
-                  onClick={() => setActiveImage(idx)}
-                  className={`flex-shrink-0 border rounded p-0 overflow-hidden ${
-                    activeImage === idx ? 'border-primary border-2' : ''
-                  }`}
-                  style={{ width: '4rem', height: '4rem' }}
-                >
-                  <img src={img} alt="" className="w-100 h-100" style={{ objectFit: 'contain' }} />
-                </Button>
-              ))}
-            </div>
-          )}
+          <ProductGallery
+            images={images}
+            title={product.title}
+            active={activeImage}
+            onChange={setActiveImage}
+            overlay={
+              <Button
+                onClick={handleToggleWishlist}
+                variant={isWishlisted ? 'primary' : 'light'}
+                className="position-absolute top-0 end-0 mt-3 me-3 rounded-circle d-flex align-items-center justify-content-center p-0 shadow-sm"
+                style={{ width: '2.25rem', height: '2.25rem', zIndex: 2 }}
+                title="Thêm vào yêu thích"
+              >
+                {isWishlisted ? '♥' : '♡'}
+              </Button>
+            }
+          />
         </Col>
 
         <Col xs={12} md={6}>
@@ -441,7 +425,7 @@ export default function ProductDetailPage() {
                       {r.images.map((img) => (
                         <img
                           key={img}
-                          src={img}
+                          src={sizedImage(img, 160)}
                           alt="Ảnh đánh giá"
                           loading="lazy"
                           role="button"
@@ -487,7 +471,7 @@ export default function ProductDetailPage() {
       {showStickyBar && (
         <div className="position-fixed bottom-0 start-0 end-0 bg-white border-top shadow-lg py-3 px-4" style={{ zIndex: 1030 }}>
           <Container fluid="xl" className="d-flex align-items-center gap-4">
-            <img src={images?.[0]} alt="" className="d-none d-sm-block" style={{ width: '2.5rem', height: '2.5rem', objectFit: 'contain' }} />
+            <img src={sizedImage(images?.[0], 96)} alt="" className="d-none d-sm-block rounded" style={{ width: '2.5rem', height: '2.5rem', objectFit: 'cover' }} />
             <div className="flex-fill text-truncate">
               <div className="small fw-medium text-truncate">{product.title}</div>
               <div className="text-primary fw-bold">{formatVND(displayPrice)}</div>
@@ -505,7 +489,7 @@ export default function ProductDetailPage() {
       )}
       <Modal show={!!zoomImage} onHide={() => setZoomImage(null)} centered size="lg">
         <Modal.Body className="p-0">
-          <img src={zoomImage || ''} alt="Ảnh đánh giá" className="w-100 rounded" onClick={() => setZoomImage(null)} />
+          <img src={sizedImage(zoomImage, 1000) || ''} alt="Ảnh đánh giá" className="w-100 rounded" onClick={() => setZoomImage(null)} />
         </Modal.Body>
       </Modal>
     </Container>
