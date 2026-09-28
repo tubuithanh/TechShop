@@ -20,7 +20,10 @@ const addressSchema = new mongoose.Schema(
 const userSchema = new mongoose.Schema(
   {
     displayName: { type: String, default: '' },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    // Email KHÔNG bắt buộc: tài khoản đăng nhập bằng Zalo để trống (Zalo không cung cấp email), khách tự thêm
+    // email sau ở trang Thông tin tài khoản (xác thực bằng mã gửi tới email). Chuỗi rỗng -> bỏ hẳn trường
+    // (undefined) để chỉ số "không trùng" bên dưới không coi nhiều tài khoản trống email là trùng nhau.
+    email: { type: String, lowercase: true, trim: true, set: (v) => (typeof v === 'string' && v.trim() ? v : undefined) },
     // password không có trong schema gốc nhưng bắt buộc phải có để đăng nhập bằng email/mật khẩu
     // (đồ án dùng xác thực nội bộ thay vì Firebase Auth như tên field "photoURL/displayName" gợi ý)
     password: { type: String, required: true, minlength: 6, select: false },
@@ -28,7 +31,8 @@ const userSchema = new mongoose.Schema(
     gender: { type: String, default: '' },
     phoneNumber: { type: String, default: '' },
     dateOfBirth: { type: String, default: '' },
-    // ID tài khoản Zalo khi đăng nhập qua Zalo OAuth - sparse để không xung đột với các user đăng ký bằng email thường
+    // ID tài khoản Zalo khi đăng nhập qua Zalo OAuth (trường riêng, không lưu vào email) - sparse để không xung đột
+    // với các user đăng ký bằng email thường
     zaloId: { type: String, unique: true, sparse: true },
     addresses: [addressSchema],
     favoriteProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
@@ -43,6 +47,9 @@ const userSchema = new mongoose.Schema(
   { timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'users' }
 );
 
+// Email không trùng - chỉ áp dụng cho tài khoản CÓ email (tài khoản Zalo chưa thêm email thì bỏ qua)
+userSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } }, name: 'email_unique_if_set' });
+
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
@@ -54,9 +61,9 @@ userSchema.methods.comparePassword = function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Tài khoản đăng nhập bằng Zalo không có email thật (Zalo không cung cấp) -> dùng email tạm dạng
-// zalo<id>@zalo.techshop.local cho đủ trường bắt buộc. Email này KHÔNG gửi thư được và khách có thể đổi sang
-// email thật (xác thực bằng mã OTP) ở trang Thông tin tài khoản.
+// Trước đây tài khoản Zalo được gán email tạm dạng zalo<id>@zalo.techshop.local (khi email còn bắt buộc).
+// Khi máy chủ khởi động, email tạm này được xóa đi (utils/migrateUserEmails.js); hàm dưới dùng để nhận biết và
+// chặn nhập lại dạng email này.
 const PLACEHOLDER_EMAIL_DOMAIN = 'zalo.techshop.local';
 const isPlaceholderEmail = (email) => String(email || '').toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
 
@@ -64,7 +71,7 @@ userSchema.methods.toSafeObject = function () {
   const obj = this.toObject();
   delete obj.password;
   obj.role = 'customer'; // hằng số, giúp code phía client dùng chung logic phân quyền với Admin
-  obj.hasPlaceholderEmail = isPlaceholderEmail(obj.email);
+  obj.hasEmail = Boolean(obj.email);
   return obj;
 };
 

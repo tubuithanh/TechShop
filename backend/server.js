@@ -15,13 +15,18 @@ const Admin = require('./models/Admin');
 const PORT = process.env.PORT || 5000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
 
-connectDB().then(() =>
+connectDB().then(() => {
   // Chưa có dữ liệu tỉnh/thành, phường/xã -> nạp dữ liệu mặc định (chỉ lần đầu)
   require('./utils/seedLocations')
     .ensureLocationsSeeded()
     .then((r) => r && console.log(`[Locations] Đã nạp ${r.provinces} tỉnh/thành, ${r.wards} phường/xã`))
-    .catch((err) => console.error('[Locations] Lỗi nạp dữ liệu:', err.message))
-);
+    .catch((err) => console.error('[Locations] Lỗi nạp dữ liệu:', err.message));
+  // Tài khoản Zalo: bỏ email tạm (zalo<id>@zalo.techshop.local), email để trống; đổi chỉ số email (chỉ lần đầu)
+  require('./utils/migrateUserEmails')
+    .migrateUserEmails()
+    .then((r) => (r.droppedOldIndex || r.clearedPlaceholders) && console.log(`[Users] Đã xóa email tạm của ${r.clearedPlaceholders} tài khoản Zalo`))
+    .catch((err) => console.error('[Users] Lỗi chuyển đổi email:', err.message));
+});
 
 const server = http.createServer(app);
 

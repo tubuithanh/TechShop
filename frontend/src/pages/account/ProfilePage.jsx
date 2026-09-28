@@ -76,7 +76,7 @@ export default function ProfilePage() {
       <Card>
         <Card.Body>
           <h2 className="fw-bold fs-5 mb-4">Đổi mật khẩu</h2>
-          {user?.hasPlaceholderEmail && (
+          {!user?.email && (
             <Alert variant="info" className="small py-2">
               Tài khoản đăng nhập bằng Zalo chưa có mật khẩu. Hãy <strong>thêm email</strong> ở trên, sau đó dùng{' '}
               <Link to="/forgot-password">Quên mật khẩu</Link> để đặt mật khẩu và đăng nhập được bằng email.

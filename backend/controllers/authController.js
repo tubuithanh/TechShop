@@ -79,7 +79,9 @@ const requestRegisterOtp = asyncHandler(async (req, res) => {
 
 const verifyRegisterOtp = asyncHandler(async (req, res) => {
   const { email, code } = req.body;
-  const otp = await Otp.findOne({ email: email?.toLowerCase(), purpose: 'register' }).sort({ createdAt: -1 });
+  // Bắt buộc email là chuỗi: nếu thiếu, Mongoose bỏ điều kiện email -> lấy nhầm mã OTP mới nhất của NGƯỜI KHÁC
+  if (typeof email !== 'string' || !email.trim()) return res.status(400).json({ message: 'Vui lòng nhập email' });
+  const otp = await Otp.findOne({ email: email.trim().toLowerCase(), purpose: 'register' }).sort({ createdAt: -1 });
 
   if (!otp) return res.status(400).json({ message: 'Không tìm thấy mã OTP, vui lòng yêu cầu gửi lại' });
   // Trước đây chỉ dựa vào TTL index của MongoDB (quét nền, không chạy đúng ngay tại thời điểm hết
@@ -279,11 +281,10 @@ const zaloComplete = asyncHandler(async (req, res) => {
 
   let user = await User.findOne({ zaloId: id });
   if (!user) {
-    // Zalo Social API mặc định không trả về email, nên tạo email "giả" duy nhất để thỏa schema
-    // (không dùng để liên hệ/gửi mail) - tài khoản này chỉ đăng nhập lại được qua Zalo.
+    // Zalo Social API không trả về email -> tài khoản để TRỐNG email (ID Zalo lưu ở trường zaloId).
+    // Khách tự thêm email sau ở trang Thông tin tài khoản (xác thực bằng mã gửi tới email).
     user = await User.create({
       displayName: safeName,
-      email: `zalo${id}@zalo.techshop.local`,
       avatar: safeAvatar,
       zaloId: id,
       password: crypto.randomBytes(24).toString('hex'),
@@ -438,7 +439,8 @@ const requestEmailChange = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.account._id).select('+password');
   if (email === user.email) return res.status(400).json({ message: 'Đây là email hiện tại của bạn' });
-  if (!User.isPlaceholderEmail(user.email)) {
+  // Chưa có email (tài khoản Zalo) -> không cần mật khẩu; đã có email -> phải nhập mật khẩu hiện tại
+  if (user.email && !User.isPlaceholderEmail(user.email)) {
     const ok = typeof req.body.currentPassword === 'string' && (await user.comparePassword(req.body.currentPassword));
     if (!ok) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
   }

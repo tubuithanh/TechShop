@@ -50,7 +50,7 @@ export default function AdminCustomersPage() {
             {customers.map((c) => (
               <tr key={c._id}>
                 <td className="p-3">{c.displayName}</td>
-                <td className="p-3">{c.email}</td>
+                <td className="p-3">{c.email || <span className="text-muted fst-italic">Chưa có email{c.zaloId ? ' (Zalo)' : ''}</span>}</td>
                 <td className="p-3">{c.phoneNumber}</td>
                 <td className="p-3">
                   <Badge bg={c.isActive ? 'success' : 'danger'}>

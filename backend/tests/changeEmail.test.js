@@ -11,18 +11,21 @@ const { registerUser } = require('./helpers');
 const auth = (req, token) => req.set('Authorization', `Bearer ${token}`);
 const tokenOf = (user) => generateAccessToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
 
-// Tài khoản giống lúc đăng nhập Zalo lần đầu: email tạm, mật khẩu ngẫu nhiên người dùng không biết
+// Tài khoản giống lúc đăng nhập Zalo lần đầu: KHÔNG có email, mật khẩu ngẫu nhiên người dùng không biết
 const zaloUser = (id = '8557963358561345173') =>
-  User.create({ displayName: 'Bui Tu', email: `zalo${id}@zalo.techshop.local`, zaloId: id, password: 'ngaunhien-khongbiet-123' });
+  User.create({ displayName: 'Bui Tu', zaloId: id, password: 'ngaunhien-khongbiet-123' });
 
 beforeEach(() => clearMailConfigCache());
 
-describe('Đổi email (tài khoản Zalo dùng email tạm)', () => {
+describe('Email của tài khoản Zalo (để trống, thêm sau bằng mã xác nhận)', () => {
   test('TC-106: Tài khoản Zalo thêm email thật bằng mã OTP, không cần mật khẩu; sau đó dùng được "Quên mật khẩu"', async () => {
     const user = await zaloUser();
     const token = tokenOf(user);
     const me = await auth(request(app).get('/api/auth/me'), token);
-    expect(me.body.user.hasPlaceholderEmail).toBe(true);
+    expect(me.body.user.email).toBeUndefined();
+    expect(me.body.user.hasEmail).toBe(false);
+    // Nhiều tài khoản Zalo cùng để trống email không bị coi là trùng
+    await zaloUser('999');
 
     const req1 = await auth(request(app).post('/api/auth/email/request-otp'), token).send({ email: '  Tu.Bui@Example.com ' });
     expect(req1.statusCode).toBe(200);
@@ -32,7 +35,7 @@ describe('Đổi email (tài khoản Zalo dùng email tạm)', () => {
     expect((await auth(request(app).post('/api/auth/email/verify'), token).send({ email: 'tu.bui@example.com', code: '000000' })).statusCode).toBe(400);
     const ok = await auth(request(app).post('/api/auth/email/verify'), token).send({ email: 'tu.bui@example.com', code });
     expect(ok.statusCode).toBe(200);
-    expect(ok.body.user).toMatchObject({ email: 'tu.bui@example.com', hasPlaceholderEmail: false, zaloId: '8557963358561345173' });
+    expect(ok.body.user).toMatchObject({ email: 'tu.bui@example.com', hasEmail: true, zaloId: '8557963358561345173' });
     // Mã chỉ dùng 1 lần
     expect((await auth(request(app).post('/api/auth/email/verify'), token).send({ email: 'tu.bui@example.com', code })).statusCode).toBe(400);
 
@@ -65,7 +68,7 @@ describe('Đổi email (tài khoản Zalo dùng email tạm)', () => {
     expect((await request(app).post('/api/auth/login').send({ email: 'moi@example.com', password: 'matkhau123' })).statusCode).toBe(200);
   });
 
-  test('TC-108: Không gửi email thông báo đơn hàng tới email tạm của tài khoản Zalo (khách có email thật vẫn nhận)', async () => {
+  test('TC-108: Không gửi email thông báo đơn hàng cho tài khoản Zalo chưa có email (khách có email vẫn nhận)', async () => {
     // Chế độ demo (chưa cấu hình gửi mail): mỗi email "gửi" được in ra log dạng "[MAIL DEMO] Tới: <email>"
     const logs = [];
     const spy = jest.spyOn(console, 'log').mockImplementation((...args) => logs.push(args.join(' ')));
@@ -78,6 +81,31 @@ describe('Đổi email (tài khoản Zalo dùng email tạm)', () => {
     spy.mockRestore();
     const sentTo = logs.join('\n');
     expect(sentTo).toContain('khachthat@example.com'); // đối chứng: cơ chế gửi vẫn chạy
-    expect(sentTo).not.toContain('zalo.techshop.local');
+    expect(sentTo.match(/Tới:/g)).toHaveLength(1); // chỉ 1 email, gửi cho khách có email
+  });
+
+  test('TC-109: Chuyển dữ liệu cũ: xóa email tạm zalo...@zalo.techshop.local, đổi chỉ số email; email thật vẫn không được trùng', async () => {
+    const { migrateUserEmails } = require('../utils/migrateUserEmails');
+    const col = User.collection;
+    // Dựng lại tình trạng cũ: chỉ số email_1 bắt buộc duy nhất + 2 tài khoản Zalo mang email tạm
+    await col.dropIndexes();
+    await col.createIndex({ email: 1 }, { unique: true, name: 'email_1' });
+    await col.insertMany([
+      { displayName: 'Zalo A', email: 'zalo111@zalo.techshop.local', zaloId: '111', password: 'x' },
+      { displayName: 'Zalo B', email: 'zalo222@zalo.techshop.local', zaloId: '222', password: 'x' },
+      { displayName: 'Thường', email: 'thuong@example.com', password: 'x' }
+    ]);
+
+    expect(await migrateUserEmails()).toEqual({ droppedOldIndex: true, clearedPlaceholders: 2 });
+    const users = await col.find().sort({ displayName: 1 }).toArray();
+    expect(users.map((u) => u.email)).toEqual(['thuong@example.com', undefined, undefined]);
+    expect(users.map((u) => u.zaloId)).toEqual([undefined, '111', '222']); // ID Zalo vẫn giữ
+    const names = (await col.indexes()).map((i) => i.name);
+    expect(names).toContain('email_unique_if_set');
+    expect(names).not.toContain('email_1');
+    // Email thật vẫn không được trùng
+    await expect(User.create({ displayName: 'Trùng', email: 'thuong@example.com', password: 'matkhau123' })).rejects.toThrow(/duplicate key/);
+    // Chạy lại không làm gì thêm
+    expect(await migrateUserEmails()).toEqual({ droppedOldIndex: false, clearedPlaceholders: 0 });
   });
 });

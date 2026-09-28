@@ -3,10 +3,10 @@ import { Alert, Button, Form, InputGroup, Spinner } from 'react-bootstrap';
 import api from '../services/api';
 
 // Ô email ở trang Thông tin tài khoản + form đổi email xác thực bằng mã OTP gửi tới email MỚI.
-// - Tài khoản Zalo (email tạm @zalo.techshop.local): hiện "Chưa có email", không cần mật khẩu
+// - Chưa có email (tài khoản đăng nhập bằng Zalo): hiện "Chưa có email", không cần mật khẩu
 // - Tài khoản thường: phải nhập mật khẩu hiện tại
 export default function ChangeEmailBox({ user, onChanged }) {
-  const placeholder = !!user?.hasPlaceholderEmail;
+  const placeholder = !user?.email; // chưa có email
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState('email'); // 'email' | 'code'
   const [email, setEmail] = useState('');
