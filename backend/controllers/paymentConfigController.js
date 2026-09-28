@@ -81,7 +81,7 @@ const updatePaymentConfig = asyncHandler(async (req, res) => {
   if (error) return res.status(400).json({ message: error });
   const doc = await PaymentConfig.findOneAndUpdate(
     {},
-    { ...mergeDoc(existing, values), updatedBy: req.account._id },
+    { $set: { ...mergeDoc(existing, values), updatedBy: req.account._id } }, // chỉ các trường VNPay, giữ nguyên cấu hình MoMo
     { new: true, upsert: true, setDefaultsOnInsert: true }
   ).lean();
   vnpay.clearPaymentConfigCache();

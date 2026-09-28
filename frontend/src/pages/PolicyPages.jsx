@@ -223,7 +223,8 @@ export function PaymentPolicyPage() {
       content: (
         <ul className="mb-0">
           <li><strong>Thanh toán khi nhận hàng (COD):</strong> tiền mặt hoặc chuyển khoản cho nhân viên giao hàng/nhân viên cửa hàng;</li>
-          <li><strong>Thanh toán online qua VNPay:</strong> thẻ ATM nội địa (có Internet Banking), thẻ quốc tế Visa/Mastercard/JCB, hoặc quét mã QR bằng ứng dụng ngân hàng.</li>
+          <li><strong>Thanh toán online qua VNPay:</strong> thẻ ATM nội địa (có Internet Banking), thẻ quốc tế Visa/Mastercard/JCB, hoặc quét mã QR bằng ứng dụng ngân hàng;</li>
+          <li><strong>Thanh toán qua ví MoMo:</strong> quét mã QR / mở ứng dụng MoMo, hoặc thẻ ATM, thẻ quốc tế ngay trên trang MoMo. Áp dụng cho đơn từ 1.000đ đến 50.000.000đ.</li>
         </ul>
       )
     },
@@ -245,12 +246,29 @@ export function PaymentPolicyPage() {
       )
     },
     {
+      id: 'momo',
+      title: 'Thanh toán qua ví MoMo',
+      content: (
+        <>
+          <ol>
+            <li>Chọn "Thanh toán qua ví MoMo" ở bước thanh toán và bấm "Đặt hàng";</li>
+            <li>Hệ thống chuyển sang trang MoMo: quét mã QR bằng ứng dụng MoMo (hoặc bấm mở ứng dụng trên điện thoại), hoặc chọn thẻ ATM / thẻ quốc tế;</li>
+            <li>Xác nhận thanh toán trong ứng dụng MoMo, Quý khách được đưa về trang kết quả của {shop}; đơn hàng chuyển sang "Đã thanh toán".</li>
+          </ol>
+          <p className="mb-0">
+            Giống VNPay: giao dịch chưa thành công có thể <strong>thanh toán lại</strong> trong trang chi tiết đơn hàng; đơn chưa thanh
+            toán sẽ chưa được xử lý.
+          </p>
+        </>
+      )
+    },
+    {
       id: 'an-toan',
       title: 'An toàn thanh toán',
       content: (
         <ul className="mb-0">
-          <li>Thông tin thẻ được nhập trực tiếp trên cổng thanh toán VNPay; {shop} <strong>không lưu</strong> số thẻ, mã CVV hay mật khẩu ngân hàng;</li>
-          <li>Mọi kết quả thanh toán được kiểm tra chữ ký điện tử của VNPay và đối chiếu đúng số tiền trước khi ghi nhận;</li>
+          <li>Thông tin thẻ / ví được nhập trực tiếp trên cổng thanh toán VNPay hoặc MoMo; {shop} <strong>không lưu</strong> số thẻ, mã CVV, mật khẩu ngân hàng hay mật khẩu ví;</li>
+          <li>Mọi kết quả thanh toán được kiểm tra chữ ký điện tử của VNPay / MoMo và đối chiếu đúng số tiền trước khi ghi nhận;</li>
           <li>{shop} không bao giờ yêu cầu Quý khách cung cấp mã OTP qua điện thoại, tin nhắn hay mạng xã hội.</li>
         </ul>
       )
@@ -266,7 +284,7 @@ export function PaymentPolicyPage() {
       )
     }
   ];
-  return <LegalPage title="Chính sách thanh toán" subtitle="Thanh toán khi nhận hàng hoặc online qua VNPay" effectiveDate={EFFECTIVE} updatedDate={EFFECTIVE} sections={sections} related={{ to: '/chinh-sach-giao-hang', label: 'Chính sách giao hàng' }} />;
+  return <LegalPage title="Chính sách thanh toán" subtitle="Thanh toán khi nhận hàng hoặc online qua VNPay, ví MoMo" effectiveDate={EFFECTIVE} updatedDate={EFFECTIVE} sections={sections} related={{ to: '/chinh-sach-giao-hang', label: 'Chính sách giao hàng' }} />;
 }
 
 export function BuyingGuidePage() {

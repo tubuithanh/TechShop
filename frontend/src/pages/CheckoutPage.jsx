@@ -58,16 +58,13 @@ export default function CheckoutPage() {
   }, [user]);
   const [deliveryMethod, setDeliveryMethod] = useState('home_delivery');
   const [paymentMode, setPaymentMode] = useState('cod');
-  // null = đang kiểm tra; false = máy chủ chưa cấu hình VNPay -> ẩn lựa chọn này
-  const [vnpayEnabled, setVnpayEnabled] = useState(null);
+  // Cổng thanh toán online đã cấu hình trên máy chủ (cổng chưa cấu hình thì ẩn lựa chọn)
+  const [methods, setMethods] = useState({ vnpay: false, momo: false, momoLimits: { min: 1000, max: 50000000 } });
   useEffect(() => {
     paymentService
-      .getVnpayStatus()
-      .then((enabled) => {
-        setVnpayEnabled(enabled);
-        if (!enabled) setPaymentMode((m) => (m === 'vnpay' ? 'cod' : m));
-      })
-      .catch(() => setVnpayEnabled(false));
+      .getMethods()
+      .then(setMethods)
+      .catch(() => setMethods((m) => ({ ...m, vnpay: false, momo: false })));
   }, []);
   const [voucherCode, setVoucherCode] = useState('');
   const [discount, setDiscount] = useState(0);
@@ -90,6 +87,14 @@ export default function CheckoutPage() {
   const qualifiesFreeShipping = freeShippingThreshold > 0 && totalAmount >= freeShippingThreshold;
   const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
   const grandTotal = Math.max(totalAmount + shippingFee - discount, 0);
+  // MoMo giới hạn số tiền mỗi giao dịch (1.000đ - 50.000.000đ)
+  const momoAllowed = grandTotal >= methods.momoLimits.min && grandTotal <= methods.momoLimits.max;
+  // Cổng đang chọn không còn dùng được (chưa cấu hình / vượt giới hạn) -> quay về COD
+  useEffect(() => {
+    if ((paymentMode === 'vnpay' && !methods.vnpay) || (paymentMode === 'momo' && (!methods.momo || !momoAllowed))) {
+      setPaymentMode('cod');
+    }
+  }, [paymentMode, methods, momoAllowed]);
 
   const handleVoucherCodeChange = (value) => {
     setVoucherCode(value);
@@ -136,14 +141,14 @@ export default function CheckoutPage() {
         voucherCode: discount > 0 ? voucherCode : undefined
       });
       await refreshCart();
-      if (paymentMode === 'vnpay') {
+      if (paymentMode === 'vnpay' || paymentMode === 'momo') {
         try {
-          await paymentService.startVnpay(order._id); // chuyển sang cổng VNPay
+          await paymentService.start(paymentMode, order._id); // chuyển sang cổng thanh toán
           return;
         } catch (err) {
           // Đơn đã tạo nhưng chưa mở được cổng thanh toán -> vào trang đơn hàng để thanh toán lại sau
           navigate(`/account/orders/${order._id}`, {
-            state: { justPlaced: true, paymentError: err.response?.data?.message || 'Không mở được cổng VNPay' }
+            state: { justPlaced: true, paymentError: err.response?.data?.message || `Không mở được cổng ${paymentMode === 'momo' ? 'MoMo' : 'VNPay'}` }
           });
           return;
         }
@@ -294,7 +299,7 @@ export default function CheckoutPage() {
               checked={paymentMode === 'cod'}
               onChange={() => setPaymentMode('cod')}
             />
-            {vnpayEnabled && (
+            {methods.vnpay && (
               <Form.Check
                 type="radio"
                 id="payment-vnpay"
@@ -303,6 +308,25 @@ export default function CheckoutPage() {
                 checked={paymentMode === 'vnpay'}
                 onChange={() => setPaymentMode('vnpay')}
               />
+            )}
+            {methods.momo && (
+              <>
+                <Form.Check
+                  type="radio"
+                  id="payment-momo"
+                  name="paymentMode"
+                  label="Thanh toán qua ví MoMo (ví MoMo, thẻ ATM, Visa/Master)"
+                  checked={paymentMode === 'momo'}
+                  disabled={!momoAllowed}
+                  onChange={() => setPaymentMode('momo')}
+                />
+                {!momoAllowed && (
+                  <div className="text-muted ms-4" style={{ fontSize: 12 }}>
+                    MoMo chỉ nhận đơn từ {methods.momoLimits.min.toLocaleString('vi-VN')}đ đến{' '}
+                    {methods.momoLimits.max.toLocaleString('vi-VN')}đ
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Col>

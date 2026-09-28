@@ -130,7 +130,8 @@ export default function App() {
 
                 {/* Không bắt đăng nhập: phiên có thể đã hết hạn trong lúc khách ở trang VNPay; kết quả được
                     backend xác minh bằng chữ ký giao dịch nên không cần token */}
-                <Route path="/payment/vnpay-return" element={<StorefrontLayout><PaymentReturnPage /></StorefrontLayout>} />
+                <Route path="/payment/vnpay-return" element={<StorefrontLayout><PaymentReturnPage gateway="vnpay" /></StorefrontLayout>} />
+                <Route path="/payment/momo-return" element={<StorefrontLayout><PaymentReturnPage gateway="momo" /></StorefrontLayout>} />
 
                 {/* Trung tâm tài khoản - có sidebar chung (mục 1.1.7) */}
                 <Route

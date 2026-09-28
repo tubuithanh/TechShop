@@ -17,19 +17,30 @@ const VNPAY_MESSAGES = {
   75: 'Ngân hàng thanh toán đang bảo trì'
 };
 
-// Trang VNPay chuyển về sau khi khách thanh toán (VNP_RETURN_URL). Kết quả chỉ được tin sau khi
-// backend kiểm tra chữ ký - không dựa vào tham số trên URL.
-export default function PaymentReturnPage() {
+// Mô tả một số mã lỗi MoMo thường gặp (resultCode)
+const MOMO_MESSAGES = {
+  1001: 'Tài khoản không đủ số dư',
+  1003: 'Giao dịch đã bị hủy',
+  1004: 'Số tiền vượt hạn mức thanh toán',
+  1005: 'Link / mã QR thanh toán đã hết hạn',
+  1006: 'Bạn đã từ chối xác nhận thanh toán',
+  1007: 'Tài khoản MoMo đang bị tạm khóa',
+  1017: 'Giao dịch đã bị hủy'
+};
+
+// Trang cổng thanh toán chuyển về sau khi khách thanh toán (VNPay: /payment/vnpay-return, MoMo:
+// /payment/momo-return). Kết quả chỉ được tin sau khi backend kiểm tra chữ ký - không dựa vào tham số trên URL.
+export default function PaymentReturnPage({ gateway = 'vnpay' }) {
   const { search } = useLocation();
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     paymentService
-      .verifyVnpayReturn(search)
+      .verifyReturn(gateway, search)
       .then(setResult)
       .catch((err) => setError(err.response?.data?.message || 'Không xác minh được kết quả thanh toán'));
-  }, [search]);
+  }, [gateway, search]);
 
   if (!result && !error) {
     return (
@@ -53,7 +64,8 @@ export default function PaymentReturnPage() {
               {!success && (
                 <>
                   <br />
-                  {VNPAY_MESSAGES[result.responseCode] || 'Giao dịch không thành công'}. Bạn có thể thanh toán lại trong trang đơn hàng.
+                  {(gateway === 'momo' ? MOMO_MESSAGES : VNPAY_MESSAGES)[result.responseCode] || result.message || 'Giao dịch không thành công'}.
+                  Bạn có thể thanh toán lại trong trang đơn hàng.
                 </>
               )}
             </p>

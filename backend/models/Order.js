@@ -93,3 +93,6 @@ orderSchema.plugin(searchablePlugin, {
 });
 
 module.exports = mongoose.model('Order', orderSchema);
+// Cổng thanh toán online: đơn phải thanh toán xong mới được xử lý tiếp; quá hạn chưa thanh toán thì tự hủy
+module.exports.ONLINE_PAYMENT_MODES = ['vnpay', 'momo'];
+module.exports.PAYMENT_LABELS = { cod: 'COD', vnpay: 'VNPay', momo: 'MoMo', bank_transfer: 'Chuyển khoản' };

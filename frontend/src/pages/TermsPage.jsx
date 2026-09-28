@@ -155,9 +155,13 @@ export default function TermsPage() {
               QR qua ứng dụng ngân hàng. Việc nhập thông tin thẻ được thực hiện trên cổng thanh toán của VNPay; {shop}{' '}
               <strong>không lưu trữ</strong> thông tin thẻ của Quý khách.
             </li>
+            <li>
+              <strong>Thanh toán qua ví MoMo:</strong> quét mã QR / mở ứng dụng MoMo, hoặc thẻ ATM, thẻ quốc tế trên trang
+              MoMo (đơn từ 1.000đ đến 50.000.000đ). {shop} <strong>không lưu trữ</strong> thông tin ví hay thẻ của Quý khách.
+            </li>
           </ul>
           <p>
-            Với đơn hàng chọn VNPay, đơn chỉ được xác nhận và chuẩn bị hàng sau khi giao dịch thanh toán thành công.
+            Với đơn hàng chọn VNPay hoặc MoMo, đơn chỉ được xác nhận và chuẩn bị hàng sau khi giao dịch thanh toán thành công.
             Nếu thanh toán chưa thành công, Quý khách có thể thanh toán lại trong trang chi tiết đơn hàng hoặc hủy đơn.
           </p>
           <p className="mb-0">

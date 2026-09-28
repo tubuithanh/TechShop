@@ -44,6 +44,19 @@ export const settingService = {
     const { data } = await api.delete(`/settings/themes/${id}`);
     return data;
   },
+  // Cấu hình thanh toán MoMo (chỉ admin) - không bao giờ trả về Secret Key
+  async getMomoConfig() {
+    const { data } = await api.get('/settings/payment/momo');
+    return data.data;
+  },
+  async updateMomoConfig(payload) {
+    const { data } = await api.put('/settings/payment/momo', payload);
+    return data;
+  },
+  async testMomoConfig(payload) {
+    const { data } = await api.post('/settings/payment/momo/test', payload);
+    return data;
+  },
   // Cấu hình thanh toán VNPay (chỉ admin) - không bao giờ trả về Secret Key
   async getPaymentConfig() {
     const { data } = await api.get('/settings/payment');

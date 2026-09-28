@@ -387,10 +387,11 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác, bạn không có quyền xử lý' });
   }
 
-  // Đơn chọn VNPay phải thanh toán xong mới được xác nhận/giao - nếu không có thể giao hàng khi chưa nhận
-  // được tiền. Đơn chưa thanh toán chỉ có thể hủy (khách/admin) hoặc chờ khách thanh toán lại.
-  if (order.paymentMode === 'vnpay' && order.paymentStatus !== 'paid' && !RESTOCK_STATUSES.includes(status)) {
-    return res.status(400).json({ message: 'Đơn thanh toán qua VNPay chưa được thanh toán, chưa thể xử lý tiếp' });
+  // Đơn thanh toán online (VNPay/MoMo) phải thanh toán xong mới được xác nhận/giao - nếu không có thể giao hàng
+  // khi chưa nhận được tiền. Đơn chưa thanh toán chỉ có thể hủy (khách/admin) hoặc chờ khách thanh toán lại.
+  if (Order.ONLINE_PAYMENT_MODES.includes(order.paymentMode) && order.paymentStatus !== 'paid' && !RESTOCK_STATUSES.includes(status)) {
+    const label = Order.PAYMENT_LABELS[order.paymentMode];
+    return res.status(400).json({ message: `Đơn thanh toán qua ${label} chưa được thanh toán, chưa thể xử lý tiếp` });
   }
 
   const allowedNext = ORDER_STATUS_TRANSITIONS[order.status] || [];

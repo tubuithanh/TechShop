@@ -10,6 +10,7 @@ const {
   disconnectGmail
 } = require('../controllers/mailConfigController');
 const { getPaymentConfig, updatePaymentConfig, testPaymentConfig } = require('../controllers/paymentConfigController');
+const { getMomoConfig, updateMomoConfig, testMomoConfig } = require('../controllers/momoConfigController');
 const {
   getThemeTemplates,
   createThemeTemplate,
@@ -31,6 +32,10 @@ router.get('/mail/gmail/callback', gmailCallback);
 router.get('/payment', protect, authorize('admin'), getPaymentConfig);
 router.put('/payment', protect, authorize('admin'), updatePaymentConfig);
 router.post('/payment/test', protect, authorize('admin'), testPaymentConfig);
+// Cấu hình thanh toán MoMo (có Secret Key) - CHỈ admin
+router.get('/payment/momo', protect, authorize('admin'), getMomoConfig);
+router.put('/payment/momo', protect, authorize('admin'), updateMomoConfig);
+router.post('/payment/momo/test', protect, authorize('admin'), testMomoConfig);
 
 // Template màu sắc giao diện - CHỈ admin
 router.get('/themes', protect, authorize('admin'), getThemeTemplates);

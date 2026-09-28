@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, InputGroup, Nav, Badge, Modal, Spinner } from 'react-bootstrap';
 import {
   Gear, TelephoneFill, GridFill, Truck, Search, Tools,
-  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill, PaletteFill, ShieldLockFill, LayoutTextWindowReverse
+  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill, PaletteFill, ShieldLockFill, LayoutTextWindowReverse, Wallet2
 } from 'react-bootstrap-icons';
 import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
 import VnpaySettingsPanel from '../../components/admin/VnpaySettingsPanel';
+import MomoSettingsPanel from '../../components/admin/MomoSettingsPanel';
 import ThemeSettingsPanel from '../../components/admin/ThemeSettingsPanel';
 import SecuritySettingsPanel from '../../components/admin/SecuritySettingsPanel';
 import FooterSettingsPanel from '../../components/admin/FooterSettingsPanel';
@@ -25,7 +26,8 @@ const TABS = [
   { key: 'security', label: 'Bảo mật', icon: ShieldLockFill },
   { key: 'audit', label: 'Nhật ký thao tác', icon: JournalText },
   { key: 'email', label: 'Cấu hình gửi email', icon: EnvelopeFill },
-  { key: 'payment', label: 'Cấu hình thanh toán VNPay', icon: CreditCard2FrontFill }
+  { key: 'payment', label: 'Cấu hình thanh toán VNPay', icon: CreditCard2FrontFill },
+  { key: 'momo', label: 'Cấu hình thanh toán MoMo', icon: Wallet2 }
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -407,6 +409,8 @@ export default function AdminSettingsPage() {
 
                 {activeTab === 'payment' && <VnpaySettingsPanel />}
 
+                {activeTab === 'momo' && <MomoSettingsPanel />}
+
                 {activeTab === 'security' && <SecuritySettingsPanel />}
 
                 {activeTab === 'footer' && (
@@ -478,7 +482,7 @@ export default function AdminSettingsPage() {
               </Card.Body>
             </Card>
 
-            <div className={`d-flex gap-2 mt-3 ${['email', 'payment', 'security'].includes(activeTab) ? 'd-none' : ''}`}>
+            <div className={`d-flex gap-2 mt-3 ${['email', 'payment', 'momo', 'security'].includes(activeTab) ? 'd-none' : ''}`}>
               <Button type="submit" variant="primary" disabled={saving || !isDirty}>
                 {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
               </Button>

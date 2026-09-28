@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Order = require('../models/Order');
 const Setting = require('../models/Setting');
 const { sendMail } = require('./mailer');
 const { layout, infoTable, orderItemsTable, plain, esc, vnd } = require('./emailTemplates');
@@ -65,7 +66,7 @@ function emailOrderPlaced(order) {
     const [user, shop] = await Promise.all([recipient(order.userId), shopInfo()]);
     if (!user) return;
     const url = `${clientUrl()}/account/orders/${order._id}`;
-    const waitingPayment = order.paymentMode === 'vnpay' && order.paymentStatus !== 'paid';
+    const waitingPayment = Order.ONLINE_PAYMENT_MODES.includes(order.paymentMode) && order.paymentStatus !== 'paid';
     await sendMail({
       to: user.email,
       subject: `Xác nhận đơn hàng ${order.orderCode} - ${shop.name}`,

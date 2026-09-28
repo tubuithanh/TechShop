@@ -57,7 +57,7 @@ export default function PrivacyPage() {
               </tr>
               <tr>
                 <td>Thông tin thanh toán</td>
-                <td>Mã giao dịch, ngân hàng, kết quả giao dịch do VNPay trả về. <strong>{shop} không thu thập và không lưu số thẻ, mã CVV hay mật khẩu ngân hàng.</strong></td>
+                <td>Mã giao dịch, ngân hàng / hình thức thanh toán, kết quả giao dịch do VNPay hoặc MoMo trả về. <strong>{shop} không thu thập và không lưu số thẻ, mã CVV, mật khẩu ngân hàng hay mật khẩu ví.</strong></td>
                 <td>Khi thanh toán online</td>
               </tr>
               <tr>
@@ -107,7 +107,7 @@ export default function PrivacyPage() {
           <ul>
             <li><strong>Chi nhánh và nhân viên {shop}</strong> được phân công xử lý đơn hàng của Quý khách (nhân viên chỉ truy cập được dữ liệu thuộc phạm vi công việc và chi nhánh của mình);</li>
             <li><strong>Đơn vị vận chuyển:</strong> họ tên, số điện thoại, địa chỉ nhận hàng để giao hàng;</li>
-            <li><strong>Cổng thanh toán VNPay:</strong> mã đơn hàng và số tiền để thực hiện giao dịch;</li>
+            <li><strong>Cổng thanh toán VNPay, ví điện tử MoMo:</strong> mã đơn hàng và số tiền để thực hiện giao dịch;</li>
             <li><strong>Nhà cung cấp hạ tầng</strong> (máy chủ, cơ sở dữ liệu, lưu trữ hình ảnh) hoạt động theo thỏa thuận bảo mật với {shop};</li>
             <li><strong>Cơ quan nhà nước có thẩm quyền</strong> khi có yêu cầu theo quy định của pháp luật.</li>
           </ul>
@@ -140,7 +140,7 @@ export default function PrivacyPage() {
           <li>Dữ liệu truyền giữa trình duyệt và máy chủ được mã hóa qua giao thức HTTPS;</li>
           <li>Mật khẩu được mã hóa một chiều (bcrypt) trước khi lưu; mã OTP chỉ lưu dạng mã hóa và tự động hết hạn;</li>
           <li>Giới hạn số lần đăng nhập sai để chống dò mật khẩu;</li>
-          <li>Kết quả thanh toán được kiểm tra chữ ký điện tử của VNPay trước khi ghi nhận;</li>
+          <li>Kết quả thanh toán được kiểm tra chữ ký điện tử của VNPay / MoMo trước khi ghi nhận;</li>
           <li>Nhân viên được phân quyền theo chức năng và chi nhánh; mọi thao tác thêm, sửa, xóa trong trang quản trị đều được ghi nhật ký.</li>
         </ul>
       )

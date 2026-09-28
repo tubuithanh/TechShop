@@ -6,7 +6,7 @@ Mô phỏng mô hình kinh doanh và chức năng cốt lõi của **thegioidido
 - **Đa chi nhánh thực sự:** mỗi cửa hàng có tồn kho riêng, tính theo **từng phiên bản** sản phẩm (màu × dung lượng).
 - **Tách biệt tài khoản:** collection `users` (khách hàng) tách riêng với `admins` (quản trị/nhân viên).
 - **Phân quyền chi tiết** cho nhân viên theo nhóm quyền, có giới hạn theo chi nhánh.
-- **Cấu hình không cần sửa code:** email, thanh toán VNPay, màu sắc giao diện, chân trang, bảo mật, nhật ký... đều chỉnh trong trang quản trị.
+- **Cấu hình không cần sửa code:** email, thanh toán VNPay và MoMo, màu sắc giao diện, chân trang, bảo mật, nhật ký... đều chỉnh trong trang quản trị.
 
 **Bản demo trực tuyến (Render + MongoDB Atlas):**
 - Website: https://frontend-i3sp.onrender.com
@@ -63,16 +63,18 @@ Mở file `.env` và chỉnh `MONGO_URI` trỏ đến MongoDB của bạn nếu 
 |---|---|---|
 | Gửi email (OTP, thông báo đơn hàng...) | Tab **Cấu hình gửi email**: SMTP, Resend, Gmail API (OAuth2), có nút gửi thử | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` hoặc `RESEND_API_KEY`, cùng `MAIL_FROM` |
 | Thanh toán VNPay | Tab **Cấu hình thanh toán VNPay**: Terminal ID, Secret Key, có nút kiểm tra kết nối | `VNP_TMN_CODE`, `VNP_HASH_SECRET`, `VNP_URL`, `VNP_RETURN_URL` |
+| Thanh toán MoMo | Tab **Cấu hình thanh toán MoMo**: Partner Code, Access Key, Secret Key, có nút kiểm tra kết nối và nút điền **bộ khóa thử công khai** của MoMo | `MOMO_PARTNER_CODE`, `MOMO_ACCESS_KEY`, `MOMO_SECRET_KEY`, `MOMO_ENDPOINT`, `MOMO_REDIRECT_URL`, `MOMO_IPN_URL` |
 | Lưu ảnh tải lên | — | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` |
 | Đăng nhập bằng Zalo | — | `ZALO_APP_ID`, `ZALO_APP_SECRET`, `ZALO_REDIRECT_URI`, `HTTPS_PORT` |
 | Khóa mã hóa bí mật (mật khẩu SMTP, API key, Secret Key VNPay) | — | `SETTINGS_SECRET` (bỏ trống thì dùng `JWT_ACCESS_SECRET`) |
 | Giới hạn tần suất | Tab **Bảo mật**: bật/tắt và số lần cho phép | `API_RATE_LIMIT` (mặc định 1000), `RATE_LIMIT_DISABLED=true` để tắt hẳn |
-| Thời gian chờ thanh toán VNPay | — | `VNPAY_PAYMENT_TIMEOUT_MINUTES` (mặc định 30) |
+| Thời gian chờ thanh toán online (VNPay, MoMo) | — | `VNPAY_PAYMENT_TIMEOUT_MINUTES` (mặc định 30) |
 
 Lưu ý:
 - **Chưa cấu hình gửi email** thì chạy chế độ demo: mã OTP hiện ngay trên màn hình. Kiểm tra gửi thật bằng `node scripts/testEmail.js <email-nhận>`.
 - **Chưa cấu hình Cloudinary** thì ảnh lưu vào `backend/uploads`. Trên Render ổ đĩa không bền (**mất khi deploy lại hoặc khởi động lại**), nên production cần Cloudinary.
 - **VNPay:** đăng ký sandbox miễn phí tại https://sandbox.vnpayment.vn/devreg; khai báo IPN URL trên VNPay là `<backend>/api/payments/vnpay/ipn`. Chưa cấu hình thì trang thanh toán tự ẩn lựa chọn VNPay.
+- **MoMo:** môi trường thử nghiệm `https://test-payment.momo.vn` dùng được ngay với bộ khóa thử công khai trong code mẫu của MoMo (tab MoMo có nút điền sẵn). IPN URL được gửi kèm mỗi giao dịch (mặc định `<backend>/api/payments/momo/ipn`), không cần khai báo trên trang MoMo. MoMo chỉ nhận đơn **từ 1.000đ đến 50.000.000đ**; đơn ngoài khoảng này khách không chọn được MoMo.
 
 ```
 npm run seed
@@ -116,10 +118,10 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có **110 test case** (23 bộ test), bao gồm:
+Có **115 test case** (24 bộ test), bao gồm:
 - tài khoản: đăng ký/đăng nhập, quên mật khẩu, đổi mật khẩu (đăng xuất thiết bị khác), đăng nhập Zalo, thêm/đổi email có xác thực;
 - mua hàng: giỏ hàng (cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, tự hủy đơn VNPay quá hạn;
-- thanh toán VNPay: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, cấu hình trong trang quản trị;
+- thanh toán VNPay và MoMo: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, giới hạn số tiền của MoMo, cấu hình trong trang quản trị;
 - quản trị: giới hạn theo chi nhánh, tìm kiếm không dấu, nhật ký thao tác, xóa bài viết hàng loạt;
 - cấu hình: email, VNPay, màu sắc giao diện, chân trang, bảo mật (bật/tắt và số lần giới hạn);
 - dữ liệu: tỉnh/thành - phường/xã, nhập sản phẩm (thegioididong.com) và tin tức (tinhte.vn) từ link;
@@ -153,7 +155,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 | Collection | Vai trò |
 |---|---|
 | `carts` | Giỏ hàng (mỗi dòng là 1 phiên bản) |
-| `orders` | Đơn hàng (gắn chi nhánh; mỗi dòng hàng ghi rõ phiên bản đã mua; lịch sử trạng thái; thông tin thanh toán VNPay) |
+| `orders` | Đơn hàng (gắn chi nhánh; mỗi dòng hàng ghi rõ phiên bản đã mua; lịch sử trạng thái; thông tin thanh toán online: mã giao dịch từng lần thử, mã giao dịch của cổng, hình thức/ngân hàng, thời điểm thanh toán) |
 | `vouchers` | Mã giảm giá (giới hạn lượt dùng, lượt dùng mỗi khách) |
 | `warranties` | Phiếu bảo hành |
 | `reviews`, `questions` | Đánh giá (có ảnh, nhãn "Đã mua hàng", phản hồi của shop); hỏi đáp sản phẩm |
@@ -179,7 +181,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 |---|---|
 | `settings` | Cấu hình chung (1 bản ghi): thông tin website, liên hệ, phân trang, phí vận chuyển, SEO, bảo trì, **màu sắc giao diện** (`theme`), **chân trang** (`footer`), số ngày lưu nhật ký. Trạng thái và số lần giới hạn tần suất (`rateLimitEnabled`, `rateLimits`) **không trả về ở API công khai** |
 | `mail_configs` | Cấu hình gửi email; mật khẩu SMTP, API key, Gmail OAuth lưu **đã mã hóa** (AES-256-GCM) |
-| `payment_configs` | Cấu hình VNPay; Secret Key lưu **đã mã hóa** |
+| `payment_configs` | Cấu hình VNPay và MoMo (1 bản ghi, 2 tab riêng); Secret Key của cả 2 cổng lưu **đã mã hóa** |
 | `theme_templates` | Template màu sắc giao diện (có sẵn: Mặc định, Giáng sinh, Tết, Mùa thu; admin lưu thêm) |
 | `audit_logs` | Nhật ký thao tác quản trị (dữ liệu nhạy cảm như mật khẩu, token được che trước khi ghi) |
 
@@ -214,12 +216,12 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
   - giỏ hàng tự cảnh báo dòng hàng **ngừng bán** hoặc **không đủ hàng** ("Chỉ còn N sản phẩm") và khóa nút thanh toán cho tới khi khách điều chỉnh;
   - **chọn nhanh địa chỉ trong sổ địa chỉ** (địa chỉ mặc định được chọn sẵn) hoặc "Giao đến địa chỉ khác";
   - ô **Tỉnh/Thành phố** + ô **Phường/Xã có gợi ý** theo đúng tỉnh đang chọn, gõ không dấu vẫn ra (dùng ở đăng ký, thanh toán, sổ địa chỉ);
-  - **thanh toán online qua VNPay** (thẻ ATM, Visa/Master, QR):
-    - kiểm tra chữ ký và số tiền của mọi kết quả VNPay gửi về, nhận kết quả qua cả trang trả về và IPN (ghi nhận 1 lần, không trùng);
+  - **thanh toán online qua VNPay** (thẻ ATM, Visa/Master, QR) hoặc **ví MoMo** (ví MoMo quét QR / mở app, thẻ ATM, Visa/Master/JCB) - 2 cổng dùng chung 1 luồng xử lý:
+    - kiểm tra chữ ký (VNPay: HMAC-SHA512, MoMo: HMAC-SHA256) và số tiền của mọi kết quả gửi về, nhận kết quả qua cả trang trả về và IPN (ghi nhận 1 lần, không trùng);
     - thanh toán lại khi thất bại; khách trả tiền ở lần thử cũ (tab cũ) vẫn được ghi nhận đúng đơn;
-    - **đơn quá 30 phút chưa thanh toán tự hủy** và trả lại tồn kho; không tạo link thanh toán mới cho đơn sắp hết hạn;
+    - **đơn quá 30 phút chưa thanh toán tự hủy** và trả lại tồn kho; không tạo link thanh toán mới cho đơn sắp hết hạn; khách lỡ trả tiền sau khi đơn đã hủy thì đơn chuyển "đã hoàn tiền";
     - hủy đơn đã thanh toán thì chuyển "đã hoàn tiền" (mô phỏng);
-    - chưa cấu hình VNPay thì trang thanh toán tự ẩn lựa chọn này.
+    - cổng nào chưa cấu hình thì trang thanh toán tự ẩn lựa chọn đó; đơn ngoài giới hạn 1.000đ – 50.000.000đ không chọn được MoMo.
 - Sổ địa chỉ, danh sách yêu thích — mục 1.1.7
 - Đánh giá (kèm tối đa 3 ảnh) và hỏi đáp (Q&A) sản phẩm; khách **sửa lại được đánh giá của mình** (số sao, nội dung, ảnh - hiện nhãn "đã chỉnh sửa") — mục 1.1.8
 - **Trang khuyến mãi** công khai (sao chép mã) — mục 1.1.9
@@ -240,7 +242,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
   - **tải ảnh lên** cho sản phẩm và từng phiên bản (Cloudinary nếu đã cấu hình, nếu không thì lưu trên máy chủ);
   - **nhập nhanh từ link thegioididong.com**: tự điền tên, thương hiệu, danh mục, các màu kèm giá, thông số (ghép vào mẫu của danh mục) và **tải ảnh về kho ảnh của website**; không tự lưu - admin kiểm tra rồi mới lưu. Nếu máy chủ bị trang nguồn chặn: dán mã nguồn trang (Ctrl+U) để nhập.
 - **Quản lý tồn kho** theo chi nhánh và phiên bản, cảnh báo sắp hết hàng
-- Quản lý đơn hàng theo luồng trạng thái (chặn nhảy cóc trạng thái; đơn VNPay chưa thanh toán không được xác nhận/giao, chỉ được hủy) — mục 1.2.2
+- Quản lý đơn hàng theo luồng trạng thái (chặn nhảy cóc trạng thái; đơn VNPay/MoMo chưa thanh toán không được xác nhận/giao, chỉ được hủy), lọc theo phương thức thanh toán — mục 1.2.2
 - **Quản lý khách hàng**: tìm kiếm, khóa/mở tài khoản (hiện rõ khách Zalo chưa có email) — mục 1.2.3
 - **Quản lý nhân viên và nhóm quyền** — mục 1.2.4:
   - phân quyền chi tiết theo từng chức năng;
@@ -267,7 +269,8 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
   - **Bảo mật**: bật/tắt chống lạm dụng & tấn công dồn dập (mặc định bật, có mô tả ảnh hưởng khi bật/tắt) và **sửa số lần cho phép** của từng nhóm;
   - **Nhật ký thao tác**: số ngày lưu nhật ký;
   - **Cấu hình gửi email**: SMTP / Resend / Gmail API, gửi thử;
-  - **Cấu hình thanh toán VNPay**: Terminal ID, Secret Key (mã hóa), kiểm tra kết nối, hiện sẵn IPN URL.
+  - **Cấu hình thanh toán VNPay**: Terminal ID, Secret Key (mã hóa), kiểm tra kết nối, hiện sẵn IPN URL;
+  - **Cấu hình thanh toán MoMo**: Partner Code, Access Key, Secret Key (mã hóa), kiểm tra kết nối, nút điền bộ khóa thử công khai.
 
 **Kỹ thuật nổi bật:**
 - Bảo mật:
@@ -276,11 +279,11 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
   - **giới hạn tần suất theo IP** (toàn API, đăng nhập, OTP, quên mật khẩu, đặt hàng, đánh giá, tải ảnh) - bật/tắt và chỉnh số lần trong trang quản trị;
   - giới hạn phân trang (tối đa 200 bản ghi/trang), chặn tham số lạ (`limit[$gt]=...`);
   - mã hóa AES-256-GCM cho các bí mật admin nhập (không bao giờ trả về trình duyệt);
-  - chữ ký HMAC-SHA512 cho VNPay; so sánh chữ ký an toàn thời gian (`timingSafeEqual`);
+  - chữ ký HMAC-SHA512 cho VNPay, HMAC-SHA256 cho MoMo; so sánh chữ ký an toàn thời gian (`timingSafeEqual`);
   - nhập dữ liệu từ link chỉ chấp nhận đúng tên miền nguồn, không đi theo chuyển hướng ra ngoài, kiểm tra ảnh theo nội dung file; nội dung bài viết lưu dạng văn bản (không chèn HTML) nên không bị chèn mã độc.
 - Tồn kho: cập nhật nguyên tử theo phiên bản và chi nhánh.
 - Tốc độ lọc/sắp xếp: số liệu thông số và giá thực trả được tính sẵn khi lưu (`specNumbers`, `effectivePrice`).
-- **Tác vụ nền** (chạy trong tiến trình máy chủ): tự hủy đơn VNPay quá hạn (mỗi 5 phút), dọn nhật ký quá hạn lưu (mỗi giờ).
+- **Tác vụ nền** (chạy trong tiến trình máy chủ): tự hủy đơn VNPay/MoMo quá hạn thanh toán (mỗi 5 phút), dọn nhật ký quá hạn lưu (mỗi giờ).
 - **Tự chuyển đổi dữ liệu khi khởi động** (chạy lại nhiều lần vẫn an toàn): nạp tỉnh/phường, xóa email tạm của tài khoản Zalo cũ và đổi chỉ số email.
 - Cursor-based pagination, Socket.io real-time, kiến trúc RESTful chia theo tầng rõ ràng.
 
@@ -315,14 +318,15 @@ Các việc sau **không cần chạy script** - máy chủ tự làm khi khởi
 
 ## Còn thiếu so với tài liệu phân tích đầy đủ (chưa triển khai trong bản demo này)
 
-- Ví MoMo (VNPay đã tích hợp)
-- Gọi API hoàn tiền thật của VNPay (hiện chỉ chuyển trạng thái "đã hoàn tiền")
+- Gọi API hoàn tiền thật của VNPay / MoMo (hiện chỉ chuyển trạng thái "đã hoàn tiền")
 - Tải ảnh lên cho yêu cầu bảo hành (vẫn lưu ảnh dạng base64 trong dữ liệu)
 - Chatbot tư vấn sản phẩm tự động (mục 1.1.22)
 - Gamification / vòng quay may mắn (mục 1.1.19)
 - Cache Redis, unit test Frontend (React Testing Library)
 - Xác thực hai yếu tố 2FA, quản lý phiên đăng nhập nhiều thiết bị (mục 1.1.21 — nâng cao)
 - Header bảo mật (helmet), lọc NoSQL injection tập trung
+
+**Thanh toán thử MoMo (sandbox):** dùng bộ khóa thử công khai (tab MoMo → "bộ khóa thử công khai của MoMo"). Trên trang MoMo có thể chọn Ví MoMo (quét QR bằng **ứng dụng MoMo bản thử nghiệm** tải từ developers.momo.vn - app MoMo thật không thanh toán được đơn thử), thẻ ATM hoặc thẻ quốc tế với thẻ test trong tài liệu MoMo.
 
 **Thẻ ngân hàng thanh toán thử của VNPay (sandbox):**
 

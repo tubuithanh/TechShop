@@ -3,7 +3,7 @@ import { useParams, useLocation } from 'react-router-dom';
 import { Container, Alert, ListGroup, Card, Button, Form, Spinner } from 'react-bootstrap';
 import { orderService } from '../services/orderService';
 import { warrantyService } from '../services/warrantyService';
-import { paymentService } from '../services/paymentService';
+import { paymentService, PAYMENT_GATEWAYS } from '../services/paymentService';
 import { io } from 'socket.io-client';
 import { getAccessToken } from '../services/api';
 
@@ -42,9 +42,9 @@ export default function OrderDetailPage() {
     setPaying(true);
     setPaymentError('');
     try {
-      await paymentService.startVnpay(id);
+      await paymentService.start(order.paymentMode, id);
     } catch (err) {
-      setPaymentError(err.response?.data?.message || 'Không mở được cổng thanh toán VNPay');
+      setPaymentError(err.response?.data?.message || `Không mở được cổng thanh toán ${PAYMENT_GATEWAYS[order.paymentMode]?.label || ''}`);
       setPaying(false);
     }
   };
@@ -105,15 +105,21 @@ export default function OrderDetailPage() {
       </p>
 
       <div className="d-flex flex-wrap align-items-center gap-2 mb-4 small">
-        <span>Thanh toán: {order.paymentMode === 'vnpay' ? 'VNPay' : order.paymentMode === 'cod' ? 'Khi nhận hàng (COD)' : order.paymentMode}</span>
+        <span>
+          Thanh toán: {order.paymentMode === 'cod' ? 'Khi nhận hàng (COD)' : PAYMENT_GATEWAYS[order.paymentMode]?.label || order.paymentMode}
+        </span>
         <span className={`badge text-bg-${paymentStatusLabel[order.paymentStatus]?.bg || 'secondary'}`}>
           {paymentStatusLabel[order.paymentStatus]?.text || order.paymentStatus}
         </span>
-        {order.paymentMode === 'vnpay' &&
+        {PAYMENT_GATEWAYS[order.paymentMode] &&
           !['paid', 'refunded'].includes(order.paymentStatus) &&
           !['cancelled', 'returned'].includes(order.status) && (
             <Button size="sm" variant="primary" onClick={handlePay} disabled={paying}>
-              {paying ? 'Đang chuyển sang VNPay...' : order.paymentStatus === 'failed' ? 'Thanh toán lại' : 'Thanh toán ngay'}
+              {paying
+                ? `Đang chuyển sang ${PAYMENT_GATEWAYS[order.paymentMode].label}...`
+                : order.paymentStatus === 'failed'
+                  ? 'Thanh toán lại'
+                  : 'Thanh toán ngay'}
             </Button>
           )}
       </div>

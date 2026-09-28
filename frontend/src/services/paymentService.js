@@ -1,18 +1,35 @@
 import api from './api';
 
+// Cổng thanh toán online: tạo link rồi chuyển trình duyệt sang cổng; kết quả trả về được backend kiểm tra chữ ký
+export const PAYMENT_GATEWAYS = {
+  vnpay: { label: 'VNPay' },
+  momo: { label: 'MoMo' }
+};
+
 export const paymentService = {
-  // Tạo link thanh toán VNPay cho đơn hàng rồi chuyển trình duyệt sang cổng VNPay
-  async startVnpay(orderId) {
-    const { data } = await api.post(`/payments/vnpay/${orderId}`);
+  // Tạo link thanh toán cho đơn hàng (gateway: 'vnpay' | 'momo') rồi chuyển sang cổng thanh toán
+  async start(gateway, orderId) {
+    const { data } = await api.post(`/payments/${gateway}/${orderId}`);
     window.location.href = data.data.paymentUrl;
   },
-  // VNPay đã được cấu hình trên máy chủ chưa (để ẩn lựa chọn thanh toán VNPay khi chưa dùng được)
+  async startVnpay(orderId) {
+    return this.start('vnpay', orderId);
+  },
+  // Cổng nào dùng được (ẩn cổng chưa cấu hình) + giới hạn số tiền của MoMo
+  async getMethods() {
+    const { data } = await api.get('/payments/methods');
+    return data;
+  },
   async getVnpayStatus() {
     const { data } = await api.get('/payments/vnpay/status');
     return data.enabled;
   },
-  async verifyVnpayReturn(search) {
-    const { data } = await api.get(`/payments/vnpay/return${search}`);
+  // Trang kết quả gọi lên kèm query cổng thanh toán gắn vào URL trả về
+  async verifyReturn(gateway, search) {
+    const { data } = await api.get(`/payments/${gateway}/return${search}`);
     return data.data;
+  },
+  async verifyVnpayReturn(search) {
+    return this.verifyReturn('vnpay', search);
   }
 };
