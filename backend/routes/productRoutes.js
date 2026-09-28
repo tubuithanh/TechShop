@@ -13,7 +13,7 @@ const { getProductReviews, createReview, updateReview } = require('../controller
 const { getQuestions, createQuestion, answerQuestion } = require('../controllers/questionController');
 const { protect, authorize, can } = require('../middlewares/authMiddleware');
 const { reviewLimiter, uploadLimiter } = require('../middlewares/rateLimits');
-const { importFromUrl } = require('../controllers/productImportController');
+const { importFromUrl, importFromHtml } = require('../controllers/productImportController');
 
 router.get('/', getProducts);
 router.post('/compare', compareProducts);
@@ -31,6 +31,8 @@ router.post('/questions/:questionId/answers', protect, answerQuestion);
 // Nhập thông tin sản phẩm từ link thegioididong.com (trả bản nháp, không tự tạo sản phẩm). Dùng chung
 // giới hạn tần suất với tải ảnh vì mỗi lần nhập tải về nhiều ảnh.
 router.post('/import-url', protect, can('products.manage'), uploadLimiter, importFromUrl);
+// Dự phòng khi máy chủ bị trang nguồn chặn: admin dán mã nguồn trang copy từ trình duyệt của mình
+router.post('/import-html', protect, can('products.manage'), uploadLimiter, importFromHtml);
 router.post('/', protect, can('products.manage'), createProduct);
 router.put('/:id', protect, can('products.manage'), updateProduct);
 router.delete('/:id', protect, authorize('admin'), deleteProduct);

@@ -48,19 +48,21 @@ const PAGE = `<!doctype html><html><head>
 // Ảnh PNG 1x1 hợp lệ
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
-function mockNetwork({ pageStatus = 200, finalUrl } = {}) {
-  const realFetch = global.fetch;
-  return jest.spyOn(global, 'fetch').mockImplementation(async (input, opts) => {
-    const url = String(input);
-    if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) return realFetch(input, opts);
-    if (url.includes('thegioididong.com')) {
-      const res = new Response(PAGE, { status: pageStatus, headers: { 'content-type': 'text/html' } });
-      Object.defineProperty(res, 'url', { value: finalUrl || url });
-      return res;
+// Giả lập mạng: thay httpGet (tải qua IPv4) - test không gọi ra Internet
+const httpClient = require('../utils/httpGet');
+function mockNetwork({ pageStatus = 200, redirectTo, pageError } = {}) {
+  return jest.spyOn(httpClient, 'httpGet').mockImplementation(async (url, opts = {}) => {
+    const host = new URL(url).hostname;
+    if (opts.allowHost && !opts.allowHost(host)) throw Object.assign(new Error('not allowed'), { code: 'EHOSTNOTALLOWED' });
+    if (host.endsWith('thegioididong.com')) {
+      if (pageError) throw Object.assign(new Error('timeout'), { code: pageError });
+      if (redirectTo) {
+        if (!opts.allowHost(new URL(redirectTo).hostname)) throw Object.assign(new Error('not allowed'), { code: 'EHOSTNOTALLOWED' });
+      }
+      return { status: pageStatus, url, headers: {}, body: Buffer.from(PAGE) };
     }
-    if (url.includes('demo-x-den-2')) return new Response('<html>not image</html>', { status: 200 }); // ảnh hỏng
-    if (/\.tgdd\.vn\//.test(url)) return new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } });
-    throw new Error(`Không được gọi ra ngoài: ${url}`);
+    if (url.includes('demo-x-den-2')) return { status: 200, url, headers: {}, body: Buffer.from('<html>not image</html>') }; // ảnh hỏng
+    return { status: 200, url, headers: {}, body: PNG };
   });
 }
 
@@ -157,7 +159,7 @@ describe('Nhập sản phẩm từ link thegioididong.com', () => {
 
     expect((await call('https://example.com/dtdd/x')).statusCode).toBe(400);
 
-    mockNetwork({ finalUrl: 'https://evil.example.com/landing' });
+    mockNetwork({ redirectTo: 'https://evil.example.com/landing' });
     expect((await call('https://www.thegioididong.com/dtdd/demo-x')).body.message).toMatch(/chuyển hướng/);
     jest.restoreAllMocks();
 
@@ -169,5 +171,32 @@ describe('Nhập sản phẩm từ link thegioididong.com', () => {
 
     const customer = (await registerUser()).body.accessToken;
     expect((await auth(request(app).post('/api/products/import-url'), customer).send({ url: 'https://www.thegioididong.com/dtdd/demo-x' })).statusCode).toBe(403);
+  });
+
+  test('TC-98: Máy chủ không kết nối được -> thử lại rồi báo gợi ý; "Dán mã nguồn trang" vẫn nhập được', async () => {
+    const token = await adminToken();
+    await Category.create({ name: 'Điện thoại', slug: 'dien-thoai' });
+    const spy = mockNetwork({ pageError: 'ETIMEDOUT' });
+    const res = await auth(request(app).post('/api/products/import-url'), token).send({ url: 'https://www.thegioididong.com/dtdd/demo-x' });
+    expect(res.statusCode).toBe(502);
+    expect(res.body.blocked).toBe(true);
+    expect(res.body.message).toMatch(/Dán mã nguồn trang/);
+    expect(spy.mock.calls.filter(([u]) => u.includes('thegioididong.com'))).toHaveLength(2); // đã thử lại 1 lần
+
+    const pasted = await auth(request(app).post('/api/products/import-html'), token).send({
+      url: 'https://www.thegioididong.com/dtdd/demo-x',
+      html: PAGE
+    });
+    expect(pasted.statusCode).toBe(200);
+    expect(pasted.body.data.title).toBe('Demo X Pro 256GB');
+    expect(pasted.body.data.imageURLs.length).toBeGreaterThan(0);
+    const fs = require('fs');
+    const path = require('path');
+    const { UPLOAD_DIR } = require('../controllers/uploadController');
+    pasted.body.data.imageURLs.forEach((u) => fs.rmSync(path.join(UPLOAD_DIR, path.basename(u)), { force: true }));
+
+    // Dán thiếu / sai link
+    expect((await auth(request(app).post('/api/products/import-html'), token).send({ url: 'https://www.thegioididong.com/dtdd/demo-x', html: '<html>' })).statusCode).toBe(400);
+    expect((await auth(request(app).post('/api/products/import-html'), token).send({ url: 'https://evil.com/dtdd/x', html: PAGE })).statusCode).toBe(400);
   });
 });
