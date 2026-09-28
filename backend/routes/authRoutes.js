@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const {
   requestRegisterOtp,
@@ -11,11 +12,22 @@ const {
   refresh,
   logout,
   getMe,
-  changePassword
+  changePassword,
+  requestPasswordReset,
+  resetPassword
 } = require('../controllers/authController');
 const { protect } = require('../middlewares/authMiddleware');
 
 router.post('/register/request-otp', requestRegisterOtp);
+
+// Quên mật khẩu: giới hạn số lần xin mã để không bị lợi dụng gửi email hàng loạt tới 1 người
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { message: 'Bạn đã yêu cầu quá nhiều lần, vui lòng thử lại sau ít phút' }
+});
+router.post('/password/request-otp', resetLimiter, requestPasswordReset);
+router.post('/password/reset', resetLimiter, resetPassword);
 router.post('/register/verify-otp', verifyRegisterOtp);
 router.post('/register', register);
 router.post('/login', login);

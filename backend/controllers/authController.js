@@ -8,6 +8,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const { sendOtp } = require('../utils/sendOtp');
 const { isMailConfigured } = require('../utils/mailer');
+const { sendPasswordResetCode } = require('../utils/notifyEmail');
 const Setting = require('../models/Setting');
 const { buildAuthUrl, exchangeCodeForToken } = require('../utils/zaloAuth');
 const {
@@ -349,6 +350,70 @@ const changePassword = asyncHandler(async (req, res) => {
   res.json({ message: 'Đổi mật khẩu thành công' });
 });
 
+// ================== QUÊN MẬT KHẨU (khách hàng) ==================
+
+// Thông báo CHUNG cho mọi trường hợp (email có hay không có tài khoản) - không để người khác dùng form này
+// dò xem email nào đã đăng ký.
+const RESET_GENERIC_MESSAGE = 'Nếu email này đã đăng ký tài khoản, mã đặt lại mật khẩu đã được gửi tới hộp thư (có hiệu lực 5 phút).';
+
+// @route POST /api/auth/password/request-otp { email }
+const requestPasswordReset = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Vui lòng nhập email hợp lệ' });
+
+  const user = await User.findOne({ email, isActive: true }).select('_id').lean();
+  if (!user) return res.json({ message: RESET_GENERIC_MESSAGE });
+
+  await Otp.deleteMany({ email, purpose: 'reset_password' });
+  const code = Otp.generateCode();
+  await Otp.create({
+    email,
+    codeHash: await bcrypt.hash(code, 10),
+    purpose: 'reset_password',
+    expiresAt: new Date(Date.now() + OTP_EXPIRES_MINUTES * 60 * 1000)
+  });
+  try {
+    await sendPasswordResetCode(email, code, { expiresMinutes: OTP_EXPIRES_MINUTES });
+  } catch (err) {
+    console.error('[RESET] Gửi email thất bại:', err.message);
+    await Otp.deleteMany({ email, purpose: 'reset_password' });
+    return res.status(502).json({ message: 'Không gửi được email, vui lòng thử lại sau ít phút' });
+  }
+  res.json({
+    message: RESET_GENERIC_MESSAGE,
+    // Giống đăng ký: chưa cấu hình gửi email (chế độ demo) hoặc chạy ở máy lập trình thì hiện mã trên màn hình
+    devOtpPreview: !(await isMailConfigured()) || process.env.NODE_ENV !== 'production' ? code : undefined
+  });
+});
+
+// @route POST /api/auth/password/reset { email, code, newPassword, confirmPassword }
+const resetPassword = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const { code, newPassword, confirmPassword } = req.body;
+  const otp = await Otp.findOne({ email, purpose: 'reset_password' }).sort({ createdAt: -1 });
+  if (!otp || otp.expiresAt < new Date()) {
+    return res.status(400).json({ message: 'Mã xác thực không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
+  }
+  if (otp.attempts >= MAX_OTP_ATTEMPTS) {
+    return res.status(429).json({ message: 'Bạn đã nhập sai quá nhiều lần, vui lòng yêu cầu mã mới' });
+  }
+  if (!(await otp.compareCode(String(code || '')))) {
+    otp.attempts += 1;
+    await otp.save();
+    return res.status(400).json({ message: 'Mã xác thực không đúng' });
+  }
+  const passwordError =
+    validatePassword(newPassword) || (confirmPassword !== undefined && confirmPassword !== newPassword ? 'Mật khẩu nhập lại không khớp' : null);
+  if (passwordError) return res.status(400).json({ message: passwordError });
+
+  const user = await User.findOne({ email, isActive: true });
+  if (!user) return res.status(400).json({ message: 'Mã xác thực không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
+  user.password = newPassword;
+  await user.save();
+  await Otp.deleteMany({ email, purpose: 'reset_password' }); // mã chỉ dùng được một lần
+  res.json({ message: 'Đặt lại mật khẩu thành công, vui lòng đăng nhập bằng mật khẩu mới' });
+});
+
 module.exports = {
   requestRegisterOtp,
   verifyRegisterOtp,
@@ -360,5 +425,7 @@ module.exports = {
   refresh,
   logout,
   getMe,
-  changePassword
+  changePassword,
+  requestPasswordReset,
+  resetPassword
 };

@@ -32,6 +32,15 @@ export const authService = {
     const { data } = await api.get('/auth/me');
     return data.user;
   },
+  // Quên mật khẩu: xin mã qua email, rồi đặt mật khẩu mới bằng mã đó
+  async requestPasswordReset(email) {
+    const { data } = await api.post('/auth/password/request-otp', { email });
+    return data;
+  },
+  async resetPassword(payload) {
+    const { data } = await api.post('/auth/password/reset', payload);
+    return data;
+  },
   async changePassword(payload) {
     const { data } = await api.put('/auth/change-password', payload);
     return data;

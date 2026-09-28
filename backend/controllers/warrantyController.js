@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
+const { emailWarranty } = require('../utils/notifyEmail');
 const { searchFilter } = require('../utils/search');
 const { normalizePhone } = require('../utils/customerValidation');
 
@@ -58,6 +59,7 @@ const createWarrantyRequest = asyncHandler(async (req, res) => {
     statusHistory: [{ status: 'received', note: 'Tiếp nhận yêu cầu bảo hành', changedBy: req.account._id }]
   });
 
+  emailWarranty(warranty, { created: true }); // email xác nhận tiếp nhận kèm mã phiếu (chạy nền)
   res.status(201).json({ data: warranty });
 });
 
@@ -145,6 +147,7 @@ const updateWarrantyStatus = asyncHandler(async (req, res) => {
     message: `Phiếu bảo hành ${warranty.ticketCode} đã chuyển sang trạng thái "${status}"`,
     link: `/warranties/${warranty._id}`
   });
+  emailWarranty(warranty, { note });
 
   const io = req.app.get('io');
   if (io) io.to(`user_${warranty.userId}`).emit('warranty:statusUpdated', { warrantyId: warranty._id, status });
@@ -186,6 +189,7 @@ const updateWarranty = asyncHandler(async (req, res) => {
       message: `Phiếu bảo hành ${warranty.ticketCode} đã chuyển sang trạng thái "${status}"`,
       link: `/warranties/${warranty._id}`
     });
+    emailWarranty(warranty, { note });
     const io = req.app.get('io');
     if (io) io.to(`user_${warranty.userId}`).emit('warranty:statusUpdated', { warrantyId: warranty._id, status });
   }

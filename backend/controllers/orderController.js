@@ -6,6 +6,7 @@ const Voucher = require('../models/Voucher');
 const Notification = require('../models/Notification');
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
+const { emailOrderPlaced, emailOrderStatus } = require('../utils/notifyEmail');
 const { searchFilter } = require('../utils/search');
 const { hasPermission, getScopedStoreId } = require('../middlewares/authMiddleware');
 
@@ -275,6 +276,8 @@ const createOrder = asyncHandler(async (req, res) => {
     link: `/orders/${order._id}`
   });
 
+  emailOrderPlaced(order); // email xác nhận đơn (chạy nền)
+
   const io = req.app.get('io');
   if (io) io.to(`user_${req.account._id}`).emit('order:created', { orderId: order._id, orderCode: order.orderCode });
 
@@ -339,6 +342,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
   }
 
   await restoreStock(order.storeId, order.items);
+  emailOrderStatus(updated, 'cancelled');
   res.json({ data: updated });
 });
 
@@ -428,6 +432,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     message: `Đơn hàng ${order.orderCode} đã chuyển sang trạng thái "${status}"`,
     link: `/orders/${order._id}`
   });
+  emailOrderStatus(updated, status, note);
 
   const io = req.app.get('io');
   if (io) io.to(`user_${order.userId}`).emit('order:statusUpdated', { orderId: order._id, status });

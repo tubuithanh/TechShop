@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Container, Form, Button, Alert } from 'react-bootstrap';
 import { useAuth } from '../store/AuthContext';
 
@@ -13,7 +13,10 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const location = useLocation();
+  // Vừa đặt lại mật khẩu xong (từ trang Quên mật khẩu): điền sẵn email và báo thành công
+  const resetMessage = location.state?.resetMessage;
+  const [form, setForm] = useState({ email: location.state?.email || '', password: '' });
   const [error, setError] = useState(ZALO_ERROR_MESSAGES[searchParams.get('error')] || '');
   const [loading, setLoading] = useState(false);
 
@@ -52,7 +55,12 @@ export default function LoginPage() {
           />
         </Form.Group>
         <Form.Group>
-          <Form.Label className="small fw-medium">Mật khẩu</Form.Label>
+          <div className="d-flex justify-content-between align-items-baseline">
+            <Form.Label className="small fw-medium">Mật khẩu</Form.Label>
+            <Link to="/forgot-password" className="small text-primary">
+              Quên mật khẩu?
+            </Link>
+          </div>
           <Form.Control
             type="password"
             required
@@ -60,6 +68,11 @@ export default function LoginPage() {
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
         </Form.Group>
+        {resetMessage && !error && (
+          <Alert variant="success" className="small py-2 mb-0">
+            {resetMessage}
+          </Alert>
+        )}
         {error && (
           <Alert variant="danger" className="small py-2 mb-0">
             {error}

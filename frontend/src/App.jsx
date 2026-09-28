@@ -19,6 +19,7 @@ import WarrantyLookupPage from './pages/WarrantyLookupPage';
 import { ReturnPolicyPage, WarrantyPolicyPage, ShippingPolicyPage, PaymentPolicyPage, BuyingGuidePage } from './pages/PolicyPages';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ZaloFinishPage from './pages/ZaloFinishPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import ComparePage from './pages/ComparePage';
@@ -96,6 +97,7 @@ export default function App() {
                 <Route path="/cart" element={<StorefrontLayout><CartPage /></StorefrontLayout>} />
                 <Route path="/login" element={<StorefrontLayout><LoginPage /></StorefrontLayout>} />
                 <Route path="/register" element={<StorefrontLayout><RegisterPage /></StorefrontLayout>} />
+                <Route path="/forgot-password" element={<StorefrontLayout><ForgotPasswordPage /></StorefrontLayout>} />
                 <Route path="/zalo-finish" element={<ZaloFinishPage />} />
                 <Route path="/terms" element={<StorefrontLayout><TermsPage /></StorefrontLayout>} />
                 <Route path="/privacy" element={<StorefrontLayout><PrivacyPage /></StorefrontLayout>} />

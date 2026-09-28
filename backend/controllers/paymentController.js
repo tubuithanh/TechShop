@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
+const { emailPaymentSuccess } = require('../utils/notifyEmail');
 const vnpay = require('../utils/vnpay');
 
 // @route POST /api/payments/vnpay/:orderId - tạo link thanh toán VNPay cho đơn của chính khách hàng
@@ -68,6 +69,7 @@ async function applyResult(result, io) {
       link: `/orders/${order._id}`
     });
     if (io) io.to(`user_${order.userId}`).emit('order:statusUpdated', { orderId: order._id, status: order.status });
+    if (updated.paymentStatus === 'paid') emailPaymentSuccess(updated);
   }
   return { code: '00', message: 'Confirm Success', order: updated || order };
 }
