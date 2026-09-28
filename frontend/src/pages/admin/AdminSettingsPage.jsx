@@ -10,6 +10,7 @@ import ThemeSettingsPanel from '../../components/admin/ThemeSettingsPanel';
 import SecuritySettingsPanel from '../../components/admin/SecuritySettingsPanel';
 import FooterSettingsPanel from '../../components/admin/FooterSettingsPanel';
 import { settingService } from '../../services/settingService';
+import { normalizeFooter, fillFooterText } from '../../utils/footer';
 import { useSettings } from '../../store/SettingsContext';
 
 const TABS = [
@@ -224,6 +225,23 @@ export default function AdminSettingsPage() {
                           placeholder="https://..."
                         />
                       </div>
+                    </Form.Group>
+                    {/* Cùng dữ liệu với ô "Dòng bản quyền" ở tab Chân trang (Footer) */}
+                    <Form.Group className="mt-3">
+                      <Form.Label className="small fw-medium" htmlFor="general-copyright">
+                        Dòng bản quyền cuối trang (footer)
+                      </Form.Label>
+                      <Form.Control
+                        id="general-copyright"
+                        maxLength={300}
+                        value={normalizeFooter(form.footer).copyright}
+                        placeholder="Để trống nếu không muốn hiển thị"
+                        onChange={(e) => setField('footer', { ...normalizeFooter(form.footer), copyright: e.target.value })}
+                      />
+                      <Form.Text className="text-muted">
+                        <code>{'{year}'}</code> = năm hiện tại, <code>{'{siteName}'}</code> = tên website. Hiển thị:{' '}
+                        <em>{fillFooterText(normalizeFooter(form.footer).copyright, form.siteName) || '(không hiển thị)'}</em>
+                      </Form.Text>
                     </Form.Group>
                   </>
                 )}
