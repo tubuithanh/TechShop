@@ -222,3 +222,22 @@ body {
 }
 .site-menu-link { padding: 0.7rem 1rem !important; color: var(--bs-body-color) !important; border-bottom: 1px solid var(--bs-border-color-translucent); }
 .site-menu-link:hover, .site-menu-link.active { background: var(--bs-primary-bg-subtle); color: var(--bs-primary) !important; }
+
+/* Hiệu ứng trang trí theo mùa (components/SeasonalEffect.jsx) */
+.seasonal-effect { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1040; }
+.seasonal-flake {
+  position: absolute; top: -40px; line-height: 1; opacity: .85; user-select: none;
+  animation-name: seasonal-fall; animation-timing-function: linear; animation-iteration-count: infinite;
+}
+.seasonal-snow { text-shadow: 0 0 3px rgba(0, 0, 0, .25); }
+@keyframes seasonal-fall {
+  0% { transform: translate3d(0, -40px, 0) rotate(0deg); }
+  100% { transform: translate3d(var(--drift, 0px), 105vh, 0) rotate(360deg); }
+}
+.seasonal-effect-contained { position: absolute; z-index: 1; }
+.seasonal-effect-contained .seasonal-flake { animation-name: seasonal-fall-contained; }
+@keyframes seasonal-fall-contained {
+  0% { transform: translate3d(0, -40px, 0) rotate(0deg); }
+  100% { transform: translate3d(calc(var(--drift, 0px) / 3), 320px, 0) rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) { .seasonal-effect { display: none; } }

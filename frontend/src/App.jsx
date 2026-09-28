@@ -51,6 +51,7 @@ import AdminArticlesPage from './pages/admin/AdminArticlesPage';
 import AdminChatPage from './pages/admin/AdminChatPage';
 import AdminAuditLogPage from './pages/admin/AdminAuditLogPage';
 import AdminLocationsPage from './pages/admin/AdminLocationsPage';
+import SeasonalEffect from './components/SeasonalEffect';
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminPermissionGroupsPage from './pages/admin/AdminPermissionGroupsPage';
@@ -72,8 +73,10 @@ function MaintenanceGate({ children }) {
 }
 
 function StorefrontLayout({ children }) {
+  const { settings } = useSettings();
   return (
-    <div className="d-flex flex-column min-vh-100 bg-light">
+    <div className="d-flex flex-column min-vh-100 bg-light site-body">
+      <SeasonalEffect effect={settings.theme?.effect} />
       <Header />
       <div className="flex-grow-1">{children}</div>
       <Footer />

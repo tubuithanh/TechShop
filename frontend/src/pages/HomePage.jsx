@@ -25,7 +25,7 @@ const CATEGORY_STYLE = {
 
 const HERO_SLIDES = [
   {
-    gradient: 'linear-gradient(135deg, #dc2626, #f97316)',
+    gradient: 'linear-gradient(135deg, var(--bs-primary), var(--site-hero-end, #f97316))', // theo màu sắc giao diện
     eyebrow: '🎓 Tiểu luận chuyên ngành MERN Stack',
     title: 'Chào mừng đến với TechShop',
     subtitle: 'Website thương mại điện tử đa chi nhánh (multi-store) — mua sắm thiết bị công nghệ chính hãng, nhanh chóng và tin cậy',
@@ -291,7 +291,7 @@ export default function HomePage() {
             <Reveal className="mb-5">
               <div
                 className="rounded-4 p-3 p-md-4"
-                style={{ background: 'linear-gradient(135deg, #fff1f0, #fff7ed)', border: '1px solid #fecaca' }}
+                style={{ background: 'linear-gradient(135deg, var(--bs-primary-bg-subtle), #fff7ed)', border: '1px solid var(--bs-primary-border-subtle)' }}
               >
                 <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                   <h2 className="fs-5 fw-bold mb-0 d-flex align-items-center gap-2">

@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, InputGroup, Nav, Badge, Modal, Spinner } from 'react-bootstrap';
 import {
   Gear, TelephoneFill, GridFill, Truck, Search, Tools,
-  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill
+  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill, PaletteFill
 } from 'react-bootstrap-icons';
 import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
 import VnpaySettingsPanel from '../../components/admin/VnpaySettingsPanel';
+import ThemeSettingsPanel from '../../components/admin/ThemeSettingsPanel';
 import { settingService } from '../../services/settingService';
 import { useSettings } from '../../store/SettingsContext';
 
@@ -13,6 +14,7 @@ const TABS = [
   { key: 'general', label: 'Thông tin chung', icon: Gear },
   { key: 'contact', label: 'Liên hệ', icon: TelephoneFill },
   { key: 'display', label: 'Hiển thị & phân trang', icon: GridFill },
+  { key: 'theme', label: 'Màu sắc giao diện', icon: PaletteFill },
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
   { key: 'seo', label: 'SEO', icon: Search },
   { key: 'maintenance', label: 'Bảo trì', icon: Tools },
@@ -382,6 +384,10 @@ export default function AdminSettingsPage() {
                 {activeTab === 'email' && <MailSettingsPanel />}
 
                 {activeTab === 'payment' && <VnpaySettingsPanel />}
+
+                {activeTab === 'theme' && (
+                  <ThemeSettingsPanel theme={form.theme} savedTheme={settings.theme} onChange={(t) => setField('theme', t)} />
+                )}
 
                 {activeTab === 'audit' && (
                   <>

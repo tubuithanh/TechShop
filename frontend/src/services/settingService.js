@@ -18,6 +18,23 @@ export const settingService = {
     const { data } = await api.put('/settings/mail', payload);
     return data;
   },
+  // Template màu sắc giao diện (chỉ admin)
+  async getThemeTemplates() {
+    const { data } = await api.get('/settings/themes');
+    return data.data;
+  },
+  async createThemeTemplate(payload) {
+    const { data } = await api.post('/settings/themes', payload);
+    return data;
+  },
+  async updateThemeTemplate(id, payload) {
+    const { data } = await api.put(`/settings/themes/${id}`, payload);
+    return data;
+  },
+  async deleteThemeTemplate(id) {
+    const { data } = await api.delete(`/settings/themes/${id}`);
+    return data;
+  },
   // Cấu hình thanh toán VNPay (chỉ admin) - không bao giờ trả về Secret Key
   async getPaymentConfig() {
     const { data } = await api.get('/settings/payment');

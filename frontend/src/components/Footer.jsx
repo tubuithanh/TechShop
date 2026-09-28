@@ -23,7 +23,7 @@ export default function Footer() {
   const social = settings.socialLinks || {};
 
   return (
-    <footer className="bg-dark text-light mt-auto">
+    <footer className="bg-dark text-light mt-auto site-footer">
       <Container fluid="xl" className="py-4">
         <Row className="gy-4 small">
           <Col xs={12} md={3}>
