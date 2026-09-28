@@ -53,4 +53,36 @@ describe('Bật/tắt chống lạm dụng & tấn công dồn dập', () => {
       process.env.RATE_LIMIT_DISABLED = 'true';
     }
   });
+
+  test('TC-93: Cấu hình số lần: mặc định giữ nguyên; đổi OTP đăng ký = 3 -> lần thứ 4 bị chặn ngay; giá trị sai bị từ chối', async () => {
+    const token = await adminToken();
+    const get = async () => (await auth(request(app).get('/api/settings/security'), token)).body.data;
+    const values = Object.fromEntries((await get()).limits.map((l) => [l.key, l.value]));
+    expect(values).toEqual({ api: 1000, login: 20, registerOtp: 10, reset: 10, order: 20, review: 20, upload: 30 });
+
+    // Giá trị không hợp lệ
+    const put = (limits) => auth(request(app).put('/api/settings/security'), token).send({ limits });
+    expect((await put({ api: 50 })).statusCode).toBe(400); // API tối thiểu 100 để admin không tự khóa mình
+    expect((await put({ login: 0 })).statusCode).toBe(400);
+    expect((await put({ login: 2.5 })).statusCode).toBe(400);
+    expect((await put({ khongCo: 5 })).statusCode).toBe(400);
+
+    const saved = await put({ registerOtp: 3 });
+    expect(saved.statusCode).toBe(200);
+    const after = Object.fromEntries(saved.body.data.limits.map((l) => [l.key, l.value]));
+    expect(after).toMatchObject({ registerOtp: 3, login: 20, api: 1000 }); // các mục khác giữ nguyên
+    expect((await request(app).get('/api/settings')).body.data).not.toHaveProperty('rateLimits');
+
+    process.env.RATE_LIMIT_DISABLED = 'false';
+    try {
+      // Nới lên 50 -> chưa bị chặn (kể cả khi test trước đã gửi vài lần cùng IP)
+      await put({ registerOtp: 50 });
+      expect((await spamOtp(4)).statusCode).not.toBe(429);
+      // Hạ xuống 3 -> bị chặn ngay ở lần tiếp theo, không cần khởi động lại
+      await put({ registerOtp: 3 });
+      expect((await spamOtp(1)).statusCode).toBe(429);
+    } finally {
+      process.env.RATE_LIMIT_DISABLED = 'true';
+    }
+  });
 });

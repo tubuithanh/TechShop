@@ -32,6 +32,8 @@ const settingSchema = new mongoose.Schema(
     // Chống lạm dụng & tấn công dồn dập (giới hạn tần suất gọi API) - chỉ admin xem/đổi qua /api/settings/security,
     // KHÔNG trả về ở GET /api/settings công khai
     rateLimitEnabled: { type: Boolean, default: true, select: false },
+    // Số lần tối đa mỗi IP / 15 phút cho từng nhóm (trống = mặc định trong middlewares/rateLimits.js)
+    rateLimits: { type: mongoose.Schema.Types.Mixed, default: undefined, select: false },
 
     maintenanceMode: { type: Boolean, default: false },
     maintenanceMessage: {
