@@ -1,9 +1,47 @@
+const mongoose = require('mongoose');
 const { makeSlug } = require('../utils/slug');
 const Product = require('../models/Product');
 const StoreInventory = require('../models/StoreInventory');
 const asyncHandler = require('../utils/asyncHandler');
 const { searchFilter } = require('../utils/search');
 const { NUMERIC_KEYS } = require('../utils/specNumbers');
+
+// @route GET /api/products/filter-ranges?categoryId=&brandId=&keyword=
+// Khoảng giá trị THỰC TẾ (thấp nhất - cao nhất) của giá bán và các thông số dạng số - làm giới hạn cho thanh kéo
+// lọc ở trang danh sách sản phẩm. keys: danh sách thông số cần tính (chỉ nhận khóa trong NUMERIC_KEYS).
+const getFilterRanges = asyncHandler(async (req, res) => {
+  const { categoryId, brandId, keyword } = req.query;
+  const match = { isActive: true, ...(searchFilter(keyword) || {}) };
+  if (typeof categoryId === 'string' && mongoose.isValidObjectId(categoryId)) match.categoryId = new mongoose.Types.ObjectId(categoryId);
+  if (typeof brandId === 'string' && brandId) {
+    const ids = brandId.split(',').filter((id) => mongoose.isValidObjectId(id)).map((id) => new mongoose.Types.ObjectId(id));
+    if (ids.length) match.brandId = { $in: ids };
+  }
+  const keys = String(req.query.keys || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter((k) => NUMERIC_KEYS.has(k))
+    .slice(0, 20);
+  // Tên thông số có dấu cách/tiếng Việt -> đặt bí danh s0, s1... cho kết quả gộp, đọc giá trị bằng $getField
+  const group = { _id: null, priceMin: { $min: '$effectivePrice' }, priceMax: { $max: '$effectivePrice' }, count: { $sum: 1 } };
+  keys.forEach((k, i) => {
+    const value = { $getField: { field: k, input: '$specNumbers' } };
+    group[`s${i}min`] = { $min: value };
+    group[`s${i}max`] = { $max: value };
+  });
+  const [r] = await Product.aggregate([{ $match: match }, { $group: group }]);
+  const specs = {};
+  keys.forEach((k, i) => {
+    if (r && r[`s${i}min`] != null && r[`s${i}max`] != null) specs[k] = { min: r[`s${i}min`], max: r[`s${i}max`] };
+  });
+  res.json({
+    data: {
+      count: r?.count || 0,
+      price: r && r.priceMin != null ? { min: r.priceMin, max: r.priceMax } : null,
+      specs
+    }
+  });
+});
 
 // @route GET /api/products
 // (params `page` + `limit`: phân trang kiểu số trang, dùng cho trang quản trị;
@@ -35,11 +73,11 @@ const getProducts = asyncHandler(async (req, res) => {
   // Lọc/sắp xếp theo effectivePrice (giá THẬT khách trả = salePrice||price), không phải "price"
   // (giá gốc trước khuyến mãi) - nếu không, sản phẩm đang giảm giá sâu có thể bị loại khỏi kết quả
   // lọc theo ngân sách của khách dù giá thực tế vẫn nằm trong khoảng đó.
-  if (minPrice || maxPrice) {
-    filter.effectivePrice = {};
-    if (minPrice) filter.effectivePrice.$gte = Number(minPrice);
-    if (maxPrice) filter.effectivePrice.$lte = Number(maxPrice);
-  }
+  // Chỉ nhận số hữu hạn (giá trị lạ như "abc" bị bỏ qua thay vì làm truy vấn lỗi)
+  const priceRange = {};
+  if (minPrice !== undefined && minPrice !== '' && Number.isFinite(Number(minPrice))) priceRange.$gte = Number(minPrice);
+  if (maxPrice !== undefined && maxPrice !== '' && Number.isFinite(Number(maxPrice))) priceRange.$lte = Number(maxPrice);
+  if (Object.keys(priceRange).length) filter.effectivePrice = priceRange;
 
   // Lọc theo thông số dạng số: specFilters=[{"key":"RAM","min":8},{"key":"Pin","min":5000}]. Chỉ
   // chấp nhận khóa nằm trong NUMERIC_KEYS và min/max là số hữu hạn - khóa được ghép vào đường dẫn
@@ -214,6 +252,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  getFilterRanges,
   getProducts,
   getProductBySlug,
   getRelatedProducts,

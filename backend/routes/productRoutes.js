@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getProducts,
+  getFilterRanges,
   getProductBySlug,
   getRelatedProducts,
   compareProducts,
@@ -17,6 +18,8 @@ const { importFromUrl, importFromHtml } = require('../controllers/productImportC
 
 router.get('/', getProducts);
 router.post('/compare', compareProducts);
+// Khoảng giá / thông số thực tế cho thanh kéo lọc (đặt TRƯỚC '/:slug' để không bị hiểu nhầm là slug)
+router.get('/filter-ranges', getFilterRanges);
 router.get('/:slug', getProductBySlug);
 router.get('/:id/related', getRelatedProducts);
 

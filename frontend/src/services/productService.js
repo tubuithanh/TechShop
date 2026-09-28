@@ -5,6 +5,11 @@ export const productService = {
     const { data } = await api.get('/products', { params });
     return data;
   },
+  // Khoảng giá / thông số thực tế (thấp nhất - cao nhất) làm giới hạn cho thanh kéo lọc
+  async getFilterRanges(params = {}) {
+    const { data } = await api.get('/products/filter-ranges', { params });
+    return data.data;
+  },
   async getProductBySlug(slug) {
     const { data } = await api.get(`/products/${slug}`);
     return data.data;

@@ -118,7 +118,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có **118 test case** (25 bộ test), bao gồm:
+Có **120 test case** (26 bộ test), bao gồm:
 - tài khoản: đăng ký/đăng nhập, quên mật khẩu, đổi mật khẩu (đăng xuất thiết bị khác), đăng nhập Zalo, thêm/đổi email có xác thực;
 - mua hàng: giỏ hàng (cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, tự hủy đơn VNPay quá hạn;
 - thanh toán VNPay và MoMo: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, giới hạn số tiền của MoMo, cấu hình trong trang quản trị;
@@ -206,7 +206,10 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
   - **quên mật khẩu** bằng mã OTP gửi qua email;
   - **đổi mật khẩu** thì các thiết bị khác tự đăng xuất, thiết bị đang dùng vẫn giữ phiên.
 - **Thông tin tài khoản:** sửa họ tên, số điện thoại; **thêm / đổi email** có xác thực bằng mã gửi tới email mới (tài khoản có mật khẩu phải nhập mật khẩu hiện tại) — mục 1.1.7
-- Trang chủ, danh mục, tìm kiếm và lọc sản phẩm; **lọc theo thông số dạng số** (VD: RAM ≥ 8GB, màn hình 6–7 inch) — mục 1.1.1, 1.1.2, 1.1.3
+- Trang chủ, danh mục, tìm kiếm và lọc sản phẩm — mục 1.1.1, 1.1.2, 1.1.3:
+  - **lọc giá bằng thanh kéo 2 đầu** (giới hạn theo giá rẻ nhất – đắt nhất thực tế của danh mục) + mức giá chọn nhanh ("Dưới 5 triệu", "10 - 20 triệu"...);
+  - **lọc theo thông số dạng số bằng thanh kéo** (VD: RAM 8 – 16 GB, màn hình 6,1 – 6,9 inch);
+  - tự áp dụng khi thả tay (không cần bấm "Áp dụng"), kéo được bằng chuột, cảm ứng và phím mũi tên; khoảng giá lưu trên đường link.
 - **Chi tiết sản phẩm** — mục 1.1.4:
   - chọn **màu** (ô màu) và **dung lượng/kích thước**; giá, ảnh và tồn kho theo từng cửa hàng đổi theo phiên bản đã chọn;
   - thư viện ảnh, breadcrumb;
