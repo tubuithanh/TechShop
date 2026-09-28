@@ -56,7 +56,11 @@ export default function ZaloFinishPage() {
         navigate('/', { replace: true });
       } catch (err) {
         console.error('Lỗi hoàn tất đăng nhập Zalo:', err.message);
-        navigate('/login?error=zalo_profile_failed', { replace: true });
+        // Kèm lý do cụ thể (thông báo của máy chủ hoặc của Zalo) để trang đăng nhập hiển thị - trước đây chỉ
+        // báo chung chung nên không biết lỗi ở đâu. Truyền qua state (không đưa lên thanh địa chỉ).
+        const reason = err.response?.data?.message || err.message;
+        const code = err.response ? 'zalo_complete_failed' : 'zalo_profile_failed';
+        navigate(`/login?error=${code}`, { replace: true, state: { zaloReason: reason } });
       }
     })();
   }, [navigate, setUser]);

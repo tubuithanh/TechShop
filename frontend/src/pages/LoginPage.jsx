@@ -6,7 +6,8 @@ import { useAuth } from '../store/AuthContext';
 const ZALO_ERROR_MESSAGES = {
   zalo_failed: 'Đăng nhập bằng Zalo thất bại, vui lòng thử lại',
   account_locked: 'Tài khoản Zalo này đã bị khóa',
-  zalo_profile_failed: 'Không lấy được hồ sơ Zalo (tên/ảnh đại diện), vui lòng thử lại'
+  zalo_profile_failed: 'Không lấy được hồ sơ Zalo (tên/ảnh đại diện), vui lòng thử lại',
+  zalo_complete_failed: 'Máy chủ không hoàn tất được đăng nhập bằng Zalo'
 };
 
 export default function LoginPage() {
@@ -17,7 +18,9 @@ export default function LoginPage() {
   // Vừa đặt lại mật khẩu xong (từ trang Quên mật khẩu): điền sẵn email và báo thành công
   const resetMessage = location.state?.resetMessage;
   const [form, setForm] = useState({ email: location.state?.email || '', password: '' });
-  const [error, setError] = useState(ZALO_ERROR_MESSAGES[searchParams.get('error')] || '');
+  const zaloError = ZALO_ERROR_MESSAGES[searchParams.get('error')];
+  const zaloReason = location.state?.zaloReason;
+  const [error, setError] = useState(zaloError ? `${zaloError}${zaloReason ? ` - Chi tiết: ${zaloReason}` : ''}` : '');
   const [loading, setLoading] = useState(false);
 
   const handleZaloLogin = () => {

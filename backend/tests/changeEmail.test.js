@@ -108,4 +108,39 @@ describe('Email của tài khoản Zalo (để trống, thêm sau bằng mã xá
     // Chạy lại không làm gì thêm
     expect(await migrateUserEmails()).toEqual({ droppedOldIndex: false, clearedPlaceholders: 0 });
   });
+
+  test('TC-110: Cùng 1 tài khoản đăng nhập được CẢ bằng Zalo lẫn email/mật khẩu (sau khi thêm email + đặt mật khẩu)', async () => {
+    const jwt = require('jsonwebtoken');
+    // Phiên Zalo hợp lệ giống zaloCallback tạo ra sau khi đổi code lấy access_token với Zalo
+    const zaloSession = () => jwt.sign({ zaloAccessToken: 'x' }, process.env.JWT_ACCESS_SECRET, { expiresIn: '3m' });
+    const zaloLogin = () => request(app).post('/api/auth/zalo/complete').send({ id: '5550001', name: 'Tu Zalo', session: zaloSession() });
+
+    // 1. Đăng nhập Zalo lần đầu -> tạo tài khoản, chưa có email
+    const first = await zaloLogin();
+    expect(first.statusCode).toBe(200);
+    const userId = first.body.user._id;
+    expect(first.body.user.email).toBeUndefined();
+
+    // 2. Thêm email (mã xác nhận gửi tới email mới)
+    const t = first.body.accessToken;
+    const otp = await auth(request(app).post('/api/auth/email/request-otp'), t).send({ email: 'tu.zalo@example.com' });
+    expect((await auth(request(app).post('/api/auth/email/verify'), t).send({ email: 'tu.zalo@example.com', code: otp.body.devOtpPreview })).statusCode).toBe(200);
+
+    // 3. Đặt mật khẩu qua "Quên mật khẩu"
+    const reset = await request(app).post('/api/auth/password/request-otp').send({ email: 'tu.zalo@example.com' });
+    await request(app).post('/api/auth/password/reset').send({ email: 'tu.zalo@example.com', code: reset.body.devOtpPreview, newPassword: 'matkhau123', confirmPassword: 'matkhau123' });
+
+    // 4. Đăng nhập bằng email/mật khẩu -> đúng tài khoản đó
+    const byEmail = await request(app).post('/api/auth/login').send({ email: 'tu.zalo@example.com', password: 'matkhau123' });
+    expect(byEmail.statusCode).toBe(200);
+    expect(byEmail.body.user._id).toBe(userId);
+
+    // 5. Đăng nhập lại bằng Zalo -> vẫn đúng tài khoản đó (không tạo tài khoản mới, không mất email)
+    const again = await zaloLogin();
+    expect(again.statusCode).toBe(200);
+    expect(again.body.user._id).toBe(userId);
+    expect(again.body.user.email).toBe('tu.zalo@example.com');
+    expect(await User.countDocuments({ zaloId: '5550001' })).toBe(1);
+    expect((await auth(request(app).get('/api/auth/me'), again.body.accessToken)).statusCode).toBe(200);
+  });
 });
