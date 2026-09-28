@@ -49,10 +49,14 @@ const uploadImages = asyncHandler(async (req, res) => {
   // Phân thư mục theo loại tài khoản cho dễ quản lý trên Cloudinary
   const folder = req.accountRole === 'customer' ? 'techshop/reviews' : 'techshop/products';
   const urls = [];
-  for (const file of files) {
-    urls.push(cloudinaryConfigured() ? await uploadToCloudinary(file, folder) : await saveLocally(file, req));
-  }
+  for (const file of files) urls.push(await storeImage(file, req, folder));
   res.status(201).json({ data: { urls } });
 });
 
-module.exports = { uploadImages, UPLOAD_DIR, EXT };
+// Lưu 1 ảnh ({ buffer, mimetype, originalname }) lên Cloudinary nếu đã cấu hình, không thì lưu vào ổ đĩa.
+// Dùng chung cho tải ảnh từ máy và nhập sản phẩm từ link. Trả về URL ảnh.
+function storeImage(file, req, folder = 'techshop/products') {
+  return cloudinaryConfigured() ? uploadToCloudinary(file, folder) : saveLocally(file, req);
+}
+
+module.exports = { uploadImages, storeImage, UPLOAD_DIR, EXT };

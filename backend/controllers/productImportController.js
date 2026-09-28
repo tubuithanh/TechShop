@@ -1,0 +1,151 @@
+const Brand = require('../models/Brand');
+const Category = require('../models/Category');
+const Product = require('../models/Product');
+const Setting = require('../models/Setting');
+const asyncHandler = require('../utils/asyncHandler');
+const { validateTgddUrl, parseTgddProduct } = require('../utils/tgddImport');
+const { SPEC_TEMPLATES } = require('../utils/specTemplates');
+const { normalizeSearch } = require('../utils/search');
+const { storeImage } = require('./uploadController');
+
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+const MAX_PAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_HOST_RE = /^[a-z0-9.-]+\.tgdd\.vn$/i;
+
+// Đọc body tối đa `limit` byte (chặn trang/ảnh quá lớn làm đầy bộ nhớ)
+async function readLimited(res, limit) {
+  const declared = Number(res.headers.get('content-length'));
+  if (declared && declared > limit) throw new Error('Dữ liệu quá lớn');
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of res.body) {
+    size += chunk.length;
+    if (size > limit) throw new Error('Dữ liệu quá lớn');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function fetchPage(url) {
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { 'user-agent': USER_AGENT, 'accept-language': 'vi-VN,vi;q=0.9', accept: 'text/html' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(20000)
+    });
+  } catch (err) {
+    throw Object.assign(new Error(`Không kết nối được tới thegioididong.com (${err.cause?.code || err.name})`), { status: 502 });
+  }
+  // Sau khi chuyển hướng vẫn phải là trang của thegioididong.com
+  if (!validateTgddUrl(res.url).url) throw Object.assign(new Error('Link bị chuyển hướng ra ngoài thegioididong.com'), { status: 400 });
+  if (res.status === 404) throw Object.assign(new Error('Không tìm thấy trang sản phẩm (404) - kiểm tra lại link'), { status: 400 });
+  if (!res.ok) {
+    throw Object.assign(new Error(`thegioididong.com từ chối truy cập (HTTP ${res.status}) - vui lòng thử lại sau hoặc nhập tay`), { status: 502 });
+  }
+  return (await readLimited(res, MAX_PAGE_BYTES)).toString('utf8');
+}
+
+// Nhận dạng ảnh theo nội dung file (không tin phần mở rộng / content-type)
+function sniffImage(buf) {
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { mimetype: 'image/jpeg', ext: 'jpg' };
+  if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { mimetype: 'image/png', ext: 'png' };
+  if (buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return { mimetype: 'image/webp', ext: 'webp' };
+  if (buf.length > 6 && buf.toString('ascii', 0, 3) === 'GIF') return { mimetype: 'image/gif', ext: 'gif' };
+  return null;
+}
+
+// Tải 1 ảnh từ CDN của TGDD. Không đi theo chuyển hướng (tránh bị dẫn sang máy chủ khác).
+async function downloadImage(url) {
+  const u = new URL(url);
+  if (u.protocol !== 'https:' || !IMAGE_HOST_RE.test(u.hostname)) throw new Error('Nguồn ảnh không hợp lệ');
+  const res = await fetch(u, { headers: { 'user-agent': USER_AGENT, referer: 'https://www.thegioididong.com/' }, redirect: 'manual', signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const buffer = await readLimited(res, MAX_IMAGE_BYTES);
+  const type = sniffImage(buffer);
+  if (!type) throw new Error('Không phải file ảnh');
+  const base = (u.pathname.split('/').pop() || 'anh').replace(/\.[a-z0-9]+$/i, '').replace(/[^a-z0-9-]/gi, '-').slice(0, 60);
+  return { buffer, mimetype: type.mimetype, originalname: `${base}.${type.ext}` };
+}
+
+// Tải và lưu các ảnh (tối đa `limit`), chạy song song 4 ảnh/lượt. Ảnh lỗi thì bỏ qua.
+async function importImages(sources, req, limit) {
+  const picked = sources.slice(0, limit);
+  const results = new Array(picked.length).fill(null);
+  let failed = 0;
+  for (let i = 0; i < picked.length; i += 4) {
+    await Promise.all(
+      picked.slice(i, i + 4).map(async (src, j) => {
+        try {
+          results[i + j] = await storeImage(await downloadImage(src), req, 'techshop/products');
+        } catch {
+          failed++;
+        }
+      })
+    );
+  }
+  return { urls: results.filter(Boolean), failed };
+}
+
+async function matchBrand(candidates) {
+  if (!candidates.length) return null;
+  const brands = await Brand.find().select('name').lean();
+  const norm = (s) => normalizeSearch(s).replace(/[^a-z0-9]/g, '');
+  for (const c of candidates) {
+    const found = brands.find((b) => norm(b.name) === norm(c));
+    if (found) return found;
+  }
+  return null;
+}
+
+// @route POST /api/products/import-url  { url } - đọc thông tin sản phẩm từ link thegioididong.com.
+// KHÔNG tạo sản phẩm: trả về bản nháp để admin xem lại / sửa trong form rồi mới lưu.
+const importFromUrl = asyncHandler(async (req, res) => {
+  const { url, pathGroup, error } = validateTgddUrl(req.body.url);
+  if (error) return res.status(400).json({ message: error });
+
+  let html;
+  try {
+    html = await fetchPage(url);
+  } catch (err) {
+    return res.status(err.status || 502).json({ message: err.message });
+  }
+
+  const categories = await Category.find().select('name slug').lean();
+  const templateKeysFor = (slug) => new Set((SPEC_TEMPLATES[slug] || []).flatMap((g) => g.fields.map((f) => f.key)));
+  const parsed = parseTgddProduct(html, { pathGroup, templateKeysFor });
+  if (parsed.error) return res.status(422).json({ message: parsed.error });
+  const { data, warnings } = parsed;
+
+  const category = categories.find((c) => c.slug === data.categorySlug) || null;
+  if (data.categorySlug && !category) warnings.push(`Chưa có danh mục phù hợp (${data.categorySlug}) - vui lòng chọn danh mục`);
+  const brand = await matchBrand(data.brandCandidates);
+  if (!brand && data.brandCandidates.length) {
+    warnings.push(`Chưa có thương hiệu "${data.brandCandidates[0]}" trong hệ thống - vui lòng chọn thương hiệu`);
+  }
+  if (await Product.exists({ title: data.title })) warnings.push(`Đã có sản phẩm cùng tên "${data.title}" - kiểm tra để tránh trùng`);
+
+  const setting = await Setting.findOne().select('maxImagesPerProduct').lean();
+  const { urls, failed } = await importImages(data.imageSources, req, setting?.maxImagesPerProduct || 10);
+  if (failed) warnings.push(`${failed} ảnh không tải được và đã được bỏ qua`);
+  if (!urls.length && data.imageSources.length) warnings.push('Không tải được ảnh nào - vui lòng tải ảnh lên thủ công');
+
+  res.json({
+    message: `Đã lấy thông tin "${data.title}" - vui lòng kiểm tra lại trước khi lưu`,
+    data: {
+      title: data.title,
+      brandId: brand?._id || '',
+      brandName: data.brandCandidates[0] || '',
+      categoryId: category?._id || '',
+      variants: data.variants,
+      description: data.description,
+      specifications: data.specifications,
+      imageURLs: urls,
+      sourceUrl: url
+    },
+    warnings
+  });
+});
+
+module.exports = { importFromUrl, sniffImage, downloadImage };

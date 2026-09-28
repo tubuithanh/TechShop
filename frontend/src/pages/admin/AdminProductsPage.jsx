@@ -11,6 +11,7 @@ import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import SpecificationsEditor from '../../components/admin/SpecificationsEditor';
 import VariantsEditor, { newVariant } from '../../components/admin/VariantsEditor';
+import ProductUrlImport from '../../components/admin/ProductUrlImport';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -244,6 +245,35 @@ export default function AdminProductsPage() {
           <Card.Body>
             <Form onSubmit={handleSubmit}>
               <Row className="g-3">
+                {!editingId && (
+                  <Col xs={12}>
+                    <ProductUrlImport
+                      onImported={(d) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          title: d.title || prev.title,
+                          brandId: d.brandId || prev.brandId,
+                          categoryId: d.categoryId || prev.categoryId,
+                          description: d.description || prev.description,
+                          // Ảnh đã được tải về kho ảnh của website; không có ảnh nào thì giữ ảnh đang có
+                          imageURLs: d.imageURLs?.length ? d.imageURLs : prev.imageURLs,
+                          coverIndex: 0,
+                          specifications: d.specifications || prev.specifications,
+                          variants: d.variants?.length
+                            ? d.variants.map((v) => ({
+                                ...newVariant(),
+                                color: v.color,
+                                colorHex: v.colorHex,
+                                storage: v.storage || '',
+                                price: v.price === '' || v.price == null ? '' : String(v.price),
+                                salePrice: v.salePrice === '' || v.salePrice == null ? '' : String(v.salePrice)
+                              }))
+                            : prev.variants
+                        }))
+                      }
+                    />
+                  </Col>
+                )}
                 <Col md={6}>
                   <Form.Control
                     required
