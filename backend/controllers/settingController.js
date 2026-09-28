@@ -10,6 +10,7 @@ const { clearRetentionCache, purgeOldAuditLogs } = require('../utils/auditRetent
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
 const { parseTheme } = require('../utils/themes');
+const { parseFooter } = require('../utils/footer');
 
 async function getOrCreateSettings() {
   let settings = await Setting.findOne();
@@ -27,7 +28,14 @@ const getSettings = asyncHandler(async (req, res) => {
 const updateSettings = asyncHandler(async (req, res) => {
   const settings = await getOrCreateSettings();
   // rateLimitEnabled / rateLimits đổi riêng qua /api/settings/security, không nhận ở đây
-  const { _id, createdAt, updatedAt, __v, socialLinks, seo, theme, rateLimitEnabled, rateLimits, ...allowedFields } = req.body;
+  const { _id, createdAt, updatedAt, __v, socialLinks, seo, theme, footer, rateLimitEnabled, rateLimits, ...allowedFields } = req.body;
+  // Chân trang: kiểm tra đường dẫn / độ dài trước khi ghi
+  let footerValue = null;
+  if (footer !== undefined) {
+    const parsedFooter = parseFooter(footer);
+    if (parsedFooter.error) return res.status(400).json({ message: parsedFooter.error });
+    footerValue = parsedFooter.footer;
+  }
   // Bộ màu: kiểm tra mã màu trước khi ghi (gửi thiếu trường nào thì giữ giá trị cũ của trường đó)
   let themePatch = null;
   if (theme !== undefined) {
@@ -42,6 +50,7 @@ const updateSettings = asyncHandler(async (req, res) => {
   if (socialLinks) settings.socialLinks = { ...settings.toObject().socialLinks, ...socialLinks };
   if (seo) settings.seo = { ...settings.toObject().seo, ...seo };
   if (themePatch) settings.theme = { ...settings.toObject().theme, ...themePatch };
+  if (footerValue) settings.footer = footerValue;
   await settings.save();
   // Đổi số ngày lưu nhật ký -> áp dụng ngay (không chờ bộ nhớ đệm hết hạn) và dọn nhật ký quá hạn luôn
   clearRetentionCache();

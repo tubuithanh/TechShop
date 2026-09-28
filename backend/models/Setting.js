@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { themeSchemaDefinition } = require('../utils/themes');
+const { footerSchemaDefinition } = require('../utils/footer');
 
 // Cấu hình chung của toàn hệ thống - CHỈ có 1 document duy nhất trong collection này
 // (dùng mẫu "singleton document" vì đây là cấu hình toàn cục, không phải danh sách nhiều bản ghi).
@@ -47,7 +48,10 @@ const settingSchema = new mongoose.Schema(
     },
 
     // Bộ màu giao diện đang dùng (Cấu hình hệ thống -> Màu sắc giao diện)
-    theme: themeSchemaDefinition
+    theme: themeSchemaDefinition,
+
+    // Nội dung chân trang (Cấu hình hệ thống -> Chân trang)
+    footer: footerSchemaDefinition
   },
   { timestamps: true, collection: 'settings' }
 );
