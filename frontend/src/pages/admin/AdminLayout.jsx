@@ -61,6 +61,10 @@ export default function AdminLayout() {
           <Speedometer2 size={18} /> Trang quản trị
         </h2>
         <Nav className="flex-column gap-1">
+          <Nav.Link as={Link} to="/" className="rounded-3 small d-flex align-items-center gap-2 text-white-50">
+            <HouseDoor size={16} className="flex-shrink-0" />
+            Trang chủ
+          </Nav.Link>
           {fullMenu.map((m) => (
             <Nav.Link
               key={m.path}
@@ -74,9 +78,6 @@ export default function AdminLayout() {
               {m.label}
             </Nav.Link>
           ))}
-          <Nav.Link as={Link} to="/" className="rounded-3 small text-muted mt-3 d-flex align-items-center gap-2">
-            <HouseDoor size={16} /> Về trang chủ
-          </Nav.Link>
         </Nav>
       </aside>
       <main className="flex-grow-1 bg-light p-4">
