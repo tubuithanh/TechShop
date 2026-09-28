@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, Button, Form, Stack, Badge, ButtonGroup } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
 import { userService } from '../../services/userService';
+import LocationFields from '../../components/LocationFields';
 
 const LABEL_PRESETS = ['Nhà riêng', 'Công ty'];
 
@@ -93,19 +94,15 @@ export default function AddressBookPage() {
               className="mb-2"
               size="sm"
             />
-            <Form.Control
-              placeholder="Phường/Xã, Quận/Huyện"
-              value={form.addressLine2}
-              onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
-              className="mb-2"
+            <LocationFields
               size="sm"
-            />
-            <Form.Control
-              placeholder="Tỉnh/Thành phố"
-              value={form.city}
-              onChange={(e) => setForm({ ...form, city: e.target.value })}
               className="mb-2"
-              size="sm"
+              idPrefix="address-book"
+              city={form.city}
+              ward={form.addressLine2}
+              onChange={({ city, ward }) =>
+                setForm((f) => ({ ...f, ...(city !== undefined && { city }), ...(ward !== undefined && { addressLine2: ward }) }))
+              }
             />
             <Form.Control
               placeholder="Ghi chú giao hàng (tùy chọn)"

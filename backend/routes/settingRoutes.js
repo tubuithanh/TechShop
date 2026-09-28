@@ -9,6 +9,7 @@ const {
   gmailCallback,
   disconnectGmail
 } = require('../controllers/mailConfigController');
+const { getPaymentConfig, updatePaymentConfig, testPaymentConfig } = require('../controllers/paymentConfigController');
 const { protect, authorize } = require('../middlewares/authMiddleware');
 
 // Cấu hình email (có mật khẩu SMTP/API key) - CHỈ admin, tách khỏi GET / vốn là API công khai
@@ -19,6 +20,11 @@ router.post('/mail/gmail/connect', protect, authorize('admin'), startGmailConnec
 router.post('/mail/gmail/disconnect', protect, authorize('admin'), disconnectGmail);
 // Google chuyển trình duyệt về đây - không có token đăng nhập, xác thực bằng "state" đã ký (xem controller)
 router.get('/mail/gmail/callback', gmailCallback);
+
+// Cấu hình thanh toán VNPay (có Secret Key) - CHỈ admin
+router.get('/payment', protect, authorize('admin'), getPaymentConfig);
+router.put('/payment', protect, authorize('admin'), updatePaymentConfig);
+router.post('/payment/test', protect, authorize('admin'), testPaymentConfig);
 
 router.get('/', getSettings);
 router.put('/', protect, authorize('admin'), updateSettings);

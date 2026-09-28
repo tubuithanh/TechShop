@@ -7,7 +7,7 @@ const { canStartPayment } = require('../utils/expireUnpaidOrders');
 
 // @route POST /api/payments/vnpay/:orderId - tạo link thanh toán VNPay cho đơn của chính khách hàng
 const createVnpayPayment = asyncHandler(async (req, res) => {
-  if (!vnpay.isConfigured()) {
+  if (!(await vnpay.isConfigured())) {
     return res.status(503).json({ message: 'Cổng thanh toán VNPay chưa được cấu hình trên máy chủ' });
   }
   const order = await Order.findById(req.params.orderId);
@@ -26,7 +26,7 @@ const createVnpayPayment = asyncHandler(async (req, res) => {
   }
 
   const ipAddr = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
-  const { txnRef, paymentUrl } = vnpay.buildPaymentUrl({ order, ipAddr });
+  const { txnRef, paymentUrl } = await vnpay.buildPaymentUrl({ order, ipAddr });
   // Lưu mã giao dịch của lần thử này - chỉ kết quả VNPay trả về khớp ĐÚNG mã này mới được ghi nhận
   // Chỉ đặt lại "pending" nếu CHƯA thanh toán (điều kiện nguyên tử - tránh đè kết quả "paid" vừa về)
   await Order.updateOne(
@@ -82,7 +82,7 @@ async function applyResult(result, io) {
 
 // @route GET /api/payments/vnpay/return - trang kết quả phía khách gọi lên kèm query VNPay trả về
 const vnpayReturn = asyncHandler(async (req, res) => {
-  const result = vnpay.verifyReturn(req.query);
+  const result = await vnpay.verifyReturn(req.query);
   if (!result) return res.status(400).json({ message: 'Chữ ký giao dịch không hợp lệ' });
   const { order } = await applyResult(result, req.app.get('io'));
   if (!order) return res.status(404).json({ message: 'Không tìm thấy giao dịch' });
@@ -100,10 +100,15 @@ const vnpayReturn = asyncHandler(async (req, res) => {
 
 // @route GET /api/payments/vnpay/ipn - VNPay gọi trực tiếp (server-to-server), trả mã theo đặc tả VNPay
 const vnpayIpn = asyncHandler(async (req, res) => {
-  const result = vnpay.verifyReturn(req.query);
+  const result = await vnpay.verifyReturn(req.query);
   if (!result) return res.json({ RspCode: '97', Message: 'Invalid signature' });
   const { code, message } = await applyResult(result, req.app.get('io'));
   res.json({ RspCode: code, Message: message });
 });
 
-module.exports = { createVnpayPayment, vnpayReturn, vnpayIpn };
+// @route GET /api/payments/vnpay/status - trang thanh toán hỏi VNPay có dùng được không (để ẩn lựa chọn khi chưa cấu hình)
+const vnpayStatus = asyncHandler(async (req, res) => {
+  res.json({ enabled: await vnpay.isConfigured() });
+});
+
+module.exports = { createVnpayPayment, vnpayReturn, vnpayIpn, vnpayStatus };

@@ -18,6 +18,19 @@ export const settingService = {
     const { data } = await api.put('/settings/mail', payload);
     return data;
   },
+  // Cấu hình thanh toán VNPay (chỉ admin) - không bao giờ trả về Secret Key
+  async getPaymentConfig() {
+    const { data } = await api.get('/settings/payment');
+    return data.data;
+  },
+  async updatePaymentConfig(payload) {
+    const { data } = await api.put('/settings/payment', payload);
+    return data;
+  },
+  async testPaymentConfig(payload) {
+    const { data } = await api.post('/settings/payment/test', payload);
+    return data;
+  },
   async testMailConfig(payload) {
     const { data } = await api.post('/settings/mail/test', payload);
     return data;

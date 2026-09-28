@@ -15,7 +15,8 @@ import {
   HouseDoor,
   Gear,
   PersonBadge,
-  KeyFill
+  KeyFill,
+  GeoAltFill
 } from 'react-bootstrap-icons';
 import { useAuth } from '../../store/AuthContext';
 import { hasPagePermission } from '../../utils/permissions';
@@ -36,6 +37,7 @@ const menu = [
 // 2 trang này admin-only tuyệt đối (không nằm trong PAGE_PERMISSIONS - xem utils/permissions.js),
 // nên tách riêng để chỉ hiện khi user.role === 'admin', không lọc theo hasPagePermission.
 const adminAbsoluteMenu = [
+  { path: '/admin/locations', label: 'Tỉnh thành & phường xã', icon: GeoAltFill },
   { path: '/admin/audit-logs', label: 'Nhật ký thao tác', icon: ClockHistory },
   { path: '/admin/settings', label: 'Cấu hình hệ thống', icon: Gear }
 ];

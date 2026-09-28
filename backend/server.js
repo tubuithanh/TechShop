@@ -15,7 +15,13 @@ const Admin = require('./models/Admin');
 const PORT = process.env.PORT || 5000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
 
-connectDB();
+connectDB().then(() =>
+  // Chưa có dữ liệu tỉnh/thành, phường/xã -> nạp dữ liệu mặc định (chỉ lần đầu)
+  require('./utils/seedLocations')
+    .ensureLocationsSeeded()
+    .then((r) => r && console.log(`[Locations] Đã nạp ${r.provinces} tỉnh/thành, ${r.wards} phường/xã`))
+    .catch((err) => console.error('[Locations] Lỗi nạp dữ liệu:', err.message))
+);
 
 const server = http.createServer(app);
 

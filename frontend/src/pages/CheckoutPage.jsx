@@ -8,6 +8,7 @@ import { orderService } from '../services/orderService';
 import { storeService } from '../services/storeService';
 import { paymentService } from '../services/paymentService';
 import api from '../services/api';
+import LocationFields from '../components/LocationFields';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -34,6 +35,17 @@ export default function CheckoutPage() {
   });
   const [deliveryMethod, setDeliveryMethod] = useState('home_delivery');
   const [paymentMode, setPaymentMode] = useState('cod');
+  // null = đang kiểm tra; false = máy chủ chưa cấu hình VNPay -> ẩn lựa chọn này
+  const [vnpayEnabled, setVnpayEnabled] = useState(null);
+  useEffect(() => {
+    paymentService
+      .getVnpayStatus()
+      .then((enabled) => {
+        setVnpayEnabled(enabled);
+        if (!enabled) setPaymentMode((m) => (m === 'vnpay' ? 'cod' : m));
+      })
+      .catch(() => setVnpayEnabled(false));
+  }, []);
   const [voucherCode, setVoucherCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [voucherMsg, setVoucherMsg] = useState('');
@@ -161,15 +173,13 @@ export default function CheckoutPage() {
               value={address.addressLine1}
               onChange={(e) => setAddress({ ...address, addressLine1: e.target.value })}
             />
-            <Form.Control
-              placeholder="Phường/Xã, Quận/Huyện"
-              value={address.addressLine2}
-              onChange={(e) => setAddress({ ...address, addressLine2: e.target.value })}
-            />
-            <Form.Control
-              placeholder="Tỉnh/Thành phố"
-              value={address.city}
-              onChange={(e) => setAddress({ ...address, city: e.target.value })}
+            <LocationFields
+              idPrefix="checkout"
+              city={address.city}
+              ward={address.addressLine2}
+              onChange={({ city, ward }) =>
+                setAddress((a) => ({ ...a, ...(city !== undefined && { city }), ...(ward !== undefined && { addressLine2: ward }) }))
+              }
             />
           </div>
 
@@ -207,14 +217,16 @@ export default function CheckoutPage() {
               checked={paymentMode === 'cod'}
               onChange={() => setPaymentMode('cod')}
             />
-            <Form.Check
-              type="radio"
-              id="payment-vnpay"
-              name="paymentMode"
-              label="Thanh toán online qua VNPay (thẻ ATM, Visa/Master, QR)"
-              checked={paymentMode === 'vnpay'}
-              onChange={() => setPaymentMode('vnpay')}
-            />
+            {vnpayEnabled && (
+              <Form.Check
+                type="radio"
+                id="payment-vnpay"
+                name="paymentMode"
+                label="Thanh toán online qua VNPay (thẻ ATM, Visa/Master, QR)"
+                checked={paymentMode === 'vnpay'}
+                onChange={() => setPaymentMode('vnpay')}
+              />
+            )}
           </div>
         </Col>
 

@@ -5,6 +5,7 @@ import { useAuth } from '../store/AuthContext';
 import { authService } from '../services/authService';
 import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 import { MAX_ADDRESSES, validateName, validatePhone, validatePassword } from '../utils/customerValidation';
+import LocationFields from '../components/LocationFields';
 
 const STEP_EMAIL = 1;
 const STEP_OTP = 2;
@@ -340,24 +341,21 @@ export default function RegisterPage() {
                     />
                     <Form.Control.Feedback type="invalid">{fieldError(`addr${idx}.addressLine1`)}</Form.Control.Feedback>
                   </Form.Group>
-                  <Form.Control
+                  <LocationFields
                     size="sm"
                     className="mb-2"
-                    placeholder="Phường/Xã, Quận/Huyện"
-                    value={addr.addressLine2}
-                    onChange={(e) => updateAddress(idx, 'addressLine2', e.target.value)}
+                    idPrefix={`register-${idx}`}
+                    required
+                    city={addr.city}
+                    ward={addr.addressLine2}
+                    cityInvalid={!!fieldError(`addr${idx}.city`)}
+                    cityFeedback={fieldError(`addr${idx}.city`)}
+                    onCityBlur={() => touch(`addr${idx}.city`)}
+                    onChange={({ city, ward }) => {
+                      if (city !== undefined) updateAddress(idx, 'city', city);
+                      if (ward !== undefined) updateAddress(idx, 'addressLine2', ward);
+                    }}
                   />
-                  <Form.Group className="mb-2">
-                    <Form.Control
-                      size="sm"
-                      placeholder="Tỉnh/Thành phố *"
-                      value={addr.city}
-                      isInvalid={!!fieldError(`addr${idx}.city`)}
-                      onBlur={() => touch(`addr${idx}.city`)}
-                      onChange={(e) => updateAddress(idx, 'city', e.target.value)}
-                    />
-                    <Form.Control.Feedback type="invalid">{fieldError(`addr${idx}.city`)}</Form.Control.Feedback>
-                  </Form.Group>
                   <Form.Check
                     type="radio"
                     name="defaultAddress"

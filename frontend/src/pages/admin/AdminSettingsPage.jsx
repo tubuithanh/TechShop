@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, InputGroup, Nav, Badge, Modal, Spinner } from 'react-bootstrap';
 import {
   Gear, TelephoneFill, GridFill, Truck, Search, Tools,
-  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText
+  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill
 } from 'react-bootstrap-icons';
 import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
+import VnpaySettingsPanel from '../../components/admin/VnpaySettingsPanel';
 import { settingService } from '../../services/settingService';
 import { useSettings } from '../../store/SettingsContext';
 
@@ -16,7 +17,8 @@ const TABS = [
   { key: 'seo', label: 'SEO', icon: Search },
   { key: 'maintenance', label: 'Bảo trì', icon: Tools },
   { key: 'audit', label: 'Nhật ký thao tác', icon: JournalText },
-  { key: 'email', label: 'Cấu hình gửi email', icon: EnvelopeFill }
+  { key: 'email', label: 'Cấu hình gửi email', icon: EnvelopeFill },
+  { key: 'payment', label: 'Cấu hình thanh toán VNPay', icon: CreditCard2FrontFill }
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -379,6 +381,8 @@ export default function AdminSettingsPage() {
 
                 {activeTab === 'email' && <MailSettingsPanel />}
 
+                {activeTab === 'payment' && <VnpaySettingsPanel />}
+
                 {activeTab === 'audit' && (
                   <>
                     <SectionTitle icon={JournalText}>Nhật ký thao tác</SectionTitle>
@@ -440,7 +444,7 @@ export default function AdminSettingsPage() {
               </Card.Body>
             </Card>
 
-            <div className={`d-flex gap-2 mt-3 ${activeTab === 'email' ? 'd-none' : ''}`}>
+            <div className={`d-flex gap-2 mt-3 ${['email', 'payment'].includes(activeTab) ? 'd-none' : ''}`}>
               <Button type="submit" variant="primary" disabled={saving || !isDirty}>
                 {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
               </Button>
