@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, Form, Button, Alert, Stack } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
 import { userService } from '../../services/userService';
 import { authService } from '../../services/authService';
 import { setAccessToken } from '../../services/api';
 import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
+import ChangeEmailBox from '../../components/ChangeEmailBox';
 
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
@@ -44,10 +46,7 @@ export default function ProfilePage() {
         <Card.Body>
           <h2 className="fw-bold fs-5 mb-4">Thông tin tài khoản</h2>
           <Form onSubmit={handleUpdateProfile} style={{ maxWidth: '28rem' }}>
-            <Form.Group className="mb-3">
-              <Form.Label className="small text-muted">Email (không thể thay đổi)</Form.Label>
-              <Form.Control disabled value={user?.email} className="bg-light" />
-            </Form.Group>
+            <ChangeEmailBox user={user} onChanged={setUser} />
             <Form.Group className="mb-3">
               <Form.Label className="small text-muted">Họ và tên</Form.Label>
               <Form.Control
@@ -77,6 +76,12 @@ export default function ProfilePage() {
       <Card>
         <Card.Body>
           <h2 className="fw-bold fs-5 mb-4">Đổi mật khẩu</h2>
+          {user?.hasPlaceholderEmail && (
+            <Alert variant="info" className="small py-2">
+              Tài khoản đăng nhập bằng Zalo chưa có mật khẩu. Hãy <strong>thêm email</strong> ở trên, sau đó dùng{' '}
+              <Link to="/forgot-password">Quên mật khẩu</Link> để đặt mật khẩu và đăng nhập được bằng email.
+            </Alert>
+          )}
           <Form onSubmit={handleChangePassword} style={{ maxWidth: '28rem' }}>
             <Form.Group className="mb-3">
               <Form.Label className="small text-muted">Mật khẩu hiện tại</Form.Label>

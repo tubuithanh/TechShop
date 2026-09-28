@@ -8,7 +8,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const { sendOtp } = require('../utils/sendOtp');
 const { isMailConfigured } = require('../utils/mailer');
-const { sendPasswordResetCode } = require('../utils/notifyEmail');
+const { sendPasswordResetCode, sendChangeEmailCode } = require('../utils/notifyEmail');
 const Setting = require('../models/Setting');
 const { buildAuthUrl, exchangeCodeForToken } = require('../utils/zaloAuth');
 const {
@@ -423,7 +423,82 @@ const resetPassword = asyncHandler(async (req, res) => {
   res.json({ message: 'Đặt lại mật khẩu thành công, vui lòng đăng nhập bằng mật khẩu mới' });
 });
 
+// ================== ĐỔI EMAIL (khách hàng đã đăng nhập) ==================
+// Tài khoản Zalo đang dùng email tạm -> không cần mật khẩu (chưa từng đặt). Tài khoản thường -> phải nhập mật
+// khẩu hiện tại (lấy được phiên đăng nhập cũng không chiếm được tài khoản). Luôn xác thực bằng mã gửi tới
+// email MỚI để chắc chắn email đó là của khách.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// @route POST /api/auth/email/request-otp { email, currentPassword? }
+const requestEmailChange = asyncHandler(async (req, res) => {
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chức năng dành cho khách hàng' });
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || email.length > 254) return res.status(400).json({ message: 'Vui lòng nhập email hợp lệ' });
+  if (User.isPlaceholderEmail(email)) return res.status(400).json({ message: 'Email không hợp lệ' });
+
+  const user = await User.findById(req.account._id).select('+password');
+  if (email === user.email) return res.status(400).json({ message: 'Đây là email hiện tại của bạn' });
+  if (!User.isPlaceholderEmail(user.email)) {
+    const ok = typeof req.body.currentPassword === 'string' && (await user.comparePassword(req.body.currentPassword));
+    if (!ok) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
+  }
+  if (await User.exists({ email, _id: { $ne: user._id } })) {
+    return res.status(409).json({ message: 'Email này đã được dùng cho tài khoản khác' });
+  }
+
+  await Otp.deleteMany({ userId: user._id, purpose: 'change_email' });
+  const code = Otp.generateCode();
+  await Otp.create({
+    email,
+    userId: user._id,
+    codeHash: await bcrypt.hash(code, 10),
+    purpose: 'change_email',
+    expiresAt: new Date(Date.now() + OTP_EXPIRES_MINUTES * 60 * 1000)
+  });
+  try {
+    await sendChangeEmailCode(email, code, { expiresMinutes: OTP_EXPIRES_MINUTES });
+  } catch (err) {
+    console.error('[CHANGE-EMAIL] Gửi email thất bại:', err.message);
+    await Otp.deleteMany({ userId: user._id, purpose: 'change_email' });
+    return res.status(502).json({ message: 'Không gửi được email, vui lòng kiểm tra lại địa chỉ hoặc thử lại sau' });
+  }
+  res.json({
+    message: `Đã gửi mã xác nhận tới ${email} (có hiệu lực ${OTP_EXPIRES_MINUTES} phút)`,
+    devOtpPreview: !(await isMailConfigured()) || process.env.NODE_ENV !== 'production' ? code : undefined
+  });
+});
+
+// @route POST /api/auth/email/verify { email, code }
+const verifyEmailChange = asyncHandler(async (req, res) => {
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chức năng dành cho khách hàng' });
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const otp = await Otp.findOne({ userId: req.account._id, email, purpose: 'change_email' }).sort({ createdAt: -1 });
+  if (!otp || otp.expiresAt < new Date()) {
+    return res.status(400).json({ message: 'Mã xác nhận không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
+  }
+  if (otp.attempts >= MAX_OTP_ATTEMPTS) {
+    return res.status(429).json({ message: 'Bạn đã nhập sai quá nhiều lần, vui lòng yêu cầu mã mới' });
+  }
+  if (!(await otp.compareCode(String(req.body.code || '')))) {
+    otp.attempts += 1;
+    await otp.save();
+    return res.status(400).json({ message: 'Mã xác nhận không đúng' });
+  }
+  // Kiểm tra lại: trong lúc chờ mã, email có thể đã bị tài khoản khác đăng ký
+  if (await User.exists({ email, _id: { $ne: req.account._id } })) {
+    await Otp.deleteMany({ userId: req.account._id, purpose: 'change_email' });
+    return res.status(409).json({ message: 'Email này đã được dùng cho tài khoản khác' });
+  }
+  const user = await User.findById(req.account._id);
+  user.email = email;
+  await user.save();
+  await Otp.deleteMany({ userId: user._id, purpose: 'change_email' });
+  res.json({ message: 'Đã cập nhật email thành công', user: user.toSafeObject() });
+});
+
 module.exports = {
+  requestEmailChange,
+  verifyEmailChange,
   requestRegisterOtp,
   verifyRegisterOtp,
   register,

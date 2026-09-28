@@ -56,7 +56,8 @@ const flushEmails = () => Promise.all([...pending]);
 
 async function recipient(userId) {
   const user = await User.findById(userId).select('email displayName').lean();
-  return user?.email ? user : null;
+  // Email tạm của tài khoản Zalo không nhận được thư -> bỏ qua (tránh gửi lỗi / bị đánh dấu spam)
+  return user?.email && !User.isPlaceholderEmail(user.email) ? user : null;
 }
 
 function emailOrderPlaced(order) {
@@ -202,4 +203,30 @@ async function sendPasswordResetCode(email, code, { expiresMinutes }) {
   });
 }
 
-module.exports = { emailOrderPlaced, emailOrderStatus, emailPaymentSuccess, emailWarranty, sendPasswordResetCode, flushEmails };
+// Email mã OTP xác nhận đổi email (gửi tới email MỚI; gọi trực tiếp để khách biết nếu gửi lỗi)
+async function sendChangeEmailCode(email, code, { expiresMinutes }) {
+  const shop = await shopInfo();
+  await sendMail({
+    to: email,
+    subject: `${code} là mã xác nhận email mới tại ${shop.name}`,
+    html: layout({
+      shop,
+      title: 'Xác nhận email mới',
+      intro: 'Bạn vừa yêu cầu dùng email này cho tài khoản của mình. Mã xác nhận của bạn là:',
+      body: `<p style="margin:0 0 16px;font-size:32px;font-weight:bold;letter-spacing:8px;text-align:center;background:#f4f5f7;border-radius:8px;padding:14px 0">${esc(code)}</p>
+        <p style="margin:0 0 8px;font-size:14px">Mã có hiệu lực trong <strong>${expiresMinutes} phút</strong> và chỉ dùng được một lần.</p>
+        <p style="margin:0;font-size:14px;color:#6b7280">Nếu bạn không yêu cầu, hãy bỏ qua email này. Không chia sẻ mã cho bất kỳ ai.</p>`
+    }),
+    text: plain(`Mã xác nhận email mới của bạn là: ${code}`, `Mã có hiệu lực trong ${expiresMinutes} phút.`, 'Nếu bạn không yêu cầu, hãy bỏ qua email này.')
+  });
+}
+
+module.exports = {
+  emailOrderPlaced,
+  emailOrderStatus,
+  emailPaymentSuccess,
+  emailWarranty,
+  sendPasswordResetCode,
+  sendChangeEmailCode,
+  flushEmails
+};

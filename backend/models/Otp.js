@@ -6,7 +6,9 @@ const otpSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, lowercase: true },
     codeHash: { type: String, required: true },
-    purpose: { type: String, enum: ['register', 'reset_password'], required: true },
+    purpose: { type: String, enum: ['register', 'reset_password', 'change_email'], required: true },
+    // Đổi email: mã chỉ dùng được cho đúng tài khoản đã yêu cầu
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     expiresAt: { type: Date, required: true },
     verified: { type: Boolean, default: false },
     attempts: { type: Number, default: 0 }

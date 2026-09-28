@@ -54,10 +54,17 @@ userSchema.methods.comparePassword = function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
+// Tài khoản đăng nhập bằng Zalo không có email thật (Zalo không cung cấp) -> dùng email tạm dạng
+// zalo<id>@zalo.techshop.local cho đủ trường bắt buộc. Email này KHÔNG gửi thư được và khách có thể đổi sang
+// email thật (xác thực bằng mã OTP) ở trang Thông tin tài khoản.
+const PLACEHOLDER_EMAIL_DOMAIN = 'zalo.techshop.local';
+const isPlaceholderEmail = (email) => String(email || '').toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
+
 userSchema.methods.toSafeObject = function () {
   const obj = this.toObject();
   delete obj.password;
   obj.role = 'customer'; // hằng số, giúp code phía client dùng chung logic phân quyền với Admin
+  obj.hasPlaceholderEmail = isPlaceholderEmail(obj.email);
   return obj;
 };
 
@@ -65,3 +72,5 @@ userSchema.methods.toSafeObject = function () {
 userSchema.plugin(searchablePlugin, { getParts: (doc) => [doc.displayName, doc.email, doc.phoneNumber] });
 
 module.exports = mongoose.model('User', userSchema);
+module.exports.isPlaceholderEmail = isPlaceholderEmail;
+module.exports.PLACEHOLDER_EMAIL_DOMAIN = PLACEHOLDER_EMAIL_DOMAIN;

@@ -13,6 +13,8 @@ const {
   logout,
   getMe,
   changePassword,
+  requestEmailChange,
+  verifyEmailChange,
   requestPasswordReset,
   resetPassword
 } = require('../controllers/authController');
@@ -45,5 +47,8 @@ router.post('/refresh', refresh);
 router.post('/logout', logout);
 router.get('/me', protect, getMe);
 router.put('/change-password', protect, changePassword);
+// Đổi email (xác thực bằng mã gửi tới email mới) - giới hạn tần suất như xin mã đăng ký vì mỗi lần gửi 1 email
+router.post('/email/request-otp', protect, registerOtpLimiter, requestEmailChange);
+router.post('/email/verify', protect, verifyEmailChange);
 
 module.exports = router;
