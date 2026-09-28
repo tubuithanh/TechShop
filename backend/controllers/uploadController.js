@@ -8,23 +8,35 @@ const asyncHandler = require('../utils/asyncHandler');
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
 
-const cloudinaryConfigured = () =>
-  Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+// Thông tin Cloudinary lấy từ 1 trong 2 cách (cách 1 ưu tiên):
+// 1. CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>  (dòng Cloudinary hiển thị sẵn trên Dashboard)
+// 2. 3 biến riêng CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+// Chuỗi còn chỗ giữ chỗ "<your_api_key>" (chưa thay khóa thật) bị coi là CHƯA cấu hình.
+function cloudinaryConfig(env = process.env) {
+  const url = String(env.CLOUDINARY_URL || '').trim();
+  if (url) {
+    const m = url.match(/^cloudinary:\/\/([^:@/\s]+):([^@/\s]+)@([A-Za-z0-9_-]+)\/?$/);
+    if (m && !/[<>]/.test(url)) {
+      return { apiKey: decodeURIComponent(m[1]), apiSecret: decodeURIComponent(m[2]), cloudName: m[3] };
+    }
+  }
+  const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = env;
+  return cloudName && apiKey && apiSecret ? { cloudName, apiKey, apiSecret } : null;
+}
+const cloudinaryConfigured = () => Boolean(cloudinaryConfig());
 
 // Upload có ký (signed upload) qua REST API của Cloudinary - không cần cài SDK
 async function uploadToCloudinary(file, folder) {
+  const { cloudName, apiKey, apiSecret } = cloudinaryConfig();
   const timestamp = Math.floor(Date.now() / 1000);
-  const signature = crypto
-    .createHash('sha1')
-    .update(`folder=${folder}&timestamp=${timestamp}${process.env.CLOUDINARY_API_SECRET}`)
-    .digest('hex');
+  const signature = crypto.createHash('sha1').update(`folder=${folder}&timestamp=${timestamp}${apiSecret}`).digest('hex');
   const form = new FormData();
   form.append('file', new Blob([file.buffer], { type: file.mimetype }), file.originalname);
-  form.append('api_key', process.env.CLOUDINARY_API_KEY);
+  form.append('api_key', apiKey);
   form.append('timestamp', String(timestamp));
   form.append('folder', folder);
   form.append('signature', signature);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`, {
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: 'POST',
     body: form
   });
@@ -59,4 +71,4 @@ function storeImage(file, req, folder = 'techshop/products') {
   return cloudinaryConfigured() ? uploadToCloudinary(file, folder) : saveLocally(file, req);
 }
 
-module.exports = { uploadImages, storeImage, UPLOAD_DIR, EXT };
+module.exports = { uploadImages, storeImage, cloudinaryConfig, UPLOAD_DIR, EXT };

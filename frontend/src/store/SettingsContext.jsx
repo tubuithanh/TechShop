@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { settingService } from '../services/settingService';
 import { applyTheme, DEFAULT_THEME } from '../utils/theme';
+import { applyHead, cachedHead, headOf } from '../utils/siteHead';
 
 // Nhớ bộ màu lần trước trong trình duyệt để tô màu NGAY khi mở trang, tránh chớp màu đỏ mặc định
 // trong lúc chờ API cấu hình trả về
@@ -13,6 +14,8 @@ function cachedTheme() {
   }
 }
 applyTheme(cachedTheme());
+// Tiêu đề / mô tả / favicon lần trước -> áp dụng ngay, không chờ API
+applyHead(cachedHead());
 
 const SettingsContext = createContext(null);
 
@@ -61,20 +64,12 @@ export function SettingsProvider({ children }) {
     }
   }, [settings.theme]);
 
+  // Tiêu đề (Tiêu đề SEO / tên website), mô tả SEO và favicon theo cấu hình - chỉ áp dụng khi đã tải xong cấu hình
+  // thật (không ghi đè bằng giá trị mặc định lúc đang tải), và nhớ lại cho lần mở trang sau
   useEffect(() => {
-    if (settings.seo?.metaTitle || settings.siteName) {
-      document.title = settings.seo?.metaTitle || settings.siteName;
-    }
-    if (settings.faviconUrl) {
-      let link = document.querySelector('link[rel="icon"]');
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.head.appendChild(link);
-      }
-      link.href = settings.faviconUrl;
-    }
-  }, [settings]);
+    if (loading) return;
+    applyHead(headOf(settings), { remember: true });
+  }, [settings, loading]);
 
   return (
     <SettingsContext.Provider value={{ settings, loading, refreshSettings }}>{children}</SettingsContext.Provider>

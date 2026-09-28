@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Container, Row, Col, Breadcrumb, Button, Card } from 'react-bootstrap';
 import { useSettings } from '../store/SettingsContext';
+import { pageTitle } from '../utils/siteHead';
 
 // Khung dùng chung cho các trang chính sách (Điều khoản sử dụng, Chính sách bảo mật...): phần đầu có ngày
 // hiệu lực, mục lục bám theo vị trí đang đọc, các mục được đánh số, hộp liên hệ và liên kết chính sách liên quan.
@@ -11,7 +12,7 @@ export default function LegalPage({ title, subtitle, effectiveDate, updatedDate,
   const [activeId, setActiveId] = useState(sections[0]?.id);
 
   useEffect(() => {
-    document.title = `${title} | ${settings.siteName || 'TechShop'}`;
+    document.title = pageTitle(title, settings);
   }, [title, settings.siteName]);
 
   // Tô sáng mục đang đọc trong mục lục

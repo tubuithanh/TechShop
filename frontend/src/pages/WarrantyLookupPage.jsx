@@ -5,6 +5,7 @@ import { warrantyService } from '../services/warrantyService';
 import { WARRANTY_METHOD_LABEL, WARRANTY_STATUS_LABEL, WARRANTY_STATUS_VARIANT, WARRANTY_STATUS_OPTIONS } from '../constants/warranty';
 import ProductImage from '../components/ProductImage';
 import { useSettings } from '../store/SettingsContext';
+import { pageTitle } from '../utils/siteHead';
 
 const fmtDate = (d) => new Date(d).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -19,7 +20,7 @@ export default function WarrantyLookupPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    document.title = `Tra cứu bảo hành | ${settings.siteName || 'TechShop'}`;
+    document.title = pageTitle('Tra cứu bảo hành', settings);
   }, [settings.siteName]);
 
   const handleSubmit = async (e) => {

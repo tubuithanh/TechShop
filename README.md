@@ -64,7 +64,7 @@ Mở file `.env` và chỉnh `MONGO_URI` trỏ đến MongoDB của bạn nếu 
 | Gửi email (OTP, thông báo đơn hàng...) | Tab **Cấu hình gửi email**: SMTP, Resend, Gmail API (OAuth2), có nút gửi thử | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` hoặc `RESEND_API_KEY`, cùng `MAIL_FROM` |
 | Thanh toán VNPay | Tab **Cấu hình thanh toán VNPay**: Terminal ID, Secret Key, có nút kiểm tra kết nối | `VNP_TMN_CODE`, `VNP_HASH_SECRET`, `VNP_URL`, `VNP_RETURN_URL` |
 | Thanh toán MoMo | Tab **Cấu hình thanh toán MoMo**: Partner Code, Access Key, Secret Key, có nút kiểm tra kết nối và nút điền **bộ khóa thử công khai** của MoMo | `MOMO_PARTNER_CODE`, `MOMO_ACCESS_KEY`, `MOMO_SECRET_KEY`, `MOMO_ENDPOINT`, `MOMO_REDIRECT_URL`, `MOMO_IPN_URL` |
-| Lưu ảnh tải lên | — | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` |
+| Lưu ảnh tải lên | — | `CLOUDINARY_URL` (dòng Cloudinary cung cấp trên Dashboard) **hoặc** `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` |
 | Đăng nhập bằng Zalo | — | `ZALO_APP_ID`, `ZALO_APP_SECRET`, `ZALO_REDIRECT_URI`, `HTTPS_PORT` |
 | Khóa mã hóa bí mật (mật khẩu SMTP, API key, Secret Key VNPay) | — | `SETTINGS_SECRET` (bỏ trống thì dùng `JWT_ACCESS_SECRET`) |
 | Giới hạn tần suất | Tab **Bảo mật**: bật/tắt và số lần cho phép | `API_RATE_LIMIT` (mặc định 1000), `RATE_LIMIT_DISABLED=true` để tắt hẳn |
@@ -118,7 +118,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có **120 test case** (26 bộ test), bao gồm:
+Có **121 test case** (27 bộ test), bao gồm:
 - tài khoản: đăng ký/đăng nhập, quên mật khẩu, đổi mật khẩu (đăng xuất thiết bị khác), đăng nhập Zalo, thêm/đổi email có xác thực;
 - mua hàng: giỏ hàng (cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, tự hủy đơn VNPay quá hạn;
 - thanh toán VNPay và MoMo: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, giới hạn số tiền của MoMo, cấu hình trong trang quản trị;

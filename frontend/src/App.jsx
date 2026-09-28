@@ -53,6 +53,7 @@ import AdminAuditLogPage from './pages/admin/AdminAuditLogPage';
 import AdminLocationsPage from './pages/admin/AdminLocationsPage';
 import AdminSlidesPage from './pages/admin/AdminSlidesPage';
 import SeasonalEffect from './components/SeasonalEffect';
+import TitleManager from './components/TitleManager';
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminPermissionGroupsPage from './pages/admin/AdminPermissionGroupsPage';
@@ -93,6 +94,7 @@ export default function App() {
         <CartProvider>
           <SettingsProvider>
             <MaintenanceGate>
+              <TitleManager />
               <Routes>
                 {/* ===== Trang khách hàng (public) ===== */}
                 <Route path="/" element={<StorefrontLayout><HomePage /></StorefrontLayout>} />
