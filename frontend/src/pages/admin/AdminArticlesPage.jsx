@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { Container, Row, Col, Table, Button, Form, Modal, Badge } from 'react-bootstrap';
+import { useEffect, useState } from 'react';
+import { Container, Row, Col, Table, Button, Form, Modal, Badge, Alert } from 'react-bootstrap';
+import { Trash } from 'react-bootstrap-icons';
+import { useAuth } from '../../store/AuthContext';
 import { postService } from '../../services/postService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
@@ -7,6 +9,8 @@ import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import ProductUrlImport from '../../components/admin/ProductUrlImport';
+
+const DELETE_ALL_CONFIRM = 'XOA TAT CA';
 
 const emptyForm = { title: '', shortDescription: '', content: '', category: 'tin_tuc', featuredImage: '', isPublished: true };
 
@@ -23,6 +27,60 @@ export default function AdminArticlesPage() {
   });
   const page = query.values.page;
   const setPage = query.setPage;
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin'; // xóa bài (từng bài / hàng loạt / tất cả) chỉ dành cho admin
+  const [selected, setSelected] = useState(() => new Set());
+  const [notice, setNotice] = useState(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  // Đổi trang / bộ lọc / tải lại -> bỏ chọn các bài không còn hiển thị
+  useEffect(() => {
+    setSelected((cur) => new Set([...cur].filter((id) => posts.some((p) => p._id === id))));
+  }, [posts]);
+
+  const toggleOne = (id) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allOnPageSelected = posts.length > 0 && posts.every((p) => selected.has(p._id));
+  const toggleAllOnPage = () => setSelected(allOnPageSelected ? new Set() : new Set(posts.map((p) => p._id)));
+
+  const handleBulkDelete = async () => {
+    if (!selected.size || !confirm(`Xóa ${selected.size} bài viết đã chọn? Hành động này không thể hoàn tác.`)) return;
+    setDeleting(true);
+    try {
+      const res = await postService.bulkRemove([...selected]);
+      setSelected(new Set());
+      setNotice({ variant: 'success', text: res.message });
+      load();
+    } catch (err) {
+      setNotice({ variant: 'danger', text: err.response?.data?.message || 'Xóa thất bại' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    setDeleting(true);
+    try {
+      const res = await postService.removeAll(confirmText);
+      setShowDeleteAll(false);
+      setConfirmText('');
+      setSelected(new Set());
+      setNotice({ variant: 'success', text: res.message });
+      query.reset();
+      load();
+    } catch (err) {
+      setNotice({ variant: 'danger', text: err.response?.data?.message || 'Xóa thất bại' });
+    } finally {
+      setDeleting(false);
+    }
+  };
   const filters = [
     {
       key: 'category',
@@ -84,6 +142,41 @@ export default function AdminArticlesPage() {
           + Viết bài mới
         </Button>
       </div>
+
+      {notice && (
+        <Alert variant={notice.variant} dismissible onClose={() => setNotice(null)} className="py-2 small">
+          {notice.text}
+        </Alert>
+      )}
+
+      <Modal show={showDeleteAll} onHide={() => !deleting && setShowDeleteAll(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-6 text-danger">Xóa TẤT CẢ bài viết</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="small">
+          <p>
+            Toàn bộ <strong>{total}</strong> bài viết (kể cả bản nháp và bình luận của bài) sẽ bị xóa vĩnh viễn, không thể hoàn tác.
+          </p>
+          <Form.Label htmlFor="delete-all-confirm">
+            Gõ <code>{DELETE_ALL_CONFIRM}</code> để xác nhận:
+          </Form.Label>
+          <Form.Control
+            id="delete-all-confirm"
+            autoComplete="off"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+          />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" disabled={deleting} onClick={() => setShowDeleteAll(false)}>
+            Hủy
+          </Button>
+          <Button variant="danger" disabled={confirmText !== DELETE_ALL_CONFIRM || deleting} onClick={handleDeleteAll}>
+            {deleting ? 'Đang xóa...' : 'Xóa tất cả'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       <Modal show={showForm} onHide={() => setShowForm(false)} size="lg" centered>
         <Modal.Header closeButton>
@@ -183,9 +276,33 @@ export default function AdminArticlesPage() {
 
       <AdminSearchBar query={query} placeholder="Tiêu đề, mô tả, tác giả..." filters={filters} total={total} loading={loading} />
       <div className="bg-white rounded-3 shadow-sm">
+        {isAdmin && (
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 p-2 border-bottom">
+            <span className="small text-muted">{selected.size ? `Đã chọn ${selected.size} bài` : 'Tick ô bên trái để chọn nhiều bài'}</span>
+            <div className="d-flex gap-2">
+              <Button size="sm" variant="danger" disabled={!selected.size || deleting} onClick={handleBulkDelete}>
+                <Trash className="me-1" />
+                Xóa đã chọn{selected.size ? ` (${selected.size})` : ''}
+              </Button>
+              <Button size="sm" variant="outline-danger" disabled={deleting || total === 0} onClick={() => setShowDeleteAll(true)}>
+                Xóa tất cả bài viết
+              </Button>
+            </div>
+          </div>
+        )}
         <Table striped hover responsive className="mb-0 align-middle">
           <thead>
             <tr className="text-muted">
+              {isAdmin && (
+                <th style={{ width: 36 }}>
+                  <Form.Check
+                    aria-label="Chọn tất cả bài trên trang"
+                    checked={allOnPageSelected}
+                    disabled={!posts.length}
+                    onChange={toggleAllOnPage}
+                  />
+                </th>
+              )}
               <th>Tiêu đề</th>
               <th>Danh mục</th>
               <th>Lượt xem</th>
@@ -195,7 +312,12 @@ export default function AdminArticlesPage() {
           </thead>
           <tbody>
             {posts.map((a) => (
-              <tr key={a._id}>
+              <tr key={a._id} className={selected.has(a._id) ? 'table-danger' : ''}>
+                {isAdmin && (
+                  <td>
+                    <Form.Check aria-label={`Chọn bài ${a.title}`} checked={selected.has(a._id)} onChange={() => toggleOne(a._id)} />
+                  </td>
+                )}
                 <td>{a.title}</td>
                 <td>{a.category}</td>
                 <td>{a.viewCount}</td>
@@ -209,16 +331,18 @@ export default function AdminArticlesPage() {
                     <Button size="sm" variant="outline-primary" onClick={() => handleEdit(a)}>
                       Sửa
                     </Button>
-                    <Button size="sm" variant="outline-danger" onClick={() => handleDelete(a._id)}>
-                      Xóa
-                    </Button>
+                    {isAdmin && (
+                      <Button size="sm" variant="outline-danger" onClick={() => handleDelete(a._id)}>
+                        Xóa
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>
             ))}
             {!loading && posts.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center text-muted p-4">
+                <td colSpan={isAdmin ? 6 : 5} className="text-center text-muted p-4">
                   Không tìm thấy kết quả phù hợp
                 </td>
               </tr>

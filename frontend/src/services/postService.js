@@ -28,5 +28,15 @@ export const postService = {
   async remove(id) {
     const { data } = await api.delete(`/posts/${id}`);
     return data;
+  },
+  // Xóa nhiều bài đã chọn (chỉ admin)
+  async bulkRemove(ids) {
+    const { data } = await api.post('/posts/bulk-delete', { ids });
+    return data;
+  },
+  // Xóa TẤT CẢ bài viết - phải gửi kèm chuỗi xác nhận (chỉ admin)
+  async removeAll(confirm) {
+    const { data } = await api.delete('/posts', { data: { confirm } });
+    return data;
   }
 };

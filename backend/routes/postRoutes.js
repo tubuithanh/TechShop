@@ -7,7 +7,9 @@ const {
   getPostsAdmin,
   createPost,
   updatePost,
-  deletePost
+  deletePost,
+  bulkDeletePosts,
+  deleteAllPosts
 } = require('../controllers/postController');
 const { protect, authorize, can } = require('../middlewares/authMiddleware');
 const { uploadLimiter } = require('../middlewares/rateLimits');
@@ -23,6 +25,9 @@ router.post('/import-url', protect, can('articles.manage'), uploadLimiter, impor
 router.post('/import-html', protect, can('articles.manage'), uploadLimiter, importPostFromHtml);
 router.post('/', protect, can('articles.manage'), createPost);
 router.put('/:id', protect, can('articles.manage'), updatePost);
+// Xóa hàng loạt / xóa tất cả - chỉ admin (giống xóa từng bài)
+router.post('/bulk-delete', protect, authorize('admin'), bulkDeletePosts);
+router.delete('/', protect, authorize('admin'), deleteAllPosts);
 router.delete('/:id', protect, authorize('admin'), deletePost);
 
 module.exports = router;

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { makeSlug } = require('../utils/slug');
 const Post = require('../models/Post');
 const asyncHandler = require('../utils/asyncHandler');
@@ -98,4 +99,38 @@ const deletePost = asyncHandler(async (req, res) => {
   res.json({ message: 'Đã xóa bài viết' });
 });
 
-module.exports = { getPosts, getPostBySlug, addComment, getPostsAdmin, createPost, updatePost, deletePost };
+const MAX_BULK = 500;
+// Chuỗi admin phải gõ đúng khi xóa TẤT CẢ bài viết (chặn bấm nhầm / gọi API vô tình)
+const DELETE_ALL_CONFIRM = 'XOA TAT CA';
+
+// @route POST /api/posts/bulk-delete { ids: [...] } - xóa nhiều bài đã chọn (chỉ admin)
+const bulkDeletePosts = asyncHandler(async (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? [...new Set(req.body.ids.map(String))] : [];
+  if (!ids.length) return res.status(400).json({ message: 'Chưa chọn bài viết nào' });
+  if (ids.length > MAX_BULK) return res.status(400).json({ message: `Mỗi lần xóa tối đa ${MAX_BULK} bài` });
+  if (!ids.every((id) => mongoose.isValidObjectId(id))) return res.status(400).json({ message: 'Danh sách bài viết không hợp lệ' });
+  const { deletedCount } = await Post.deleteMany({ _id: { $in: ids } });
+  res.json({ message: `Đã xóa ${deletedCount} bài viết`, deletedCount });
+});
+
+// @route DELETE /api/posts { confirm: 'XOA TAT CA' } - xóa TOÀN BỘ bài viết (chỉ admin)
+const deleteAllPosts = asyncHandler(async (req, res) => {
+  if (req.body?.confirm !== DELETE_ALL_CONFIRM) {
+    return res.status(400).json({ message: `Vui lòng xác nhận bằng cách gõ "${DELETE_ALL_CONFIRM}"` });
+  }
+  const { deletedCount } = await Post.deleteMany({});
+  res.json({ message: `Đã xóa toàn bộ ${deletedCount} bài viết`, deletedCount });
+});
+
+module.exports = {
+  getPosts,
+  getPostBySlug,
+  addComment,
+  getPostsAdmin,
+  createPost,
+  updatePost,
+  deletePost,
+  bulkDeletePosts,
+  deleteAllPosts,
+  DELETE_ALL_CONFIRM
+};
