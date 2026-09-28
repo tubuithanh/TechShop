@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Container, Row, Col, Form, Button, Card, Alert } from 'react-bootstrap';
+import { Link, useNavigate } from 'react-router-dom';
+import { Container, Row, Col, Form, Button, Card, Alert, Badge } from 'react-bootstrap';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
 import { useSettings } from '../store/SettingsContext';
@@ -23,7 +23,8 @@ export default function CheckoutPage() {
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState('');
 
-  const defaultAddress = user?.addresses?.find((a) => a.isDefault) || user?.addresses?.[0];
+  const savedAddresses = user?.addresses || [];
+  const defaultAddress = savedAddresses.find((a) => a.isDefault) || savedAddresses[0];
   const [address, setAddress] = useState({
     fullName: user?.displayName || '',
     phone: user?.phoneNumber || '',
@@ -33,6 +34,28 @@ export default function CheckoutPage() {
     state: defaultAddress?.state || '',
     pincode: defaultAddress?.pincode || ''
   });
+  // Địa chỉ trong sổ địa chỉ đang chọn; 'new' = khách tự nhập địa chỉ khác
+  const [addressChoice, setAddressChoice] = useState(defaultAddress?._id || 'new');
+  const chooseAddress = (choice) => {
+    setAddressChoice(choice);
+    const a = savedAddresses.find((x) => x._id === choice);
+    setAddress((cur) => ({
+      ...cur,
+      addressLine1: a?.addressLine1 || '',
+      addressLine2: a?.addressLine2 || '',
+      city: a?.city || '',
+      state: a?.state || '',
+      pincode: a?.pincode || ''
+    }));
+  };
+  // Thông tin tài khoản tải xong SAU khi trang đã mở (tải lại trang) -> chọn sẵn địa chỉ mặc định
+  useEffect(() => {
+    if (defaultAddress && addressChoice === 'new' && !address.addressLine1) chooseAddress(defaultAddress._id);
+    if (user && !address.fullName && !address.phone) {
+      setAddress((cur) => ({ ...cur, fullName: user.displayName || '', phone: user.phoneNumber || '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
   const [deliveryMethod, setDeliveryMethod] = useState('home_delivery');
   const [paymentMode, setPaymentMode] = useState('cod');
   // null = đang kiểm tra; false = máy chủ chưa cấu hình VNPay -> ẩn lựa chọn này
@@ -168,19 +191,73 @@ export default function CheckoutPage() {
               value={address.phone}
               onChange={(e) => setAddress({ ...address, phone: e.target.value })}
             />
-            <Form.Control
-              placeholder="Địa chỉ (số nhà, đường)"
-              value={address.addressLine1}
-              onChange={(e) => setAddress({ ...address, addressLine1: e.target.value })}
-            />
-            <LocationFields
-              idPrefix="checkout"
-              city={address.city}
-              ward={address.addressLine2}
-              onChange={({ city, ward }) =>
-                setAddress((a) => ({ ...a, ...(city !== undefined && { city }), ...(ward !== undefined && { addressLine2: ward }) }))
-              }
-            />
+            {savedAddresses.length > 0 && (
+              <div className="d-flex flex-column gap-2 my-1" role="radiogroup" aria-label="Chọn địa chỉ nhận hàng">
+                {savedAddresses.map((a) => (
+                  <label
+                    key={a._id}
+                    className={`border rounded-3 p-2 px-3 d-flex gap-2 align-items-start small ${
+                      addressChoice === a._id ? 'border-primary bg-primary-subtle' : ''
+                    }`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <Form.Check.Input
+                      type="radio"
+                      name="checkoutAddress"
+                      className="mt-1 flex-shrink-0"
+                      checked={addressChoice === a._id}
+                      onChange={() => chooseAddress(a._id)}
+                    />
+                    <span>
+                      <span className="fw-medium">{a.label || 'Địa chỉ'}</span>
+                      {a.isDefault && (
+                        <Badge bg="primary" className="ms-2 fw-normal">
+                          Mặc định
+                        </Badge>
+                      )}
+                      <span className="d-block text-muted">
+                        {[a.addressLine1, a.addressLine2, a.city].filter(Boolean).join(', ')}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+                <label
+                  className={`border rounded-3 p-2 px-3 d-flex gap-2 align-items-center small ${
+                    addressChoice === 'new' ? 'border-primary bg-primary-subtle' : ''
+                  }`}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <Form.Check.Input
+                    type="radio"
+                    name="checkoutAddress"
+                    className="mt-0 flex-shrink-0"
+                    checked={addressChoice === 'new'}
+                    onChange={() => chooseAddress('new')}
+                  />
+                  <span className="fw-medium">Giao đến địa chỉ khác</span>
+                </label>
+                <Link to="/account/addresses" className="small">
+                  Quản lý sổ địa chỉ
+                </Link>
+              </div>
+            )}
+            {addressChoice === 'new' && (
+              <>
+                <Form.Control
+                  placeholder="Địa chỉ (số nhà, đường)"
+                  value={address.addressLine1}
+                  onChange={(e) => setAddress({ ...address, addressLine1: e.target.value })}
+                />
+                <LocationFields
+                  idPrefix="checkout"
+                  city={address.city}
+                  ward={address.addressLine2}
+                  onChange={({ city, ward }) =>
+                    setAddress((a) => ({ ...a, ...(city !== undefined && { city }), ...(ward !== undefined && { addressLine2: ward }) }))
+                  }
+                />
+              </>
+            )}
           </div>
 
           <h2 className="fw-medium mt-4 mb-3 fs-6">Hình thức nhận hàng</h2>
