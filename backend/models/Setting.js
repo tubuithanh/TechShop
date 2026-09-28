@@ -29,6 +29,10 @@ const settingSchema = new mongoose.Schema(
     // Số ngày lưu nhật ký thao tác: 0 = không ghi nhật ký; N = chỉ giữ N ngày gần nhất (cũ hơn tự xóa)
     auditLogRetentionDays: { type: Number, default: 30, min: 0, max: 3650 },
 
+    // Chống lạm dụng & tấn công dồn dập (giới hạn tần suất gọi API) - chỉ admin xem/đổi qua /api/settings/security,
+    // KHÔNG trả về ở GET /api/settings công khai
+    rateLimitEnabled: { type: Boolean, default: true, select: false },
+
     maintenanceMode: { type: Boolean, default: false },
     maintenanceMessage: {
       type: String,

@@ -1,3 +1,4 @@
+const { clearRateLimitCache } = require('../middlewares/rateLimits');
 const { clearRetentionCache, purgeOldAuditLogs } = require('../utils/auditRetention');
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
@@ -18,7 +19,8 @@ const getSettings = asyncHandler(async (req, res) => {
 // @route PUT /api/settings - chỉ admin (không cho staff vì đây là cấu hình toàn hệ thống)
 const updateSettings = asyncHandler(async (req, res) => {
   const settings = await getOrCreateSettings();
-  const { _id, createdAt, updatedAt, __v, socialLinks, seo, theme, ...allowedFields } = req.body;
+  // rateLimitEnabled đổi riêng qua /api/settings/security (có xác nhận), không nhận ở đây
+  const { _id, createdAt, updatedAt, __v, socialLinks, seo, theme, rateLimitEnabled, ...allowedFields } = req.body;
   // Bộ màu: kiểm tra mã màu trước khi ghi (gửi thiếu trường nào thì giữ giá trị cũ của trường đó)
   let themePatch = null;
   if (theme !== undefined) {
@@ -40,4 +42,27 @@ const updateSettings = asyncHandler(async (req, res) => {
   res.json({ data: settings });
 });
 
-module.exports = { getSettings, updateSettings };
+// @route GET /api/settings/security - chỉ admin
+const getSecuritySettings = asyncHandler(async (req, res) => {
+  await getOrCreateSettings();
+  const settings = await Setting.findOne().select('+rateLimitEnabled').lean();
+  res.json({ data: { rateLimitEnabled: settings.rateLimitEnabled !== false, envDisabled: process.env.RATE_LIMIT_DISABLED === 'true' } });
+});
+
+// @route PUT /api/settings/security - chỉ admin
+const updateSecuritySettings = asyncHandler(async (req, res) => {
+  if (typeof req.body.rateLimitEnabled !== 'boolean') {
+    return res.status(400).json({ message: 'Giá trị bật/tắt không hợp lệ' });
+  }
+  await getOrCreateSettings();
+  await Setting.updateOne({}, { $set: { rateLimitEnabled: req.body.rateLimitEnabled } });
+  clearRateLimitCache(); // áp dụng ngay, không chờ bộ nhớ đệm hết hạn
+  res.json({
+    message: req.body.rateLimitEnabled
+      ? 'Đã BẬT chống lạm dụng & tấn công dồn dập'
+      : 'Đã TẮT chống lạm dụng & tấn công dồn dập',
+    data: { rateLimitEnabled: req.body.rateLimitEnabled, envDisabled: process.env.RATE_LIMIT_DISABLED === 'true' }
+  });
+});
+
+module.exports = { getSettings, updateSettings, getSecuritySettings, updateSecuritySettings };

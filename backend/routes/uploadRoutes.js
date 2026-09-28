@@ -1,6 +1,5 @@
 const express = require('express');
 const multer = require('multer');
-const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { uploadImages, EXT } = require('../controllers/uploadController');
 const { protect } = require('../middlewares/authMiddleware');
@@ -13,13 +12,8 @@ const upload = multer({
 });
 
 // Bắt lỗi của multer (file quá lớn, sai định dạng...) để trả 400 kèm thông báo rõ ràng thay vì 500
-// Giới hạn số lần tải ảnh để tránh bị lợi dụng làm đầy ổ đĩa/Cloudinary
-const uploadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  message: { message: 'Bạn tải ảnh quá nhiều lần, vui lòng thử lại sau ít phút' },
-  skip: () => process.env.RATE_LIMIT_DISABLED === 'true'
-});
+// Giới hạn số lần tải ảnh để tránh bị lợi dụng làm đầy ổ đĩa/Cloudinary (middlewares/rateLimits.js)
+const { uploadLimiter } = require('../middlewares/rateLimits');
 
 router.post('/', protect, uploadLimiter, (req, res, next) =>
   upload.array('images', 5)(req, res, (err) => {

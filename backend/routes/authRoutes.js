@@ -1,6 +1,5 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
-const { registerOtpLimiter } = require('../middlewares/rateLimits');
+const { registerOtpLimiter, resetLimiter } = require('../middlewares/rateLimits');
 const router = express.Router();
 const {
   requestRegisterOtp,
@@ -21,13 +20,7 @@ const { protect } = require('../middlewares/authMiddleware');
 
 router.post('/register/request-otp', registerOtpLimiter, requestRegisterOtp);
 
-// Quên mật khẩu: giới hạn số lần xin mã để không bị lợi dụng gửi email hàng loạt tới 1 người
-const resetLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { message: 'Bạn đã yêu cầu quá nhiều lần, vui lòng thử lại sau ít phút' },
-  skip: () => process.env.RATE_LIMIT_DISABLED === 'true'
-});
+// Quên mật khẩu: giới hạn số lần xin mã (middlewares/rateLimits.js)
 router.post('/password/request-otp', resetLimiter, requestPasswordReset);
 router.post('/password/reset', resetLimiter, resetPassword);
 router.post('/register/verify-otp', verifyRegisterOtp);

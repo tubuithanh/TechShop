@@ -18,6 +18,15 @@ export const settingService = {
     const { data } = await api.put('/settings/mail', payload);
     return data;
   },
+  // Bảo mật: bật/tắt chống lạm dụng & tấn công dồn dập (chỉ admin)
+  async getSecuritySettings() {
+    const { data } = await api.get('/settings/security');
+    return data.data;
+  },
+  async updateSecuritySettings(payload) {
+    const { data } = await api.put('/settings/security', payload);
+    return data;
+  },
   // Template màu sắc giao diện (chỉ admin)
   async getThemeTemplates() {
     const { data } = await api.get('/settings/themes');

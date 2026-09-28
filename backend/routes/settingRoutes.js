@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getSettings, updateSettings } = require('../controllers/settingController');
+const { getSettings, updateSettings, getSecuritySettings, updateSecuritySettings } = require('../controllers/settingController');
 const {
   getMailConfig,
   updateMailConfig,
@@ -37,6 +37,10 @@ router.get('/themes', protect, authorize('admin'), getThemeTemplates);
 router.post('/themes', protect, authorize('admin'), createThemeTemplate);
 router.put('/themes/:id', protect, authorize('admin'), updateThemeTemplate);
 router.delete('/themes/:id', protect, authorize('admin'), deleteThemeTemplate);
+
+// Bảo mật: bật/tắt chống lạm dụng & tấn công dồn dập - CHỈ admin
+router.get('/security', protect, authorize('admin'), getSecuritySettings);
+router.put('/security', protect, authorize('admin'), updateSecuritySettings);
 
 router.get('/', getSettings);
 router.put('/', protect, authorize('admin'), updateSettings);

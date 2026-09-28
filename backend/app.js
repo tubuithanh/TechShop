@@ -2,12 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
-const rateLimit = require('express-rate-limit');
 
 const { notFound, errorHandler } = require('./middlewares/errorMiddleware');
 const auditLogger = require('./middlewares/auditLogger');
 const paginationGuard = require('./middlewares/paginationGuard');
-const { apiLimiter } = require('./middlewares/rateLimits');
+const { apiLimiter, loginLimiter } = require('./middlewares/rateLimits');
 
 const authRoutes = require('./routes/authRoutes');
 const { zaloCallback } = require('./controllers/authController');
@@ -59,12 +58,6 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Giới hạn số lần gọi API đăng nhập để chống brute-force (bảo mật)
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { message: 'Bạn đã thử đăng nhập quá nhiều lần, vui lòng thử lại sau ít phút' },
-  skip: () => process.env.RATE_LIMIT_DISABLED === 'true'
-});
 app.use('/api/auth/login', loginLimiter);
 
 // Ghi nhật ký thao tác quản trị (chỉ log khi tài khoản thuộc collection admins)
