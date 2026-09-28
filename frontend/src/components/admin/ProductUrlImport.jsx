@@ -3,10 +3,17 @@ import { Alert, Button, Form, InputGroup, Spinner } from 'react-bootstrap';
 import { CloudDownload, ClipboardCheck } from 'react-bootstrap-icons';
 import api from '../../services/api';
 
-// Ô "Nhập từ link thegioididong.com" ở form Thêm sản phẩm: gọi backend đọc thông tin + tải ảnh về kho ảnh,
-// rồi đưa bản nháp cho form (onImported). Không tự lưu sản phẩm - admin xem lại, sửa rồi mới bấm Lưu.
+// Ô "Nhập nhanh từ link" (sản phẩm từ thegioididong.com, tin tức từ tinhte.vn...): gọi backend đọc thông tin + tải ảnh về kho ảnh,
+// rồi đưa bản nháp cho form (onImported). Không tự lưu - admin xem lại, sửa rồi mới bấm Lưu.
 // Dự phòng: nếu máy chủ bị trang nguồn chặn, admin dán mã nguồn trang copy từ trình duyệt của mình.
-export default function ProductUrlImport({ onImported }) {
+export default function ProductUrlImport({
+  onImported,
+  sourceName = 'thegioididong.com',
+  endpoint = '/products/import-url',
+  htmlEndpoint = '/products/import-html',
+  placeholder = 'VD: https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+  hint = 'Tự điền tên, thương hiệu, danh mục, màu/giá, thông số và tải ảnh về kho ảnh của website. Hãy kiểm tra lại trước khi lưu. Dữ liệu thuộc bản quyền của trang nguồn - chỉ dùng cho mục đích minh họa.'
+}) {
   const [url, setUrl] = useState('');
   const [html, setHtml] = useState('');
   const [showPaste, setShowPaste] = useState(false);
@@ -19,8 +26,8 @@ export default function ProductUrlImport({ onImported }) {
     try {
       const { data } =
         mode === 'html'
-          ? await api.post('/products/import-html', { url, html })
-          : await api.post('/products/import-url', { url });
+          ? await api.post(htmlEndpoint, { url, html })
+          : await api.post(endpoint, { url });
       onImported(data.data);
       setResult({ variant: data.warnings?.length ? 'warning' : 'success', message: data.message, warnings: data.warnings || [] });
       if (mode === 'html') {
@@ -28,7 +35,7 @@ export default function ProductUrlImport({ onImported }) {
         setShowPaste(false);
       }
     } catch (err) {
-      setResult({ variant: 'danger', message: err.response?.data?.message || 'Không lấy được thông tin sản phẩm', warnings: [] });
+      setResult({ variant: 'danger', message: err.response?.data?.message || 'Không lấy được thông tin', warnings: [] });
       if (err.response?.data?.blocked) setShowPaste(true); // máy chủ bị chặn -> mở sẵn cách dán mã nguồn
     } finally {
       setLoading(false);
@@ -38,12 +45,12 @@ export default function ProductUrlImport({ onImported }) {
   return (
     <div className="border rounded-3 p-3 bg-light">
       <Form.Label className="small fw-medium mb-1" htmlFor="import-url">
-        Nhập nhanh từ link thegioididong.com
+        Nhập nhanh từ link {sourceName}
       </Form.Label>
       <InputGroup size="sm">
         <Form.Control
           id="import-url"
-          placeholder="VD: https://www.thegioididong.com/dtdd/iphone-16-pro-max"
+          placeholder={placeholder}
           value={url}
           disabled={loading}
           onChange={(e) => setUrl(e.target.value)}
@@ -60,8 +67,7 @@ export default function ProductUrlImport({ onImported }) {
         </Button>
       </InputGroup>
       <Form.Text className="text-muted">
-        Tự điền tên, thương hiệu, danh mục, màu/giá, thông số và tải ảnh về kho ảnh của website. Hãy kiểm tra lại trước khi
-        lưu. Dữ liệu thuộc bản quyền của trang nguồn - chỉ dùng cho mục đích minh họa.{' '}
+        {hint}{' '}
         <Button variant="link" size="sm" className="p-0 align-baseline" onClick={() => setShowPaste((v) => !v)}>
           {showPaste ? 'Ẩn cách dán mã nguồn' : 'Không lấy được? Dán mã nguồn trang'}
         </Button>
@@ -70,11 +76,11 @@ export default function ProductUrlImport({ onImported }) {
       {showPaste && (
         <div className="mt-2 border rounded-3 p-2 bg-white">
           <div className="small mb-2">
-            <strong>Dán mã nguồn trang</strong> - dùng khi máy chủ bị thegioididong.com chặn:
+            <strong>Dán mã nguồn trang</strong> - dùng khi máy chủ bị {sourceName} chặn:
             <ol className="mb-1 ps-3">
-              <li>Dán link sản phẩm vào ô phía trên (để biết danh mục).</li>
+              <li>Dán link vào ô phía trên.</li>
               <li>
-                Mở trang sản phẩm trên trình duyệt, nhấn <kbd>Ctrl</kbd> + <kbd>U</kbd> để xem mã nguồn trang.
+                Mở trang đó trên trình duyệt, nhấn <kbd>Ctrl</kbd> + <kbd>U</kbd> để xem mã nguồn trang.
               </li>
               <li>
                 Nhấn <kbd>Ctrl</kbd> + <kbd>A</kbd> rồi <kbd>Ctrl</kbd> + <kbd>C</kbd> để copy toàn bộ, dán vào ô dưới đây.
@@ -86,7 +92,7 @@ export default function ProductUrlImport({ onImported }) {
             id="import-html"
             rows={4}
             className="font-monospace small"
-            placeholder="<!DOCTYPE html> ... (dán toàn bộ mã nguồn trang sản phẩm)"
+            placeholder="<!DOCTYPE html> ... (dán toàn bộ mã nguồn trang)"
             value={html}
             disabled={loading}
             onChange={(e) => setHtml(e.target.value)}

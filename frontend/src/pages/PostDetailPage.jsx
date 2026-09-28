@@ -4,6 +4,7 @@ import { Container, Row, Col, Breadcrumb, Badge, Form, Button, Spinner } from 'r
 import { useAuth } from '../store/AuthContext';
 import { postService } from '../services/postService';
 import ProductCard from '../components/ProductCard';
+import PostContent from '../components/PostContent';
 
 const categoryLabel = { tu_van: 'Tư vấn', danh_gia: 'Đánh giá', thu_thuat: 'Thủ thuật', tin_tuc: 'Tin tức' };
 
@@ -51,9 +52,7 @@ export default function PostDetailPage() {
 
       {post.featuredImage && <img src={post.featuredImage} alt={post.title} className="w-100 rounded-3 mb-4" />}
 
-      <div className="small" style={{ lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-        {post.content}
-      </div>
+      <PostContent content={post.content} />
 
       {post.relatedProductIds?.length > 0 && (
         <div className="mt-5">

@@ -6,6 +6,7 @@ import AdminPagination from '../../components/admin/AdminPagination';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
+import ProductUrlImport from '../../components/admin/ProductUrlImport';
 
 const emptyForm = { title: '', shortDescription: '', content: '', category: 'tin_tuc', featuredImage: '', isPublished: true };
 
@@ -90,6 +91,26 @@ export default function AdminArticlesPage() {
         </Modal.Header>
         <Form onSubmit={handleSubmit}>
           <Modal.Body>
+            {!editingId && (
+              <div className="mb-3">
+                <ProductUrlImport
+                  sourceName="tinhte.vn"
+                  endpoint="/posts/import-url"
+                  htmlEndpoint="/posts/import-html"
+                  placeholder="VD: https://tinhte.vn/thread/ten-bai-viet.1234567/"
+                  hint="Tự điền tiêu đề, tóm tắt, ảnh bìa và nội dung (kèm ảnh trong bài - dùng link ảnh gốc của tinhte.vn, cuối bài ghi nguồn). Hãy kiểm tra lại trước khi lưu. Nội dung thuộc bản quyền của tác giả/tinhte.vn - chỉ dùng cho mục đích minh họa."
+                  onImported={(d) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      title: d.title || prev.title,
+                      shortDescription: d.shortDescription || prev.shortDescription,
+                      content: d.content || prev.content,
+                      featuredImage: d.featuredImage || prev.featuredImage
+                    }))
+                  }
+                />
+              </div>
+            )}
             <Form.Group className="mb-3">
               <Form.Label>Tiêu đề bài viết</Form.Label>
               <Form.Control required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
@@ -130,11 +151,17 @@ export default function AdminArticlesPage() {
               <Form.Control
                 required
                 as="textarea"
-                rows={6}
+                rows={10}
                 value={form.content}
                 onChange={(e) => setForm({ ...form, content: e.target.value })}
               />
+              <Form.Text className="text-muted">
+                Chèn ảnh vào giữa bài: viết một dòng riêng dạng <code>![mô tả ảnh](https://link-anh.jpg)</code>.
+              </Form.Text>
             </Form.Group>
+            {form.featuredImage && (
+              <img src={form.featuredImage} alt="" referrerPolicy="no-referrer" className="rounded mb-3" style={{ maxHeight: 120 }} />
+            )}
             <Form.Check
               type="checkbox"
               id="isPublished"
