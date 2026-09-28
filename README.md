@@ -89,7 +89,7 @@ Backend chạy tại `http://localhost:5000`.
 - 10 đánh giá kèm ảnh cho mỗi sản phẩm;
 - phiếu bảo hành, bài viết, khách hàng mẫu.
 
-Khi khởi động, máy chủ còn **tự nạp** (chỉ lần đầu, không ghi đè dữ liệu admin đã sửa): 34 tỉnh/thành và 3.321 phường/xã, 4 template màu sắc giao diện.
+Khi khởi động, máy chủ còn **tự nạp** (chỉ lần đầu, không ghi đè dữ liệu admin đã sửa): 34 tỉnh/thành và 3.321 phường/xã, 4 template màu sắc giao diện, 3 slide trang chủ mặc định.
 
 **Tài khoản demo sau khi seed:**
 
@@ -118,7 +118,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có **115 test case** (24 bộ test), bao gồm:
+Có **118 test case** (25 bộ test), bao gồm:
 - tài khoản: đăng ký/đăng nhập, quên mật khẩu, đổi mật khẩu (đăng xuất thiết bị khác), đăng nhập Zalo, thêm/đổi email có xác thực;
 - mua hàng: giỏ hàng (cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, tự hủy đơn VNPay quá hạn;
 - thanh toán VNPay và MoMo: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, giới hạn số tiền của MoMo, cấu hình trong trang quản trị;
@@ -182,6 +182,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 | `settings` | Cấu hình chung (1 bản ghi): thông tin website, liên hệ, phân trang, phí vận chuyển, SEO, bảo trì, **màu sắc giao diện** (`theme`), **chân trang** (`footer`), số ngày lưu nhật ký. Trạng thái và số lần giới hạn tần suất (`rateLimitEnabled`, `rateLimits`) **không trả về ở API công khai** |
 | `mail_configs` | Cấu hình gửi email; mật khẩu SMTP, API key, Gmail OAuth lưu **đã mã hóa** (AES-256-GCM) |
 | `payment_configs` | Cấu hình VNPay và MoMo (1 bản ghi, 2 tab riêng); Secret Key của cả 2 cổng lưu **đã mã hóa** |
+| `slides` | Slide (banner lớn) đầu trang chủ: nội dung, nút bấm, nền (màu giao diện / dải màu / ảnh), thứ tự, bật/tắt, thời gian hiển thị |
 | `theme_templates` | Template màu sắc giao diện (có sẵn: Mặc định, Giáng sinh, Tết, Mùa thu; admin lưu thêm) |
 | `audit_logs` | Nhật ký thao tác quản trị (dữ liệu nhạy cảm như mật khẩu, token được che trước khi ghi) |
 
@@ -255,6 +256,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
   - **xóa hàng loạt** (tick chọn nhiều bài) và **xóa tất cả bài viết** (phải gõ "XOA TAT CA" để xác nhận) - chỉ admin.
 - **Quản lý đánh giá**: ẩn/hiện, phản hồi (tự tính lại điểm trung bình) — mục 1.2.7
 - Dashboard thống kê (MongoDB Aggregation + Recharts) — mục 1.2.8
+- **Slide trang chủ**: thêm, sửa, xóa, đổi thứ tự, bật/tắt; nền theo màu giao diện / dải màu tự chọn / ảnh tải lên; hẹn thời gian hiển thị (VD slide khuyến mãi Tết); xem trước trực tiếp khi chỉnh
 - **Tỉnh thành & phường xã**: thêm, sửa, ẩn/hiện, xóa; nút bổ sung dữ liệu mặc định
 - **Tìm kiếm tiếng Việt không dấu** ở các trang quản lý (đơn hàng, sản phẩm, tồn kho, khách hàng, bảo hành, đánh giá, khuyến mãi, tin tức): gõ "nguyen van" vẫn ra "Nguyễn Văn"; kèm bộ lọc, từ khóa lưu trên đường link, phím tắt "/"
 - Quản lý bảo hành, trả lời chat khách hàng

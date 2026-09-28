@@ -51,6 +51,7 @@ import AdminArticlesPage from './pages/admin/AdminArticlesPage';
 import AdminChatPage from './pages/admin/AdminChatPage';
 import AdminAuditLogPage from './pages/admin/AdminAuditLogPage';
 import AdminLocationsPage from './pages/admin/AdminLocationsPage';
+import AdminSlidesPage from './pages/admin/AdminSlidesPage';
 import SeasonalEffect from './components/SeasonalEffect';
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import AdminStaffPage from './pages/admin/AdminStaffPage';
@@ -186,6 +187,7 @@ export default function App() {
                   <Route path="chat" element={<PrivateRoute permissionPath="/admin/chat"><AdminChatPage /></PrivateRoute>} />
                   <Route path="audit-logs" element={<PrivateRoute roles={['admin']}><AdminAuditLogPage /></PrivateRoute>} />
                   <Route path="locations" element={<PrivateRoute roles={['admin']}><AdminLocationsPage /></PrivateRoute>} />
+                  <Route path="slides" element={<PrivateRoute roles={['admin']}><AdminSlidesPage /></PrivateRoute>} />
                   <Route path="settings" element={<PrivateRoute roles={['admin']}><AdminSettingsPage /></PrivateRoute>} />
                   {/* Quản lý nhân viên/nhóm quyền là thao tác cấu trúc nhạy cảm - chỉ admin được vào
                       trang này (staff dù có quyền gì cũng không thấy được, tránh tự cấp thêm quyền). */}

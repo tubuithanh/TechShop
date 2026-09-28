@@ -12,6 +12,8 @@ import { postService } from '../services/postService';
 import { storeService } from '../services/storeService';
 import ProductCard from '../components/ProductCard';
 import AnimatedCounter from '../components/AnimatedCounter';
+import HeroSlide from '../components/HeroSlide';
+import { slideService } from '../services/slideService';
 
 const CATEGORY_STYLE = {
   'dien-thoai': { icon: Phone, bg: 'primary-subtle', text: 'primary-emphasis' },
@@ -23,29 +25,7 @@ const CATEGORY_STYLE = {
   'phu-kien': { icon: Plug, bg: 'dark-subtle', text: 'dark-emphasis' }
 };
 
-const HERO_SLIDES = [
-  {
-    gradient: 'linear-gradient(135deg, var(--bs-primary), var(--site-hero-end, #f97316))', // theo màu sắc giao diện
-    eyebrow: '🎓 Tiểu luận chuyên ngành MERN Stack',
-    title: 'Chào mừng đến với TechShop',
-    subtitle: 'Website thương mại điện tử đa chi nhánh (multi-store) — mua sắm thiết bị công nghệ chính hãng, nhanh chóng và tin cậy',
-    cta: { label: 'Khám phá ngay', to: '/products' }
-  },
-  {
-    gradient: 'linear-gradient(135deg, #7c3aed, #db2777)',
-    eyebrow: '⚡ Ưu đãi mỗi ngày',
-    title: 'Flash Sale giảm đến 25%',
-    subtitle: 'Hàng nghìn sản phẩm công nghệ chính hãng đang được săn đón — số lượng có hạn',
-    cta: { label: 'Săn deal ngay', to: '/products?sort=price_asc' }
-  },
-  {
-    gradient: 'linear-gradient(135deg, #0891b2, #059669)',
-    eyebrow: '💳 Linh hoạt tài chính',
-    title: 'Trả góp 0% lãi suất',
-    subtitle: 'Sở hữu ngay điện thoại, laptop yêu thích với thủ tục nhanh gọn, duyệt trong 15 phút',
-    cta: { label: 'Xem ưu đãi', to: '/promotions' }
-  }
-];
+// Slide đầu trang: quản lý ở Admin -> Slide trang chủ (API /slides)
 
 const TRUST_ITEMS = [
   { icon: Truck, title: 'Giao hàng nhanh', desc: 'Nội thành trong 2 giờ', bg: 'primary-subtle', text: 'primary-emphasis' },
@@ -141,6 +121,15 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState('newest');
   const [loading, setLoading] = useState(true);
   const countdown = useCountdown(6);
+  // null = đang tải; [] = không có slide nào đang hiển thị (ẩn khối slide)
+  const [slides, setSlides] = useState(null);
+
+  useEffect(() => {
+    slideService
+      .getSlides()
+      .then(setSlides)
+      .catch(() => setSlides([]));
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -189,33 +178,20 @@ export default function HomePage() {
 
   return (
     <Container fluid="xl" className="py-4 py-md-5">
-      {/* ===== Hero banner carousel ===== */}
-      <Carousel className="mb-4 rounded-4 overflow-hidden shadow" indicators controls fade>
-        {HERO_SLIDES.map((slide) => (
-          <Carousel.Item key={slide.title}>
-            <div
-              className="text-white d-flex align-items-center p-4 p-md-5 position-relative overflow-hidden"
-              style={{ background: slide.gradient, minHeight: '280px' }}
-            >
-              <div className="hero-dots" />
-              <div className="hero-decor" style={{ width: 260, height: 260, top: -80, right: -60 }} />
-              <div className="hero-decor" style={{ width: 160, height: 160, bottom: -60, right: 120 }} />
-              <div className="position-relative" style={{ maxWidth: '34rem' }}>
-                <Badge bg="light" text="dark" className="rounded-pill fw-medium mb-3 px-3 py-2">
-                  {slide.eyebrow}
-                </Badge>
-                <h1 className="fs-1 fw-bold mb-3">{slide.title}</h1>
-                <p className="mb-4 fs-6" style={{ opacity: 0.92 }}>
-                  {slide.subtitle}
-                </p>
-                <Button as={Link} to={slide.cta.to} variant="light" size="lg" className="fw-semibold rounded-pill px-4">
-                  {slide.cta.label}
-                </Button>
-              </div>
-            </div>
-          </Carousel.Item>
-        ))}
-      </Carousel>
+      {/* ===== Hero banner carousel (quản lý ở Admin -> Slide trang chủ) ===== */}
+      {slides === null ? (
+        <div className="mb-4 rounded-4 shadow skeleton" style={{ minHeight: 280 }} />
+      ) : (
+        slides.length > 0 && (
+          <Carousel className="mb-4 rounded-4 overflow-hidden shadow" indicators={slides.length > 1} controls={slides.length > 1} fade>
+            {slides.map((slide) => (
+              <Carousel.Item key={slide._id}>
+                <HeroSlide slide={slide} />
+              </Carousel.Item>
+            ))}
+          </Carousel>
+        )
+      )}
 
       {/* ===== Con số ấn tượng ===== */}
       <Reveal className="mb-5">
