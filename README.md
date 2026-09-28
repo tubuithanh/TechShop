@@ -219,6 +219,13 @@ MONGO_URI="<chuỗi-kết-nối>" node seed/<tên-script>.js    # database khác
 - Cache Redis, unit test Frontend (React Testing Library)
 - Xác thực hai yếu tố 2FA, quản lý phiên đăng nhập nhiều thiết bị (mục 1.1.21 — nâng cao)
 
+Thẻ ngân hàng thanh toán thử của VNPay
+Ngân hàng: NCB
+Số thẻ: 9704198526191432198
+Tên in trên thẻ: NGUYEN VAN A
+Ngày phát hành: 07/15
+Mật khẩu OTP: 123456
+
 ## Tài liệu đi kèm trong bộ hồ sơ nộp
 
 - `khao-sat-hien-trang-thegioididong.md` — Báo cáo khảo sát hiện trạng (Bước 1)
