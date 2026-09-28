@@ -40,6 +40,10 @@ const protect = async (req, res, next) => {
     if (!account || !account.isActive) {
       return res.status(401).json({ message: 'Tài khoản không hợp lệ hoặc đã bị khóa' });
     }
+    // Token cấp trước lần đổi/đặt lại mật khẩu gần nhất -> không còn hiệu lực
+    if ((decoded.tv || 0) !== (account.tokenVersion || 0)) {
+      return res.status(401).json({ message: 'Phiên đăng nhập đã hết hiệu lực (mật khẩu vừa được thay đổi), vui lòng đăng nhập lại' });
+    }
 
     req.account = account;
     req.accountRole = accountRole; // 'customer' | 'staff' | 'admin' - LUÔN lấy tươi từ DB, không tin token

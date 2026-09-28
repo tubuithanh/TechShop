@@ -1,7 +1,29 @@
-import { useEffect, useState } from 'react';
-import { Container, Table, Button, Badge } from 'react-bootstrap';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Container, Table, Button, Badge, Alert } from 'react-bootstrap';
+import { Trash } from 'react-bootstrap-icons';
 import { auditLogService } from '../../services/auditLogService';
 import { useSettings } from '../../store/SettingsContext';
+import AdminPagination from '../../components/admin/AdminPagination';
+import AdminSearchBar from '../../components/admin/AdminSearchBar';
+import useListQuery from '../../hooks/useListQuery';
+import useAdminList from '../../hooks/useAdminList';
+
+const FILTERS = [
+  {
+    key: 'method',
+    label: 'Hành động',
+    options: [
+      { value: 'POST', label: 'Tạo mới' },
+      { value: 'PUT', label: 'Cập nhật (PUT)' },
+      { value: 'PATCH', label: 'Cập nhật (PATCH)' },
+      { value: 'DELETE', label: 'Xóa' }
+    ]
+  },
+  { key: 'role', label: 'Vai trò', options: [{ value: 'admin', label: 'Admin' }, { value: 'staff', label: 'Nhân viên' }] },
+  { key: 'from', label: 'Từ ngày', type: 'date' },
+  { key: 'to', label: 'Đến ngày', type: 'date' }
+];
 
 function actionBadgeVariant(action) {
   if (!action) return 'secondary';
@@ -12,25 +34,61 @@ function actionBadgeVariant(action) {
 }
 
 export default function AdminAuditLogPage() {
-  const [logs, setLogs] = useState([]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
+  const retentionDays = settings.auditLogRetentionDays ?? 30;
+  const query = useListQuery(FILTERS.map((f) => f.key));
+  const { data: logs, total, totalPages, loading, reload } = useAdminList(auditLogService.getLogs, {
+    ...query.apiParams,
+    limit: pageSize
+  });
+  const [deleting, setDeleting] = useState(false);
+  const [message, setMessage] = useState(null);
 
-  useEffect(() => {
-    auditLogService.getLogs({ page, limit: pageSize }).then((res) => {
-      setLogs(res.data);
-      setTotalPages(res.totalPages);
-    });
-  }, [page, pageSize]);
+  const handleDeleteAll = async () => {
+    if (!confirm('Xóa TẤT CẢ nhật ký thao tác? Hành động này không thể hoàn tác.')) return;
+    setDeleting(true);
+    try {
+      const res = await auditLogService.deleteAll();
+      setMessage({ variant: 'success', text: res.message });
+      query.reset();
+      reload();
+    } catch (err) {
+      setMessage({ variant: 'danger', text: err.response?.data?.message || 'Xóa nhật ký thất bại' });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <Container fluid>
-      <h1 className="fs-4 fw-bold mb-2">Nhật ký thao tác quản trị (Audit Log)</h1>
-      <p className="small text-muted mb-4">
-        Ghi lại mọi thao tác thêm/sửa/xóa do quản trị viên và nhân viên thực hiện, phục vụ truy vết khi có sự cố.
+      <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+        <h1 className="fs-4 fw-bold mb-0">Nhật ký thao tác quản trị (Audit Log)</h1>
+        <Button variant="outline-danger" size="sm" onClick={handleDeleteAll} disabled={deleting || total === 0}>
+          <Trash className="me-1" /> {deleting ? 'Đang xóa...' : 'Xóa tất cả nhật ký'}
+        </Button>
+      </div>
+      <p className="small text-muted mb-3">
+        Ghi lại mọi thao tác thêm/sửa/xóa do quản trị viên và nhân viên thực hiện, phục vụ truy vết khi có sự cố.{' '}
+        {retentionDays > 0 ? (
+          <>Nhật ký được lưu trong <strong>{retentionDays} ngày</strong> gần nhất, cũ hơn sẽ tự động xóa.</>
+        ) : (
+          <strong className="text-danger">Đang tắt ghi nhật ký (số ngày lưu = 0).</strong>
+        )}{' '}
+        <Link to="/admin/settings?tab=audit">Thay đổi</Link>
       </p>
+      {message && (
+        <Alert variant={message.variant} dismissible onClose={() => setMessage(null)} className="py-2 small">
+          {message.text}
+        </Alert>
+      )}
+      <AdminSearchBar
+        query={query}
+        placeholder="Người thực hiện, hành động, đường dẫn, IP..."
+        filters={FILTERS}
+        total={total}
+        loading={loading}
+      />
 
       <div className="bg-white rounded-3 shadow-sm">
         <Table striped hover responsive className="mb-0 align-middle">
@@ -73,7 +131,7 @@ export default function AdminAuditLogPage() {
             {logs.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-4 text-center text-muted">
-                  Chưa có nhật ký nào
+                  {loading ? 'Đang tải...' : 'Không có nhật ký nào'}
                 </td>
               </tr>
             )}
@@ -81,16 +139,8 @@ export default function AdminAuditLogPage() {
         </Table>
       </div>
 
-      <div className="d-flex justify-content-center align-items-center gap-2 mt-4">
-        <Button variant="outline-secondary" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-          Trước
-        </Button>
-        <span className="small px-2">
-          Trang {page}/{totalPages || 1}
-        </span>
-        <Button variant="outline-secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-          Sau
-        </Button>
+      <div className="mt-3">
+        <AdminPagination page={query.values.page} totalPages={totalPages} total={total} onChange={query.setPage} />
       </div>
     </Container>
   );

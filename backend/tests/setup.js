@@ -8,6 +8,8 @@ beforeAll(async () => {
   process.env.JWT_ACCESS_SECRET = 'test_access_secret';
   process.env.JWT_REFRESH_SECRET = 'test_refresh_secret';
   process.env.NODE_ENV = 'test';
+  // Tắt giới hạn tần suất khi kiểm thử (các test tạo nhiều tài khoản/đơn liên tiếp); test riêng bật lại để kiểm tra
+  process.env.RATE_LIMIT_DISABLED = 'true';
 
   // Windows (Hyper-V/WSL) giữ riêng một số dải cổng: nếu cổng ngẫu nhiên rơi vào đó sẽ lỗi
   // "listen EACCES" - thử lại với cổng khác thay vì làm hỏng cả file test.

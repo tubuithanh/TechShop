@@ -3,6 +3,7 @@ import { Card, Form, Button, Alert, Stack } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
 import { userService } from '../../services/userService';
 import { authService } from '../../services/authService';
+import { setAccessToken } from '../../services/api';
 import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 
 export default function ProfilePage() {
@@ -27,7 +28,9 @@ export default function ProfilePage() {
     e.preventDefault();
     setPwMessage('');
     try {
-      await authService.changePassword(pwForm);
+      // Đổi mật khẩu đăng xuất các thiết bị khác; thiết bị này nhận token mới để tiếp tục đăng nhập
+      const res = await authService.changePassword(pwForm);
+      if (res.accessToken) setAccessToken(res.accessToken);
       setPwMessage('Đổi mật khẩu thành công!');
       setPwForm({ oldPassword: '', newPassword: '' });
     } catch (err) {

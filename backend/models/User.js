@@ -34,6 +34,8 @@ const userSchema = new mongoose.Schema(
     favoriteProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
     savedPostIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
     isActive: { type: Boolean, default: true },
+    // Tăng lên khi đổi/đặt lại mật khẩu -> mọi token cấp trước đó (trên các thiết bị khác) hết hiệu lực
+    tokenVersion: { type: Number, default: 0 },
     isEmailVerified: { type: Boolean, default: false },
     termsAcceptedAt: { type: Date, default: null },
     lastLoginAt: Date

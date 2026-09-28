@@ -441,6 +441,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  restoreStock,
   createOrder,
   getMyOrders,
   getOrderById,

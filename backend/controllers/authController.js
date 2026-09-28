@@ -150,8 +150,8 @@ const register = asyncHandler(async (req, res) => {
   });
   await Otp.deleteMany({ email: email.toLowerCase(), purpose: 'register' });
 
-  const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
-  const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
+  const accessToken = generateAccessToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
+  const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
   res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
   res.status(201).json({ message: 'Đăng ký thành công', user: user.toSafeObject(), accessToken });
@@ -172,8 +172,8 @@ const login = asyncHandler(async (req, res) => {
       user.lastLoginAt = new Date();
       await user.save();
 
-      const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
-      const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
+      const accessToken = generateAccessToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
+      const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
       res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
       return res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
     }
@@ -190,8 +190,8 @@ const login = asyncHandler(async (req, res) => {
       admin.lastLoginAt = new Date();
       await admin.save();
 
-      const accessToken = generateAccessToken({ _id: admin._id, role: admin.role });
-      const refreshToken = generateRefreshToken({ _id: admin._id, role: admin.role });
+      const accessToken = generateAccessToken({ _id: admin._id, role: admin.role, tokenVersion: admin.tokenVersion });
+      const refreshToken = generateRefreshToken({ _id: admin._id, role: admin.role, tokenVersion: admin.tokenVersion });
       res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
       // Nạp sẵn permissions của các nhóm quyền (giống hệt protect() cho các request sau) - để
       // Frontend có ngay danh sách quyền để lọc menu/route NGAY SAU KHI đăng nhập, không phải đợi
@@ -295,8 +295,8 @@ const zaloComplete = asyncHandler(async (req, res) => {
   user.lastLoginAt = new Date();
   await user.save();
 
-  const accessToken = generateAccessToken({ _id: user._id, role: 'customer' });
-  const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer' });
+  const accessToken = generateAccessToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
+  const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
   res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
   res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
 });
@@ -316,8 +316,9 @@ const refresh = asyncHandler(async (req, res) => {
       role = account?.role;
     }
     if (!account || !account.isActive) return res.status(401).json({ message: 'Tài khoản không hợp lệ' });
+    if ((decoded.tv || 0) !== (account.tokenVersion || 0)) return res.status(401).json({ message: 'Phiên đăng nhập đã hết hiệu lực (mật khẩu vừa được thay đổi), vui lòng đăng nhập lại' });
 
-    const accessToken = generateAccessToken({ _id: account._id, role });
+    const accessToken = generateAccessToken({ _id: account._id, role, tokenVersion: account.tokenVersion });
     res.json({ accessToken });
   } catch (err) {
     return res.status(401).json({ message: 'Refresh token không hợp lệ hoặc đã hết hạn' });
@@ -346,8 +347,15 @@ const changePassword = asyncHandler(async (req, res) => {
   if (passwordError) return res.status(400).json({ message: passwordError });
 
   account.password = newPassword;
+  // Đăng xuất mọi thiết bị khác (token cũ hết hiệu lực); thiết bị đang thao tác nhận token mới để ở lại
+  account.tokenVersion = (account.tokenVersion || 0) + 1;
   await account.save();
-  res.json({ message: 'Đổi mật khẩu thành công' });
+  const role = req.accountRole;
+  res.cookie('refreshToken', generateRefreshToken({ _id: account._id, role, tokenVersion: account.tokenVersion }), REFRESH_COOKIE_OPTIONS);
+  res.json({
+    message: 'Đổi mật khẩu thành công. Các thiết bị khác đã được đăng xuất.',
+    accessToken: generateAccessToken({ _id: account._id, role, tokenVersion: account.tokenVersion })
+  });
 });
 
 // ================== QUÊN MẬT KHẨU (khách hàng) ==================
@@ -409,6 +417,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email, isActive: true });
   if (!user) return res.status(400).json({ message: 'Mã xác thực không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
   user.password = newPassword;
+  user.tokenVersion = (user.tokenVersion || 0) + 1; // đăng xuất mọi thiết bị đang dùng mật khẩu cũ
   await user.save();
   await Otp.deleteMany({ email, purpose: 'reset_password' }); // mã chỉ dùng được một lần
   res.json({ message: 'Đặt lại mật khẩu thành công, vui lòng đăng nhập bằng mật khẩu mới' });

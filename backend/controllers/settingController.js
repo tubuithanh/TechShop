@@ -1,3 +1,4 @@
+const { clearRetentionCache, purgeOldAuditLogs } = require('../utils/auditRetention');
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -24,6 +25,9 @@ const updateSettings = asyncHandler(async (req, res) => {
   if (socialLinks) settings.socialLinks = { ...settings.toObject().socialLinks, ...socialLinks };
   if (seo) settings.seo = { ...settings.toObject().seo, ...seo };
   await settings.save();
+  // Đổi số ngày lưu nhật ký -> áp dụng ngay (không chờ bộ nhớ đệm hết hạn) và dọn nhật ký quá hạn luôn
+  clearRetentionCache();
+  await purgeOldAuditLogs();
   res.json({ data: settings });
 });
 

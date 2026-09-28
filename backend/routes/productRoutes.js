@@ -12,6 +12,7 @@ const {
 const { getProductReviews, createReview, updateReview } = require('../controllers/reviewController');
 const { getQuestions, createQuestion, answerQuestion } = require('../controllers/questionController');
 const { protect, authorize, can } = require('../middlewares/authMiddleware');
+const { reviewLimiter } = require('../middlewares/rateLimits');
 
 router.get('/', getProducts);
 router.post('/compare', compareProducts);
@@ -19,8 +20,8 @@ router.get('/:slug', getProductBySlug);
 router.get('/:id/related', getRelatedProducts);
 
 router.get('/:productId/reviews', getProductReviews);
-router.post('/:productId/reviews', protect, createReview);
-router.put('/:productId/reviews/:reviewId', protect, updateReview);
+router.post('/:productId/reviews', protect, reviewLimiter, createReview);
+router.put('/:productId/reviews/:reviewId', protect, reviewLimiter, updateReview);
 
 router.get('/:productId/questions', getQuestions);
 router.post('/:productId/questions', protect, createQuestion);

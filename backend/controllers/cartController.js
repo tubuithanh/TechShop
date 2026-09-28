@@ -1,6 +1,7 @@
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const StoreInventory = require('../models/StoreInventory');
+const Store = require('../models/Store');
 const asyncHandler = require('../utils/asyncHandler');
 
 const getOrCreateCart = async (userId) => {
@@ -9,14 +10,21 @@ const getOrCreateCart = async (userId) => {
   return cart;
 };
 
-// Tồn kho của 1 phiên bản: tại đúng cửa hàng nếu có storeId, ngược lại cộng dồn mọi cửa hàng
+// Id các cửa hàng đang hoạt động (cửa hàng đã đóng không bán được)
+async function activeStoreIds() {
+  return Store.find({ isActive: { $ne: false } }).distinct('_id');
+}
+
+// Số lượng TỐI ĐA mua được của 1 phiên bản: tại đúng cửa hàng nếu có storeId; ngược lại lấy cửa hàng còn
+// NHIỀU hàng nhất. Một đơn hàng chỉ lấy hàng từ 1 chi nhánh, nên không được cộng dồn tồn kho mọi chi nhánh
+// (trước đây: chi nhánh A còn 2 + B còn 2 thì giỏ cho mua 4, nhưng không chi nhánh nào giao đủ 4).
 async function getVariantStock(productId, variantId, storeId) {
   if (storeId) {
     const inv = await StoreInventory.findOne({ productId, variantId, storeId });
     return inv?.stock || 0;
   }
-  const inventories = await StoreInventory.find({ productId, variantId });
-  return inventories.reduce((sum, inv) => sum + inv.stock, 0);
+  const best = await StoreInventory.findOne({ productId, variantId, storeId: { $in: await activeStoreIds() } }).sort({ stock: -1 });
+  return best?.stock || 0;
 }
 
 const sameLine = (item, productId, variantId) =>
@@ -25,14 +33,14 @@ const sameLine = (item, productId, variantId) =>
 // Dựng phản hồi giỏ hàng: đồng bộ giá theo phiên bản + gắn trạng thái từng dòng để giao diện cảnh báo
 // NGAY trong giỏ (thay vì khách chỉ biết khi bấm đặt hàng và bị báo lỗi):
 //   availability = 'ok' | 'unavailable' (sản phẩm/phiên bản đã ngừng bán hoặc bị xóa) | 'out_of_stock'
-//   stock = tổng tồn kho của phiên bản ở các cửa hàng (để hiện "chỉ còn N sản phẩm")
+//   stock = số lượng mua được tối đa trong 1 đơn = tồn kho của cửa hàng còn nhiều hàng nhất ("chỉ còn N sản phẩm")
 async function buildCartResponse(cart) {
   if (!cart.items.length) return { ...cart.toObject(), hasUnavailable: false };
   const products = await Product.find({ _id: { $in: cart.items.map((i) => i.productId) } }, 'variants isActive');
   const productMap = new Map(products.map((p) => [p._id.toString(), p]));
   const stocks = await StoreInventory.aggregate([
-    { $match: { variantId: { $in: cart.items.map((i) => i.variantId) } } },
-    { $group: { _id: '$variantId', stock: { $sum: '$stock' } } }
+    { $match: { variantId: { $in: cart.items.map((i) => i.variantId) }, storeId: { $in: await activeStoreIds() } } },
+    { $group: { _id: '$variantId', stock: { $max: '$stock' } } }
   ]);
   const stockMap = new Map(stocks.map((s) => [String(s._id), s.stock]));
 

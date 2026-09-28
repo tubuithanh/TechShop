@@ -3,6 +3,7 @@ const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
 const { emailPaymentSuccess } = require('../utils/notifyEmail');
 const vnpay = require('../utils/vnpay');
+const { canStartPayment } = require('../utils/expireUnpaidOrders');
 
 // @route POST /api/payments/vnpay/:orderId - tạo link thanh toán VNPay cho đơn của chính khách hàng
 const createVnpayPayment = asyncHandler(async (req, res) => {
@@ -17,6 +18,11 @@ const createVnpayPayment = asyncHandler(async (req, res) => {
   if (order.paymentStatus === 'paid') return res.status(400).json({ message: 'Đơn hàng đã được thanh toán' });
   if (['cancelled', 'returned'].includes(order.status)) {
     return res.status(400).json({ message: 'Đơn hàng đã hủy, không thể thanh toán' });
+  }
+  if (!canStartPayment(order)) {
+    return res.status(400).json({
+      message: `Đơn hàng đã quá thời hạn thanh toán online và sẽ tự hủy trong ít phút (tồn kho được trả lại). Vui lòng đặt đơn mới.`
+    });
   }
 
   const ipAddr = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;

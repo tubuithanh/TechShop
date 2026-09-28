@@ -126,6 +126,25 @@ io.on('connection', (socket) => {
 
 app.set('io', io);
 
+// Tự hủy đơn VNPay quá hạn chưa thanh toán (trả lại tồn kho) - chạy mỗi 5 phút
+const { expireUnpaidVnpayOrders } = require('./utils/expireUnpaidOrders');
+const { restoreStock } = require('./controllers/orderController');
+const runExpireJob = () =>
+  expireUnpaidVnpayOrders({ restoreStock })
+    .then((n) => n && console.log(`[VNPay] Đã tự hủy ${n} đơn quá hạn thanh toán`))
+    .catch((err) => console.error('[VNPay] Lỗi khi hủy đơn quá hạn:', err.message));
+setInterval(runExpireJob, 5 * 60 * 1000).unref();
+setTimeout(runExpireJob, 30 * 1000).unref();
+
+// Dọn nhật ký thao tác quá số ngày lưu cấu hình trong Cấu hình hệ thống (mỗi giờ)
+const { purgeOldAuditLogs } = require('./utils/auditRetention');
+const runAuditPurge = () =>
+  purgeOldAuditLogs()
+    .then((n) => n && console.log(`[AuditLog] Đã xóa ${n} nhật ký quá hạn lưu`))
+    .catch((err) => console.error('[AuditLog] Lỗi dọn nhật ký:', err.message));
+setInterval(runAuditPurge, 60 * 60 * 1000).unref();
+setTimeout(runAuditPurge, 60 * 1000).unref(); // lần đầu sau khi server khởi động xong
+
 server.listen(PORT, () => {
   console.log(`[Server] Đang chạy tại http://localhost:${PORT}`);
 });

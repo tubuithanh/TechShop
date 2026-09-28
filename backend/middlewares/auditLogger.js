@@ -1,4 +1,5 @@
 const AuditLog = require('../models/AuditLog');
+const { getRetentionDays } = require('../utils/auditRetention');
 
 // Trước đây audit log chỉ ghi "đã có hành động xảy ra" (method + path + statusCode), không ghi
 // GIÁ TRỊ đã gửi lên - không đủ để trả lời "admin đã đổi cái gì" khi xem lại sau này (VD: đổi
@@ -49,8 +50,10 @@ function auditLogger(req, res, next) {
 
   res.on('finish', () => {
     const isAdminActor = req.account && req.accountRole && req.accountRole !== 'customer';
-    if (isAdminActor && res.statusCode < 400) {
-      AuditLog.create({
+    if (!isAdminActor || res.statusCode >= 400) return;
+    // Số ngày lưu nhật ký = 0 -> tắt ghi nhật ký
+    getRetentionDays()
+      .then((days) => days > 0 && AuditLog.create({
         adminId: req.account._id,
         adminName: req.account.name,
         adminRole: req.accountRole,
@@ -60,8 +63,8 @@ function auditLogger(req, res, next) {
         targetId: req.params?.id || req.params?.productId || req.params?.orderId || null,
         ip: req.ip,
         metadata: { statusCode: res.statusCode, requestBody: sanitizeBody(req.body) }
-      }).catch((err) => console.error('[AuditLog] Lỗi ghi log:', err.message));
-    }
+      }))
+      .catch((err) => console.error('[AuditLog] Lỗi ghi log:', err.message));
   });
   next();
 }

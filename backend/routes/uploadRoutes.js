@@ -17,7 +17,8 @@ const upload = multer({
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  message: { message: 'Bạn tải ảnh quá nhiều lần, vui lòng thử lại sau ít phút' }
+  message: { message: 'Bạn tải ảnh quá nhiều lần, vui lòng thử lại sau ít phút' },
+  skip: () => process.env.RATE_LIMIT_DISABLED === 'true'
 });
 
 router.post('/', protect, uploadLimiter, (req, res, next) =>

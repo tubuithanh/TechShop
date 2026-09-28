@@ -6,6 +6,8 @@ const rateLimit = require('express-rate-limit');
 
 const { notFound, errorHandler } = require('./middlewares/errorMiddleware');
 const auditLogger = require('./middlewares/auditLogger');
+const paginationGuard = require('./middlewares/paginationGuard');
+const { apiLimiter } = require('./middlewares/rateLimits');
 
 const authRoutes = require('./routes/authRoutes');
 const { zaloCallback } = require('./controllers/authController');
@@ -34,6 +36,10 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const { UPLOAD_DIR } = require('./controllers/uploadController');
 
 const app = express();
+// Render (và hầu hết nền tảng hosting) đặt 1 proxy phía trước: tin 1 lớp proxy để req.ip là IP THẬT của khách.
+// Trước đây thiếu dòng này nên mọi khách có chung IP của proxy -> giới hạn đăng nhập 20 lần/15 phút bị áp
+// dụng chung cho cả website, còn URL ảnh tải lên dùng sai giao thức.
+app.set('trust proxy', 1);
 
 // ----- Middlewares nền tảng -----
 app.use(
@@ -43,6 +49,8 @@ app.use(
   })
 );
 app.use(express.json({ limit: '5mb' }));
+app.use('/api', apiLimiter); // giới hạn chung cho toàn bộ API (xem middlewares/rateLimits.js)
+app.use('/api', paginationGuard); // limit tối đa 200, page là số nguyên >= 1
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 if (process.env.NODE_ENV !== 'test') {
@@ -53,7 +61,8 @@ if (process.env.NODE_ENV !== 'test') {
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  message: { message: 'Bạn đã thử đăng nhập quá nhiều lần, vui lòng thử lại sau ít phút' }
+  message: { message: 'Bạn đã thử đăng nhập quá nhiều lần, vui lòng thử lại sau ít phút' },
+  skip: () => process.env.RATE_LIMIT_DISABLED === 'true'
 });
 app.use('/api/auth/login', loginLimiter);
 

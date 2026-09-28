@@ -21,6 +21,8 @@ const adminSchema = new mongoose.Schema(
     // như quyền vốn có. Admin và staff không gán storeId không bị ảnh hưởng bởi field này.
     storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', default: null },
     isActive: { type: Boolean, default: true },
+    // Tăng lên khi đổi/đặt lại mật khẩu -> mọi token cấp trước đó (trên các thiết bị khác) hết hiệu lực
+    tokenVersion: { type: Number, default: 0 },
     lastLoginAt: Date
   },
   { timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'admins' }

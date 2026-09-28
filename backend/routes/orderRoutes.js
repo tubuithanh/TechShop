@@ -9,9 +9,10 @@ const {
   updateOrderStatus
 } = require('../controllers/orderController');
 const { protect, can } = require('../middlewares/authMiddleware');
+const { orderLimiter } = require('../middlewares/rateLimits');
 
 router.use(protect);
-router.post('/', createOrder);
+router.post('/', orderLimiter, createOrder);
 router.get('/', getMyOrders);
 router.get('/admin/all', can('orders.manage'), getAllOrders);
 router.get('/:id', getOrderById);

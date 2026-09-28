@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, InputGroup, Nav, Badge, Modal, Spinner } from 'react-bootstrap';
 import {
   Gear, TelephoneFill, GridFill, Truck, Search, Tools,
-  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill
+  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText
 } from 'react-bootstrap-icons';
 import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
 import { settingService } from '../../services/settingService';
@@ -15,6 +15,7 @@ const TABS = [
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
   { key: 'seo', label: 'SEO', icon: Search },
   { key: 'maintenance', label: 'Bảo trì', icon: Tools },
+  { key: 'audit', label: 'Nhật ký thao tác', icon: JournalText },
   { key: 'email', label: 'Cấu hình gửi email', icon: EnvelopeFill }
 ];
 
@@ -377,6 +378,36 @@ export default function AdminSettingsPage() {
                 )}
 
                 {activeTab === 'email' && <MailSettingsPanel />}
+
+                {activeTab === 'audit' && (
+                  <>
+                    <SectionTitle icon={JournalText}>Nhật ký thao tác</SectionTitle>
+                    <Form.Group>
+                      <Form.Label className="small fw-medium">Ngày lưu nhật ký</Form.Label>
+                      <InputGroup style={{ maxWidth: 240 }}>
+                        <Form.Control
+                          type="number"
+                          min={0}
+                          max={3650}
+                          value={form.auditLogRetentionDays ?? 30}
+                          onChange={(e) => setField('auditLogRetentionDays', Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                        />
+                        <InputGroup.Text>ngày</InputGroup.Text>
+                      </InputGroup>
+                      <Form.Text className="text-muted">
+                        0 = không ghi nhật ký thao tác. Lớn hơn 0 = chỉ giữ nhật ký của số ngày gần nhất, nhật ký cũ hơn
+                        sẽ tự động bị xóa (ngay khi lưu và định kỳ mỗi giờ).
+                      </Form.Text>
+                    </Form.Group>
+                    {Number(form.auditLogRetentionDays) === 0 && (
+                      <Alert variant="warning" className="small py-2 mt-3 mb-0">
+                        <ExclamationTriangleFill className="me-1" />
+                        Khi đặt 0, các thao tác thêm/sửa/xóa của quản trị viên và nhân viên sẽ không còn được ghi lại
+                        (nhật ký cũ vẫn giữ, có thể xóa ở trang Nhật ký thao tác).
+                      </Alert>
+                    )}
+                  </>
+                )}
 
                 {activeTab === 'maintenance' && (
                   <>

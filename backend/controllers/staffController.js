@@ -98,6 +98,7 @@ const updateStaff = asyncHandler(async (req, res) => {
   if (newPassword) {
     if (newPassword.length < 6) return res.status(400).json({ message: 'Mật khẩu mới phải từ 6 ký tự' });
     target.password = newPassword;
+    target.tokenVersion = (target.tokenVersion || 0) + 1; // admin đặt lại mật khẩu -> nhân viên phải đăng nhập lại
   }
 
   await target.save();
