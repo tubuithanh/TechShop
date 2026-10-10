@@ -53,6 +53,7 @@ const updateGroup = asyncHandler(async (req, res) => {
 const deleteGroup = asyncHandler(async (req, res) => {
   const group = await PermissionGroup.findById(req.params.id);
   if (!group) return res.status(404).json({ message: 'Không tìm thấy nhóm quyền' });
+  if (group.code === 'customer_support') return res.status(400).json({ message: 'Nhóm CSKH được dùng cho chức năng chat, không thể xóa. Bạn có thể sửa tên hoặc quyền.' });
   // Chặn xóa nhóm quyền còn nhân viên đang được gán - tránh 1 staff đột nhiên mất hết quyền vì
   // nhóm của họ biến mất mà không ai biết.
   const staffCount = await Admin.countDocuments({ groupIds: group._id });
