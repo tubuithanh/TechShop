@@ -1,11 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-<<<<<<< HEAD
-import { Card, Form, Button } from 'react-bootstrap';
-import { useAuth } from '../store/AuthContext';
-import api from '../services/api';
-import { connectSocket } from '../services/socket';
-import { chatService } from '../services/chatService';
-=======
 import { Alert, Badge, Button, Card, Form, Spinner } from 'react-bootstrap';
 import { ChatDotsFill, X } from 'react-bootstrap-icons';
 import { useAuth } from '../store/AuthContext';
@@ -13,7 +6,6 @@ import { chatService, chatStatus, clearChatToken, createChatSocket, getChatToken
 import ChatMessages from './ChatMessages';
 import ChatComposer from './ChatComposer';
 import ChatRating from './ChatRating';
->>>>>>> e846496448bebd851c1c76c93074f72922d069ac
 
 export default function ChatWidget() {
   const { user, loading: authLoading } = useAuth();
@@ -47,9 +39,6 @@ export default function ChatWidget() {
       phone: user?.phoneNumber || prev.phone, gender: ['male', 'female', 'other'].includes(user?.gender) ? user.gender : prev.gender }));
   }, [visible, user?._id]);
 
-<<<<<<< HEAD
-    const socket = connectSocket();
-=======
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
@@ -95,7 +84,6 @@ export default function ChatWidget() {
       }
     };
     const socket = createChatSocket(true);
->>>>>>> e846496448bebd851c1c76c93074f72922d069ac
     socketRef.current = socket;
     socket.on('connect', () => { setConnected(true); sync(); });
     socket.on('disconnect', () => setConnected(false));

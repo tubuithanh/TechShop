@@ -19,7 +19,6 @@ export default defineConfig({
     // HTTPS công khai (VD: đăng nhập Zalo) - Vite mặc định chặn Host header lạ để chống DNS rebinding.
     allowedHosts: true,
     proxy: {
-      '/socket.io': { target: 'http://localhost:5000', ws: true },
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true

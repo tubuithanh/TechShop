@@ -29,11 +29,7 @@
     "jest": "^29.7.0",
     "mongodb-memory-server": "^9.2.0",
     "nodemon": "^3.1.0",
-<<<<<<< HEAD
-    "socket.io-client": "^4.7.5",
-=======
     "socket.io-client": "^4.8.4",
->>>>>>> e846496448bebd851c1c76c93074f72922d069ac
     "supertest": "^7.0.0"
   }
 }

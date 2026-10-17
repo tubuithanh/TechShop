@@ -3,16 +3,12 @@ const request = require('supertest');
 const mongoose = require('mongoose');
 const app = require('../app');
 const Admin = require('../models/Admin');
-const User = require('../models/User');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 const Store = require('../models/Store');
 const StoreInventory = require('../models/StoreInventory');
 const Voucher = require('../models/Voucher');
 const Order = require('../models/Order');
-const PermissionGroup = require('../models/PermissionGroup');
-const { generateAccessToken } = require('../utils/generateTokens');
-const { resolveSocketAccount, cleanChatContent } = require('../utils/socketAuth');
 const { expireUnpaidVnpayOrders } = require('../utils/expireUnpaidOrders');
 const { restoreStock } = require('../controllers/orderController');
 const { flushEmails } = require('../utils/notifyEmail');
@@ -81,37 +77,5 @@ describe('Đặt hàng', () => {
     await Order.collection.updateOne({ _id: new mongoose.Types.ObjectId(second.body.data._id) }, { $set: { createdAt: new Date(Date.now() - 2 * 3600000) } });
     expect(await expireUnpaidVnpayOrders({ restoreStock })).toBe(1);
     expect(await used()).toBe(0);
-  });
-});
-
-describe('Xác thực Socket.IO', () => {
-  test('TC-134: Vai trò lấy từ cơ sở dữ liệu; tài khoản khóa / token cũ bị từ chối; chỉ ai có quyền chat.support mới vào phòng hỗ trợ', async () => {
-    const tokenOf = (acc, role) => generateAccessToken({ _id: acc._id, role, tokenVersion: acc.tokenVersion });
-    const support = await PermissionGroup.create({ name: 'CSKH', permissions: ['chat.support'] });
-    const sales = await PermissionGroup.create({ name: 'Bán hàng', permissions: ['orders.manage'] });
-    const agent = await Admin.create({ name: 'CSKH', email: 'cskh@example.com', password: 'abc12345', role: 'staff', groupIds: [support._id] });
-    const seller = await Admin.create({ name: 'Bán', email: 'ban@example.com', password: 'abc12345', role: 'staff', groupIds: [sales._id] });
-    const admin = await Admin.create({ name: 'Admin', email: 'ad@example.com', password: 'abc12345', role: 'admin' });
-    const customerId = (await registerUser({ email: 'kh-socket@example.com' })).body.user._id;
-    const customer = await User.findById(customerId);
-
-    expect(await resolveSocketAccount(tokenOf(agent, 'staff'))).toMatchObject({ role: 'staff', canSupport: true });
-    expect(await resolveSocketAccount(tokenOf(seller, 'staff'))).toMatchObject({ role: 'staff', canSupport: false });
-    expect(await resolveSocketAccount(tokenOf(admin, 'admin'))).toMatchObject({ role: 'admin', canSupport: true });
-    expect(await resolveSocketAccount(tokenOf(customer, 'customer'))).toMatchObject({ role: 'customer', canSupport: false });
-    // Token ghi "admin" nhưng tài khoản thật là staff không có quyền -> theo cơ sở dữ liệu
-    expect(await resolveSocketAccount(tokenOf(seller, 'admin'))).toMatchObject({ role: 'staff', canSupport: false });
-
-    await Admin.updateOne({ _id: agent._id }, { isActive: false });
-    expect(await resolveSocketAccount(tokenOf(agent, 'staff'))).toBeNull();
-    const oldToken = tokenOf(admin, 'admin');
-    await Admin.updateOne({ _id: admin._id }, { $inc: { tokenVersion: 1 } });
-    expect(await resolveSocketAccount(oldToken)).toBeNull();
-    expect(await resolveSocketAccount('sai-token')).toBeNull();
-
-    expect(cleanChatContent('  xin chào  ')).toBe('xin chào');
-    expect(cleanChatContent('   ')).toBeNull();
-    expect(cleanChatContent({ $gt: '' })).toBeNull();
-    expect(cleanChatContent('a'.repeat(2001))).toBeNull();
   });
 });

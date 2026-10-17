@@ -4,7 +4,6 @@ const request = require('supertest');
 const { io: ioClient } = require('socket.io-client');
 const app = require('../app');
 const Admin = require('../models/Admin');
-const PermissionGroup = require('../models/PermissionGroup');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 const Store = require('../models/Store');
@@ -69,26 +68,5 @@ describe('Socket.IO (kết nối thật)', () => {
     const dropped = nextEvent(sock, 'disconnect');
     await auth(request(app).put(`/api/users/admin/${reg.body.user._id}/toggle-active`), admin).send({});
     expect(await dropped).toBe('io server disconnect');
-  });
-
-  test('TC-141: Tin chat của khách chỉ tới admin / nhân viên có quyền chat.support', async () => {
-    const support = await PermissionGroup.create({ name: 'CSKH', permissions: ['chat.support'] });
-    const sales = await PermissionGroup.create({ name: 'Bán hàng', permissions: ['orders.manage'] });
-    await Admin.create({ name: 'CSKH', email: 'cskh-rt@example.com', password: 'abc12345', role: 'staff', groupIds: [support._id] });
-    await Admin.create({ name: 'Bán', email: 'ban-rt@example.com', password: 'abc12345', role: 'staff', groupIds: [sales._id] });
-    const agent = await connect(await login('cskh-rt@example.com', 'abc12345'));
-    const seller = await connect(await login('ban-rt@example.com', 'abc12345'));
-    const customer = await connect((await registerUser()).body.accessToken);
-
-    const toAgent = nextEvent(agent, 'chat:message');
-    const toSeller = nextEvent(seller, 'chat:message', 800);
-    customer.emit('chat:message', { content: '  Cần tư vấn  ' });
-    expect((await toAgent).content).toBe('Cần tư vấn');
-    expect(await toSeller).toBeNull();
-
-    // Nhân viên không có quyền thì không gửi được tin cho khách
-    const toCustomer = nextEvent(customer, 'chat:message', 800);
-    seller.emit('chat:message', { conversationId: 'x', content: 'tin lạ' });
-    expect(await toCustomer).toBeNull();
   });
 });

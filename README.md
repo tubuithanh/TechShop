@@ -118,7 +118,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có **146 test case** (36 bộ test), bao gồm:
+Có **169 test case** (40 bộ test), bao gồm:
 - tài khoản: đăng ký/đăng nhập, quên mật khẩu, đổi mật khẩu (đăng xuất thiết bị khác), đăng xuất xóa đúng cookie, không lộ trạng thái khóa khi sai mật khẩu, đăng nhập Zalo, thêm/đổi email có xác thực;
 - mua hàng: giỏ hàng (cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, tự hủy đơn VNPay quá hạn, số lượng "đã bán" chỉ tính khi giao thành công;
 - thanh toán VNPay và MoMo: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, giới hạn số tiền của MoMo, cấu hình trong trang quản trị;
@@ -343,12 +343,4 @@ Các việc sau **không cần chạy script** - máy chủ tự làm khi khởi
 | Ngày phát hành | 07/15 |
 | Mật khẩu OTP | 123456 |
 
-## Tài liệu đi kèm trong bộ hồ sơ nộp
 
-- `khao-sat-hien-trang-thegioididong.md` — Báo cáo khảo sát hiện trạng (Bước 1)
-- `muc-tieu-va-yeu-cau-do-an.md` — Mục tiêu và yêu cầu đồ án
-- `ke-hoach-du-an.md` — Kế hoạch dự án chi tiết theo 6 bước
-- `DanhSach_TestCase_TechShop.docx` — Danh sách test case
-- `Khao-sat-hien-trang-hinh-anh-minh-hoa.docx` — Hình ảnh minh họa cho báo cáo khảo sát
-- `Huong-dan-trien-khai-TechShop-len-Internet.docx` — Hướng dẫn triển khai lên Render + MongoDB Atlas
-- `Bao-cao-kiem-tra-khac-phuc-loi-TechShop*.docx` — Báo cáo kiểm tra và khắc phục lỗi (3 đợt)

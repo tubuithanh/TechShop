@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-import { useEffect, useRef, useState } from 'react';
-import { Container, Row, Col, Form, Button, ListGroup } from 'react-bootstrap';
-import { useAuth } from '../../store/AuthContext';
-import { connectSocket } from '../../services/socket';
-import { chatService } from '../../services/chatService';
-=======
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Badge, Button, Col, Container, Form, ListGroup, Nav, Row, Spinner } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
@@ -13,7 +6,6 @@ import { chatService, chatStatus, createChatSocket, mergeMessages } from '../../
 import ChatMessages from '../../components/ChatMessages';
 import ChatComposer from '../../components/ChatComposer';
 import { RatingDetails } from '../../components/ChatRating';
->>>>>>> e846496448bebd851c1c76c93074f72922d069ac
 
 export default function AdminChatPage() {
   const { user } = useAuth();
@@ -89,14 +81,8 @@ export default function AdminChatPage() {
   useEffect(() => { setLoading(true); loadList(); return () => { listSequence.current++; }; }, [loadList]);
 
   useEffect(() => {
-<<<<<<< HEAD
-    chatService.getConversations().then(setConversations);
-
-    const socket = connectSocket();
-=======
     let cancelled = false;
     const socket = createChatSocket();
->>>>>>> e846496448bebd851c1c76c93074f72922d069ac
     socketRef.current = socket;
     const announceAvailability = () => socket.emit('chat:availability', acceptingRef.current, (result) => {
       if (result?.error && !cancelled) setError(result.error);
