@@ -17,7 +17,9 @@ import {
   PersonBadge,
   KeyFill,
   GeoAltFill,
-  Images
+  Images,
+  Truck,
+  Bicycle
 } from 'react-bootstrap-icons';
 import { useAuth } from '../../store/AuthContext';
 import { hasPagePermission } from '../../utils/permissions';
@@ -27,6 +29,8 @@ const menu = [
   { path: '/admin/products', label: 'Quản lý sản phẩm', icon: BoxSeam },
   { path: '/admin/inventory', label: 'Quản lý tồn kho (đa chi nhánh)', icon: Boxes },
   { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: ReceiptCutoff },
+  { path: '/admin/deliveries', label: 'Phân công giao hàng', icon: Truck },
+  { path: '/admin/my-deliveries', label: 'Đơn tôi cần giao', icon: Bicycle },
   { path: '/admin/warranties', label: 'Quản lý bảo hành', icon: ShieldCheck },
   { path: '/admin/customers', label: 'Quản lý khách hàng', icon: People },
   { path: '/admin/vouchers', label: 'Quản lý khuyến mãi', icon: TagsFill },

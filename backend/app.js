@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const sanitizeInput = require('./middlewares/sanitizeInput');
 
 const { notFound, errorHandler } = require('./middlewares/errorMiddleware');
 const auditLogger = require('./middlewares/auditLogger');
@@ -34,6 +36,7 @@ const permissionGroupRoutes = require('./routes/permissionGroupRoutes');
 const staffRoutes = require('./routes/staffRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const deliveryRoutes = require('./routes/deliveryRoutes');
 const { UPLOAD_DIR } = require('./controllers/uploadController');
 
 const app = express();
@@ -43,6 +46,9 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ----- Middlewares nền tảng -----
+// Header bảo mật (chống nhúng iframe, đoán kiểu nội dung, ẩn X-Powered-By...). Ảnh tải lên (/uploads) được
+// trang frontend ở tên miền khác hiển thị nên phải cho phép tải chéo tên miền (cross-origin).
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(
   cors({
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
@@ -54,6 +60,7 @@ app.use('/api', apiLimiter); // giới hạn chung cho toàn bộ API (xem middl
 app.use('/api', paginationGuard); // limit tối đa 200, page là số nguyên >= 1
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(sanitizeInput); // bỏ khóa "$..." (toán tử MongoDB) khỏi body / query / params
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
@@ -114,6 +121,7 @@ app.use('/api/permission-groups', permissionGroupRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/deliveries', deliveryRoutes);
 // Ảnh upload khi chưa cấu hình Cloudinary (xem controllers/uploadController.js)
 app.use(
   '/uploads',

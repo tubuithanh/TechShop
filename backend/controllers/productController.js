@@ -200,6 +200,11 @@ const compareProducts = asyncHandler(async (req, res) => {
   if (!Array.isArray(ids) || ids.length < 2) {
     return res.status(400).json({ message: 'Cần chọn tối thiểu 2 sản phẩm để so sánh' });
   }
+  // Cùng giới hạn với trang so sánh (tối đa 4); mã sai định dạng trả 400 thay vì lỗi truy vấn
+  if (ids.length > 4) return res.status(400).json({ message: 'Chỉ so sánh được tối đa 4 sản phẩm' });
+  if (!ids.every((id) => typeof id === 'string' && mongoose.isValidObjectId(id))) {
+    return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ' });
+  }
   const products = await Product.find({ _id: { $in: ids }, isActive: true }).populate(
     'categoryId',
     'name slug specTemplate'
@@ -209,10 +214,15 @@ const compareProducts = asyncHandler(async (req, res) => {
 
 // ---------- ADMIN ----------
 
+// Trường do hệ thống tự tính (từ đơn đã giao, đánh giá, từ khóa tìm kiếm) - không nhận từ người sửa sản phẩm,
+// nếu không nhân viên có quyền sản phẩm có thể tự đặt "đã bán" / điểm đánh giá giả.
+const SYSTEM_FIELDS = ['_id', 'slug', 'soldCount', 'ratingAverage', 'ratingCount', 'searchTokens', 'createdAt', 'updatedAt'];
+const editableFields = (body) => Object.fromEntries(Object.entries(body || {}).filter(([k]) => !SYSTEM_FIELDS.includes(k)));
+
 const createProduct = asyncHandler(async (req, res) => {
   const body = req.body;
   const slug = makeSlug(body.title) + '-' + Date.now().toString().slice(-5);
-  const product = await Product.create({ ...body, slug });
+  const product = await Product.create({ ...editableFields(body), slug });
   res.status(201).json({ data: product });
 });
 
@@ -237,7 +247,7 @@ const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  Object.assign(product, req.body);
+  Object.assign(product, editableFields(req.body));
   await product.save();
   if (removedIds.length) await StoreInventory.deleteMany({ productId: product._id, variantId: { $in: removedIds } });
   res.json({ data: product });

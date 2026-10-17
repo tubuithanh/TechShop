@@ -72,13 +72,32 @@ const orderSchema = new mongoose.Schema(
       }
     ],
     note: String,
-    cancelReason: String
+    cancelReason: String,
+    // ----- Giao nhận hàng (UC37 – UC40) -----
+    // Nhân viên giao hàng được phân công (tài khoản quản trị có quyền deliveries.perform)
+    shipperId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+    assignedAt: Date,
+    // Mỗi lần giao: thành công / thất bại kèm lý do
+    deliveryAttempts: [
+      {
+        _id: false,
+        at: { type: Date, default: Date.now },
+        result: { type: String, enum: ['success', 'failed'], required: true },
+        reason: { type: String, default: '' },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }
+      }
+    ],
+    // Tiền COD: nhân viên giao hàng thu lúc giao thành công, rồi nộp cho chi nhánh (quản lý xác nhận đối soát)
+    codCollectedAt: Date,
+    codSettledAt: Date,
+    codSettledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }
   },
   { timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'orders' }
 );
 
 orderSchema.index({ storeId: 1, createdAt: -1 });
 orderSchema.index({ userId: 1 });
+orderSchema.index({ shipperId: 1, status: 1 });
 
 // Tìm kiếm không dấu: mã đơn (cả phần số, VD "000123"), người nhận, SĐT, sản phẩm, mã giảm giá
 orderSchema.plugin(searchablePlugin, {

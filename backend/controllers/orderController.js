@@ -1,7 +1,9 @@
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const StoreInventory = require('../models/StoreInventory');
+const Store = require('../models/Store');
 const Voucher = require('../models/Voucher');
 const Notification = require('../models/Notification');
 const Setting = require('../models/Setting');
@@ -9,6 +11,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const { emailOrderPlaced, emailOrderStatus } = require('../utils/notifyEmail');
 const { searchFilter } = require('../utils/search');
 const { hasPermission, getScopedStoreId } = require('../middlewares/authMiddleware');
+const { releaseVoucher } = require('../utils/voucherUsage');
+const { withTransaction, BusinessError } = require('../utils/transaction');
+const { validatePhone } = require('../utils/customerValidation');
 
 const SHIPPING_FEE_DEFAULT = 30000;
 
@@ -81,7 +86,7 @@ async function restoreCartItems(userId, items) {
 
 // Hoàn kho đúng phiên bản đã bán. Đơn hàng cũ (trước khi có phiên bản) đã được migration gán variantId
 // (seed/migrateVariants.js); nếu vẫn thiếu thì KHÔNG đoán bừa phiên bản nào để cộng kho.
-async function restoreStock(storeId, items) {
+async function restoreStock(storeId, items, session = null) {
   for (const item of items) {
     if (!item.variantId) {
       console.warn(`[restoreStock] Bỏ qua dòng hàng thiếu variantId (sản phẩm ${item.productId})`);
@@ -89,8 +94,170 @@ async function restoreStock(storeId, items) {
     }
     await StoreInventory.findOneAndUpdate(
       { productId: item.productId, variantId: item.variantId, storeId },
-      { $inc: { stock: item.quantity }, lastUpdated: new Date() }
+      { $inc: { stock: item.quantity }, lastUpdated: new Date() },
+      { session }
     );
+  }
+}
+
+// Cộng / trừ số lượng "đã bán" của sản phẩm (sign = 1 | -1). Không bao giờ để âm. Chỉ phục vụ hiển thị
+// và thống kê bán chạy, nên lỗi ở đây chỉ ghi log, không làm hỏng việc đổi trạng thái đơn đã thành công.
+async function adjustSoldCount(items, sign, session = null) {
+  for (const item of items) {
+    try {
+      await Product.updateOne({ _id: item.productId }, [
+        { $set: { soldCount: { $max: [0, { $add: [{ $ifNull: ['$soldCount', 0] }, sign * item.quantity] }] } } }
+      ], { session });
+    } catch (err) {
+      if (session) throw err; // trong transaction: để cả khối hủy
+      console.error(`Lỗi cập nhật soldCount cho sản phẩm ${item.productId}:`, err.message);
+    }
+  }
+}
+
+const DELIVERY_METHODS = ['home_delivery', 'store_pickup'];
+const text = (v) => (typeof v === 'string' ? v.trim() : '');
+function validateDeliveryAddress(address, deliveryMethod) {
+  if (!address || typeof address !== 'object') return 'Vui lòng nhập thông tin người nhận';
+  if (!text(address.fullName)) return 'Vui lòng nhập họ tên người nhận';
+  const phoneError = validatePhone(address.phone);
+  if (phoneError) return phoneError;
+  if (deliveryMethod === 'home_delivery' && (!text(address.addressLine1) || !text(address.city))) {
+    return 'Giao tận nơi cần có số nhà / đường và tỉnh / thành phố';
+  }
+  return null;
+}
+
+// Các bước tạo đơn: lấy giỏ, tính tiền theo giá hiện tại, kiểm tra mã giảm giá, trừ kho, giữ lượt mã, tạo đơn.
+// Chạy trong transaction (session): lỗi ở BẤT KỲ bước nào MongoDB tự hủy mọi thao tác đã ghi, kể cả khi máy
+// chủ dừng đột ngột giữa chừng. Không có transaction (MongoDB đơn lẻ lúc lập trình) thì hoàn tác thủ công
+// theo danh sách `undo`. Lỗi nghiệp vụ ném BusinessError (mã HTTP + thông báo cho khách).
+async function placeOrder(userId, input, session) {
+  const { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note } = input;
+  const undo = [];
+  const rollback = async () => {
+    if (session) return; // transaction tự hủy
+    for (const step of undo.reverse()) await step();
+  };
+  const fail = async (status, message) => {
+    await rollback();
+    throw new BusinessError(status, message);
+  };
+
+  try {
+    // "Nhận" giỏ hàng bằng 1 lệnh có điều kiện: chỉ request lấy được giỏ KHÔNG rỗng và dọn nó về rỗng mới
+    // được tạo đơn - bấm "Đặt hàng" 2 lần (hoặc gửi trùng do mất mạng) không tạo 2 đơn.
+    const claimedCart = await Cart.findOneAndUpdate(
+      { userId, 'items.0': { $exists: true } },
+      { $set: { items: [] } },
+      { new: false, session }
+    );
+    if (!claimedCart) throw new BusinessError(400, 'Giỏ hàng đang trống');
+    const cartItemsSnapshot = claimedCart.items;
+    undo.push(() => restoreCartItems(userId, cartItemsSnapshot));
+
+    // Giá HIỆN TẠI của từng phiên bản, không tin giá đã lưu trong giỏ (giá có thể đã đổi)
+    const products = await Product.find({ _id: { $in: cartItemsSnapshot.map((i) => i.productId) } }, null, { session });
+    const productMap = new Map(products.map((p) => [p._id.toString(), p]));
+    const orderItems = [];
+    for (const item of cartItemsSnapshot) {
+      const product = productMap.get(item.productId.toString());
+      const variant = product?.variants.id(item.variantId);
+      if (!product || !product.isActive || !variant || !variant.isActive) {
+        const label = item.variantLabel ? ` (${item.variantLabel})` : '';
+        return await fail(400, `Sản phẩm "${item.name}${label}" không còn kinh doanh`);
+      }
+      orderItems.push({
+        productId: item.productId,
+        variantId: variant._id,
+        variantLabel: variant.label,
+        quantity: item.quantity,
+        unitPrice: variant.effectivePrice,
+        name: product.title,
+        image: variant.image || product.featuredImage
+      });
+    }
+    const itemsTotal = orderItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+
+    // Phí ship và ngưỡng miễn phí ship theo cấu hình hệ thống
+    const settings = await Setting.findOne({}, null, { session });
+    const shippingFeeConfig = settings?.defaultShippingFee ?? SHIPPING_FEE_DEFAULT;
+    const freeShippingThreshold = settings?.freeShippingThreshold ?? 0;
+    const qualifiesFreeShipping = freeShippingThreshold > 0 && itemsTotal >= freeShippingThreshold;
+    const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
+
+    let voucher = null;
+    let discountAmount = 0;
+    if (voucherCode) {
+      voucher = await Voucher.findOne({ code: String(voucherCode).toUpperCase() }, null, { session });
+      if (!voucher || !voucher.isValidNow()) return await fail(400, 'Mã giảm giá không hợp lệ hoặc đã hết hạn');
+      if (itemsTotal < voucher.minOrderValue) {
+        return await fail(400, `Đơn hàng tối thiểu ${voucher.minOrderValue.toLocaleString()}đ để áp dụng mã`);
+      }
+      if (voucher.perCustomerLimit > 0) {
+        // Đơn đã hủy / trả hàng không tính lượt (khách không thật sự hưởng giảm giá)
+        const usedByCustomer = await Order.countDocuments(
+          { userId, voucherCode: voucher.code, status: { $nin: ['cancelled', 'returned'] } },
+          { session }
+        );
+        if (usedByCustomer >= voucher.perCustomerLimit) return await fail(400, 'Bạn đã sử dụng hết lượt cho mã giảm giá này');
+      }
+      // maxDiscountAmount = 0 là cố ý đặt trần 0đ, khác "chưa đặt" (không giới hạn)
+      const maxDiscount = typeof voucher.maxDiscountAmount === 'number' ? voucher.maxDiscountAmount : Infinity;
+      discountAmount =
+        voucher.discountType === 'percent'
+          ? Math.round(Math.min((itemsTotal * voucher.discountValue) / 100, maxDiscount))
+          : Math.round(Math.min(voucher.discountValue, itemsTotal + shippingFee));
+    }
+    const grandTotal = Math.round(Math.max(itemsTotal + shippingFee - discountAmount, 0));
+
+    // Trừ kho đúng chi nhánh bằng lệnh có điều kiện (stock >= số lượng): 2 đơn tranh món cuối chỉ 1 đơn được
+    for (const item of orderItems) {
+      const updated = await StoreInventory.findOneAndUpdate(
+        { productId: item.productId, variantId: item.variantId, storeId, stock: { $gte: item.quantity } },
+        { $inc: { stock: -item.quantity }, lastUpdated: new Date() },
+        { new: true, session }
+      );
+      if (!updated) return await fail(400, `Sản phẩm "${item.name} (${item.variantLabel})" không đủ tồn kho tại cửa hàng đã chọn`);
+      undo.push(() => restoreStock(storeId, [item]));
+    }
+
+    // Giữ 1 lượt mã bằng lệnh có điều kiện "còn lượt": 2 đơn tranh lượt cuối chỉ 1 đơn được
+    if (voucher) {
+      const claimedVoucher = await Voucher.findOneAndUpdate(
+        { _id: voucher._id, $or: [{ usageLimit: 0 }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }] },
+        { $inc: { usedCount: 1 } },
+        { new: true, session }
+      );
+      if (!claimedVoucher) return await fail(400, 'Mã giảm giá vừa hết lượt sử dụng, vui lòng thử lại');
+      undo.push(() => Voucher.updateOne({ _id: voucher._id, usedCount: { $gt: 0 } }, { $inc: { usedCount: -1 } }));
+    }
+
+    const [order] = await Order.create(
+      [
+        {
+          orderCode: generateOrderCode(),
+          userId,
+          storeId,
+          items: orderItems,
+          deliveryAddress,
+          deliveryMethod,
+          paymentMode,
+          itemsTotal,
+          shippingFee,
+          discountAmount,
+          voucherCode: voucher ? voucher.code : null,
+          grandTotal,
+          note,
+          statusHistory: [{ status: 'pending', note: 'Đơn hàng được tạo', changedBy: userId }]
+        }
+      ],
+      { session }
+    );
+    return order;
+  } catch (err) {
+    if (!(err instanceof BusinessError)) await rollback(); // lỗi bất ngờ (VD lưu đơn thất bại)
+    throw err;
   }
 }
 
@@ -100,173 +267,37 @@ const createOrder = asyncHandler(async (req, res) => {
   const { storeId, deliveryAddress, deliveryMethod = 'home_delivery', paymentMode = 'cod', voucherCode, note } =
     req.body;
 
+  if (req.accountRole !== 'customer') {
+    return res.status(403).json({ message: 'Chỉ tài khoản khách hàng mới đặt hàng được' });
+  }
   if (!storeId) {
     return res.status(400).json({ message: 'Vui lòng chọn cửa hàng xử lý đơn hàng (mô hình đa chi nhánh)' });
   }
-
-  // "Nhận" (claim) giỏ hàng bằng 1 update có điều kiện nguyên tử: chỉ request nào lấy giỏ hàng
-  // KHÔNG rỗng và dọn nó về rỗng mới được tiếp tục tạo đơn. Nhờ vậy, bấm "Đặt hàng" 2 lần liên tiếp
-  // (double-click) hoặc request bị gửi trùng do mất mạng/thử lại sẽ không tạo ra 2 đơn hàng trùng
-  // nhau cho cùng 1 giỏ hàng - request thứ 2 sẽ thấy giỏ hàng đã rỗng và dừng lại ngay.
-  const claimedCart = await Cart.findOneAndUpdate(
-    { userId: req.account._id, 'items.0': { $exists: true } },
-    { $set: { items: [] } },
-    { new: false }
-  );
-  if (!claimedCart) {
-    return res.status(400).json({ message: 'Giỏ hàng đang trống' });
+  // Trang thanh toán chỉ liệt kê cửa hàng đang hoạt động, nhưng API phải tự kiểm tra: trước đây vẫn đặt
+  // được đơn vào chi nhánh đã đóng (nếu còn dòng tồn kho) - đơn đó không ai xử lý.
+  if (!mongoose.isValidObjectId(storeId) || !(await Store.exists({ _id: storeId, isActive: { $ne: false } }))) {
+    return res.status(400).json({ message: 'Cửa hàng đã chọn không tồn tại hoặc đã ngừng hoạt động' });
   }
-  const cartItemsSnapshot = claimedCart.items;
-
-  // Lấy giá HIỆN TẠI của sản phẩm từ database thay vì tin vào unitPrice đã cache trong giỏ hàng -
-  // giá sản phẩm có thể đã được admin đổi kể từ lúc khách thêm vào giỏ (giỏ hàng không tự làm mới
-  // giá). Đơn hàng luôn tính theo giá thật tại thời điểm đặt hàng.
-  const productIds = cartItemsSnapshot.map((i) => i.productId);
-  const products = await Product.find({ _id: { $in: productIds } });
-  const productMap = new Map(products.map((p) => [p._id.toString(), p]));
-
-  const orderItems = [];
-  for (const item of cartItemsSnapshot) {
-    const product = productMap.get(item.productId.toString());
-    const variant = product?.variants.id(item.variantId);
-    if (!product || !product.isActive || !variant || !variant.isActive) {
-      await restoreCartItems(req.account._id, cartItemsSnapshot);
-      const label = item.variantLabel ? ` (${item.variantLabel})` : '';
-      return res.status(400).json({ message: `Sản phẩm "${item.name}${label}" không còn kinh doanh` });
-    }
-    orderItems.push({
-      productId: item.productId,
-      variantId: variant._id,
-      variantLabel: variant.label,
-      quantity: item.quantity,
-      unitPrice: variant.effectivePrice,
-      name: product.title,
-      image: variant.image || product.featuredImage
-    });
+  if (!DELIVERY_METHODS.includes(deliveryMethod)) {
+    return res.status(400).json({ message: 'Hình thức nhận hàng không hợp lệ' });
   }
-
-  const itemsTotal = orderItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-
-  // Phí ship & ngưỡng miễn phí ship lấy từ cấu hình hệ thống (Admin > Cấu hình hệ thống),
-  // fallback về giá trị mặc định nếu admin chưa thiết lập.
-  const settings = await Setting.findOne();
-  const shippingFeeConfig = settings?.defaultShippingFee ?? SHIPPING_FEE_DEFAULT;
-  const freeShippingThreshold = settings?.freeShippingThreshold ?? 0;
-  const qualifiesFreeShipping = freeShippingThreshold > 0 && itemsTotal >= freeShippingThreshold;
-  const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
-
-  let voucher = null;
-  let discountAmount = 0;
-  if (voucherCode) {
-    voucher = await Voucher.findOne({ code: voucherCode.toUpperCase() });
-    if (!voucher || !voucher.isValidNow()) {
-      await restoreCartItems(req.account._id, cartItemsSnapshot);
-      return res.status(400).json({ message: 'Mã giảm giá không hợp lệ hoặc đã hết hạn' });
-    }
-    if (itemsTotal < voucher.minOrderValue) {
-      await restoreCartItems(req.account._id, cartItemsSnapshot);
-      return res.status(400).json({ message: `Đơn hàng tối thiểu ${voucher.minOrderValue.toLocaleString()}đ để áp dụng mã` });
-    }
-    if (voucher.perCustomerLimit > 0) {
-      // Đơn đã hủy HOẶC đã hoàn trả (được hoàn tiền đầy đủ) không tính vào số lượt đã dùng - khách
-      // hàng không thực sự hưởng giảm giá nào từ những đơn đó nên không nên bị khoá vĩnh viễn.
-      const usedByCustomer = await Order.countDocuments({
-        userId: req.account._id,
-        voucherCode: voucher.code,
-        status: { $nin: ['cancelled', 'returned'] }
-      });
-      if (usedByCustomer >= voucher.perCustomerLimit) {
-        await restoreCartItems(req.account._id, cartItemsSnapshot);
-        return res.status(400).json({ message: 'Bạn đã sử dụng hết lượt cho mã giảm giá này' });
-      }
-    }
-    // maxDiscountAmount = 0 là admin CHỦ Ý đặt mức trần 0đ (không cho giảm), khác với "chưa thiết
-    // lập" (undefined/null = không giới hạn) - dùng kiểm tra kiểu number thay vì `|| Infinity`
-    // (0 là falsy nên `0 || Infinity` sẽ SAI thành "không giới hạn").
-    const maxDiscount = typeof voucher.maxDiscountAmount === 'number' ? voucher.maxDiscountAmount : Infinity;
-    discountAmount =
-      voucher.discountType === 'percent'
-        ? Math.round(Math.min((itemsTotal * voucher.discountValue) / 100, maxDiscount))
-        : Math.round(Math.min(voucher.discountValue, itemsTotal + shippingFee));
-  }
-
-  const grandTotal = Math.round(Math.max(itemsTotal + shippingFee - discountAmount, 0));
-
-  // Trừ tồn kho ĐÚNG THEO CỬA HÀNG đã bán, dùng update có điều kiện (stock >= quantity)
-  // để tránh race condition khi nhiều đơn cùng tranh chấp đơn vị tồn kho cuối cùng.
-  // Nếu một sản phẩm không đủ hàng, hoàn lại các sản phẩm đã trừ trước đó rồi báo lỗi.
-  const decremented = [];
-  for (const item of orderItems) {
-    const updated = await StoreInventory.findOneAndUpdate(
-      { productId: item.productId, variantId: item.variantId, storeId, stock: { $gte: item.quantity } },
-      { $inc: { stock: -item.quantity }, lastUpdated: new Date() },
-      { new: true }
-    );
-    if (!updated) {
-      await restoreStock(storeId, decremented);
-      await restoreCartItems(req.account._id, cartItemsSnapshot);
-      return res.status(400).json({
-        message: `Sản phẩm "${item.name} (${item.variantLabel})" không đủ tồn kho tại cửa hàng đã chọn`
-      });
-    }
-    decremented.push(item);
-  }
-
-  // Trừ lượt dùng voucher bằng update có điều kiện nguyên tử (chỉ thành công nếu vẫn còn lượt tại
-  // đúng thời điểm ghi) - 2 đơn hàng tranh chấp lượt dùng cuối cùng của cùng 1 mã giảm giá sẽ không
-  // thể cùng lúc "vượt rào" usageLimit như khi đọc-rồi-ghi (read-then-write) không nguyên tử.
-  if (voucher) {
-    const claimedVoucher = await Voucher.findOneAndUpdate(
-      {
-        _id: voucher._id,
-        $or: [{ usageLimit: 0 }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }]
-      },
-      { $inc: { usedCount: 1 } },
-      { new: true }
-    );
-    if (!claimedVoucher) {
-      await restoreStock(storeId, decremented);
-      await restoreCartItems(req.account._id, cartItemsSnapshot);
-      return res.status(400).json({ message: 'Mã giảm giá vừa hết lượt sử dụng, vui lòng thử lại' });
-    }
-  }
+  // Người nhận (tên + SĐT) luôn bắt buộc; giao tận nơi cần thêm địa chỉ và tỉnh/thành. Trước đây không
+  // kiểm tra gì - gọi thẳng API vẫn tạo được đơn giao tận nơi không có địa chỉ.
+  const addressError = validateDeliveryAddress(deliveryAddress, deliveryMethod);
+  if (addressError) return res.status(400).json({ message: addressError });
 
   let order;
   try {
-    order = await Order.create({
-      orderCode: generateOrderCode(),
-      userId: req.account._id,
-      storeId,
-      items: orderItems,
-      deliveryAddress,
-      deliveryMethod,
-      paymentMode,
-      itemsTotal,
-      shippingFee,
-      discountAmount,
-      voucherCode: voucherCode || null,
-      grandTotal,
-      note,
-      statusHistory: [{ status: 'pending', note: 'Đơn hàng được tạo', changedBy: req.account._id }]
-    });
+    order = await withTransaction((session) =>
+      placeOrder(req.account._id, { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note }, session)
+    );
   } catch (err) {
-    // Tạo đơn thất bại: hoàn lại tồn kho + lượt dùng voucher + giỏ hàng đã trừ/dùng ở trên
-    await restoreStock(storeId, decremented);
-    if (voucher) await Voucher.findByIdAndUpdate(voucher._id, { $inc: { usedCount: -1 } });
-    await restoreCartItems(req.account._id, cartItemsSnapshot);
+    if (err instanceof BusinessError) return res.status(err.status).json({ message: err.message });
     throw err;
   }
 
-  // Đơn hàng, tồn kho và lượt dùng voucher đã được ghi nhận THÀNH CÔNG ở trên - cập nhật soldCount
-  // (chỉ phục vụ thống kê "bán chạy") không được để lỗi ở đây làm hỏng phản hồi thành công, khiến
-  // khách hàng thấy lỗi 500 dù đơn hàng thực ra đã đặt thành công.
-  for (const item of orderItems) {
-    try {
-      await Product.findByIdAndUpdate(item.productId, { $inc: { soldCount: item.quantity } });
-    } catch (err) {
-      console.error(`Lỗi cập nhật soldCount cho sản phẩm ${item.productId}:`, err.message);
-    }
-  }
+  // soldCount KHÔNG tăng ở đây: đơn mới đặt chưa phải đã bán (có thể bị hủy, tự hủy vì quá hạn thanh
+  // toán) - chỉ tính khi đơn chuyển sang "delivered" (xem updateOrderStatus / adjustSoldCount).
 
   await Notification.create({
     userId: req.account._id,
@@ -324,24 +355,32 @@ const cancelOrder = asyncHandler(async (req, res) => {
   // Update có điều kiện: chỉ thắng nếu status ĐÚNG BẰNG status vừa đọc ở trên - nếu 1 request khác
   // (double-click, tab khác) đã hủy đơn này trước, request này sẽ nhận null và dừng lại, tránh hoàn
   // kho 2 lần cho cùng 1 đơn hàng.
-  const updated = await Order.findOneAndUpdate(
-    { _id: order._id, status: order.status },
-    {
-      $set: {
-        status: 'cancelled',
-        cancelReason,
-        // Đơn đã thanh toán online bị hủy -> chuyển sang "đã hoàn tiền" (bản demo mô phỏng việc hoàn tiền)
-        ...(order.paymentStatus === 'paid' && order.paymentMode !== 'cod' ? { paymentStatus: 'refunded' } : {})
+  // Điều kiện kèm cả paymentStatus: nếu kết quả thanh toán vừa về đúng lúc khách bấm hủy thì nhận 409
+  // (tải lại rồi hủy), không để đơn "đã hủy" mà vẫn "đã thanh toán" thay vì "đã hoàn tiền".
+  // Đổi trạng thái + hoàn kho + trả lượt mã chạy chung 1 transaction: không bao giờ hủy rồi mà chưa hoàn kho.
+  const updated = await withTransaction(async (session) => {
+    const changed = await Order.findOneAndUpdate(
+      { _id: order._id, status: order.status, paymentStatus: order.paymentStatus },
+      {
+        $set: {
+          status: 'cancelled',
+          cancelReason,
+          // Đơn đã thanh toán online bị hủy -> chuyển sang "đã hoàn tiền" (bản demo mô phỏng việc hoàn tiền)
+          ...(order.paymentStatus === 'paid' && order.paymentMode !== 'cod' ? { paymentStatus: 'refunded' } : {})
+        },
+        $push: { statusHistory: { status: 'cancelled', note: cancelReason, changedBy: req.account._id } }
       },
-      $push: { statusHistory: { status: 'cancelled', note: cancelReason, changedBy: req.account._id } }
-    },
-    { new: true }
-  );
+      { new: true, session }
+    );
+    if (!changed) return null;
+    await restoreStock(order.storeId, order.items, session);
+    await releaseVoucher(order, session);
+    return changed;
+  });
   if (!updated) {
     return res.status(409).json({ message: 'Đơn hàng vừa được cập nhật, vui lòng tải lại trang' });
   }
 
-  await restoreStock(order.storeId, order.items);
   emailOrderStatus(updated, 'cancelled');
   res.json({ data: updated });
 });
@@ -387,43 +426,62 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác, bạn không có quyền xử lý' });
   }
 
+  const result = await transitionOrder(req, order, status, { note });
+  if (result.error) return res.status(result.error.status).json({ message: result.error.message });
+  res.json({ data: result.updated });
+});
+
+// Chuyển trạng thái 1 đơn theo đúng quy tắc (bảng chuyển trạng thái, đơn online chưa thanh toán chỉ được hủy),
+// trong 1 transaction cùng hoàn kho / trả lượt mã / số "đã bán", rồi báo khách (thông báo, email, Socket.IO).
+// Dùng chung cho nhân viên xử lý đơn (updateOrderStatus) và nhân viên giao hàng (deliveryController).
+// extraSet / extraPush: trường ghi thêm cùng lệnh (VD lần giao hàng, thời điểm thu COD). Trả { updated } hoặc { error }.
+async function transitionOrder(req, order, status, { note, extraSet = {}, extraPush = {} } = {}) {
   // Đơn thanh toán online (VNPay/MoMo) phải thanh toán xong mới được xác nhận/giao - nếu không có thể giao hàng
   // khi chưa nhận được tiền. Đơn chưa thanh toán chỉ có thể hủy (khách/admin) hoặc chờ khách thanh toán lại.
   if (Order.ONLINE_PAYMENT_MODES.includes(order.paymentMode) && order.paymentStatus !== 'paid' && !RESTOCK_STATUSES.includes(status)) {
     const label = Order.PAYMENT_LABELS[order.paymentMode];
-    return res.status(400).json({ message: `Đơn thanh toán qua ${label} chưa được thanh toán, chưa thể xử lý tiếp` });
+    return { error: { status: 400, message: `Đơn thanh toán qua ${label} chưa được thanh toán, chưa thể xử lý tiếp` } };
   }
 
   const allowedNext = ORDER_STATUS_TRANSITIONS[order.status] || [];
   if (!allowedNext.includes(status)) {
-    return res.status(400).json({
-      message: `Không thể chuyển đơn hàng từ trạng thái "${order.status}" sang "${status}"`
-    });
+    return { error: { status: 400, message: `Không thể chuyển đơn hàng từ trạng thái "${order.status}" sang "${status}"` } };
   }
 
   // Update có điều kiện (status hiện tại phải khớp đúng status vừa đọc) - đảm bảo 2 request cập
   // nhật trạng thái đồng thời không thể cùng vượt qua kiểm tra rồi cùng hoàn kho / cùng ghi đè
   // trạng thái của nhau.
-  const updated = await Order.findOneAndUpdate(
-    { _id: order._id, status: order.status },
-    {
-      $set: {
-        status,
-        ...(status === 'delivered' && order.paymentMode === 'cod' ? { paymentStatus: 'paid' } : {}),
-        ...(RESTOCK_STATUSES.includes(status) && order.paymentStatus === 'paid' && order.paymentMode !== 'cod'
-          ? { paymentStatus: 'refunded' }
-          : {})
+  // Kèm paymentStatus trong điều kiện vì giá trị mới của nó tính từ giá trị vừa đọc (giống cancelOrder).
+  // Đổi trạng thái + hoàn kho + trả lượt mã + số "đã bán" chạy chung 1 transaction.
+  const updated = await withTransaction(async (session) => {
+    const changed = await Order.findOneAndUpdate(
+      { _id: order._id, status: order.status, paymentStatus: order.paymentStatus },
+      {
+        $set: {
+          status,
+          ...extraSet,
+          ...(status === 'delivered' && order.paymentMode === 'cod' ? { paymentStatus: 'paid' } : {}),
+          ...(RESTOCK_STATUSES.includes(status) && order.paymentStatus === 'paid' && order.paymentMode !== 'cod'
+            ? { paymentStatus: 'refunded' }
+            : {})
+        },
+        $push: { statusHistory: { status, note, changedBy: req.account._id }, ...extraPush }
       },
-      $push: { statusHistory: { status, note, changedBy: req.account._id } }
-    },
-    { new: true }
-  );
+      { new: true, session }
+    );
+    if (!changed) return null;
+    if (RESTOCK_STATUSES.includes(status)) {
+      await restoreStock(order.storeId, order.items, session);
+      await releaseVoucher(order, session);
+    }
+    // "Đã bán" = khách đã nhận hàng: cộng khi giao thành công, trừ lại nếu đơn đã giao bị trả hàng.
+    // Đơn bị trả khi đang giao (shipping -> returned) chưa từng được cộng nên không trừ.
+    if (status === 'delivered') await adjustSoldCount(order.items, 1, session);
+    else if (status === 'returned' && order.status === 'delivered') await adjustSoldCount(order.items, -1, session);
+    return changed;
+  });
   if (!updated) {
-    return res.status(409).json({ message: 'Đơn hàng vừa được cập nhật bởi người khác, vui lòng tải lại' });
-  }
-
-  if (RESTOCK_STATUSES.includes(status)) {
-    await restoreStock(order.storeId, order.items);
+    return { error: { status: 409, message: 'Đơn hàng vừa được cập nhật bởi người khác, vui lòng tải lại' } };
   }
 
   await Notification.create({
@@ -438,8 +496,8 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   const io = req.app.get('io');
   if (io) io.to(`user_${order.userId}`).emit('order:statusUpdated', { orderId: order._id, status });
 
-  res.json({ data: updated });
-});
+  return { updated };
+}
 
 module.exports = {
   restoreStock,
@@ -448,5 +506,7 @@ module.exports = {
   getOrderById,
   cancelOrder,
   getAllOrders,
-  updateOrderStatus
+  updateOrderStatus,
+  transitionOrder,
+  inScope
 };

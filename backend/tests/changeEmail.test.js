@@ -7,6 +7,7 @@ const { generateAccessToken } = require('../utils/generateTokens');
 const { clearMailConfigCache } = require('../utils/mailer');
 const { flushEmails, emailOrderStatus } = require('../utils/notifyEmail');
 const { registerUser } = require('./helpers');
+afterEach(() => jest.restoreAllMocks());
 
 const auth = (req, token) => req.set('Authorization', `Bearer ${token}`);
 const tokenOf = (user) => generateAccessToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
@@ -113,6 +114,11 @@ describe('Email của tài khoản Zalo (để trống, thêm sau bằng mã xá
     const jwt = require('jsonwebtoken');
     // Phiên Zalo hợp lệ giống zaloCallback tạo ra sau khi đổi code lấy access_token với Zalo
     const zaloSession = () => jwt.sign({ zaloAccessToken: 'x' }, process.env.JWT_ACCESS_SECRET, { expiresIn: '3m' });
+    // Backend tự hỏi Zalo id của access_token -> giả lập Zalo trả đúng id của tài khoản này
+    const realFetch = global.fetch;
+    jest.spyOn(global, 'fetch').mockImplementation(async (url, opts) =>
+      String(url).startsWith('https://graph.zalo.me/') ? new Response(JSON.stringify({ id: '5550001' })) : realFetch(url, opts)
+    );
     const zaloLogin = () => request(app).post('/api/auth/zalo/complete').send({ id: '5550001', name: 'Tu Zalo', session: zaloSession() });
 
     // 1. Đăng nhập Zalo lần đầu -> tạo tài khoản, chưa có email

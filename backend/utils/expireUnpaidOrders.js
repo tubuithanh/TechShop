@@ -1,6 +1,8 @@
 const Order = require('../models/Order');
 const Notification = require('../models/Notification');
 const { emailOrderStatus } = require('./notifyEmail');
+const { releaseVoucher } = require('./voucherUsage');
+const { withTransaction } = require('./transaction');
 
 // Đơn thanh toán online (VNPay/MoMo) chưa thanh toán giữ hàng trong kho - quá hạn thì tự hủy để trả lại tồn kho.
 // PAYMENT_TIMEOUT_MINUTES: thời gian chờ thanh toán; LINK_LIFETIME_MINUTES: hạn của 1 link VNPay (utils/vnpay.js).
@@ -31,17 +33,23 @@ async function expireUnpaidVnpayOrders({ restoreStock, now = new Date() }) {
   for (const { _id, paymentMode } of candidates) {
     const REASON = reasonFor(paymentMode);
     // Điều kiện nguyên tử: chỉ hủy nếu đơn VẪN chờ xác nhận và chưa thanh toán (khách có thể vừa trả tiền)
-    const order = await Order.findOneAndUpdate(
-      { _id, status: 'pending', paymentStatus: { $in: ['pending', 'failed'] } },
-      {
-        $set: { status: 'cancelled', cancelReason: REASON },
-        $push: { statusHistory: { status: 'cancelled', note: REASON } }
-      },
-      { new: true }
-    );
+    // Hủy + hoàn kho + trả lượt mã trong 1 transaction: không có đơn đã hủy mà tồn kho chưa được trả
+    const order = await withTransaction(async (session) => {
+      const changed = await Order.findOneAndUpdate(
+        { _id, status: 'pending', paymentStatus: { $in: ['pending', 'failed'] } },
+        {
+          $set: { status: 'cancelled', cancelReason: REASON },
+          $push: { statusHistory: { status: 'cancelled', note: REASON } }
+        },
+        { new: true, session }
+      );
+      if (!changed) return null;
+      await restoreStock(changed.storeId, changed.items, session);
+      await releaseVoucher(changed, session);
+      return changed;
+    });
     if (!order) continue;
     cancelled++;
-    await restoreStock(order.storeId, order.items);
     await Notification.create({
       userId: order.userId,
       type: 'order',

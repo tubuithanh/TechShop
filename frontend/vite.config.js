@@ -22,6 +22,12 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true
+      },
+      // Socket.IO (chat, thông báo real-time) - trước đây thiếu nên lúc dev không kết nối được backend
+      '/socket.io': {
+        target: 'http://localhost:5000',
+        ws: true,
+        changeOrigin: true
       }
     }
   }

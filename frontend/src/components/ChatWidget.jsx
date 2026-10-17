@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
 import { Card, Form, Button } from 'react-bootstrap';
 import { useAuth } from '../store/AuthContext';
-import api, { getAccessToken } from '../services/api';
+import api from '../services/api';
+import { connectSocket } from '../services/socket';
 import { chatService } from '../services/chatService';
 
 // ID nhân viên CSKH sẽ được lấy động qua API /api/chat/support-agent
@@ -21,8 +21,7 @@ export default function ChatWidget() {
   useEffect(() => {
     if (!shouldShow) return;
 
-    const token = getAccessToken();
-    const socket = io('/', { auth: { token } });
+    const socket = connectSocket();
     socketRef.current = socket;
 
     socket.on('chat:message', (msg) => {

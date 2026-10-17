@@ -26,6 +26,8 @@ const settingSchema = new mongoose.Schema(
 
     defaultShippingFee: { type: Number, default: 30000, min: 0 },
     freeShippingThreshold: { type: Number, default: 0, min: 0 }, // 0 = tắt tính năng miễn phí ship
+    // Giao thất bại (khách hẹn lại, không liên lạc được) quá số lần này thì đơn chuyển sang trả hàng
+    maxDeliveryAttempts: { type: Number, default: 3, min: 1, max: 10 },
 
     // Số ngày lưu nhật ký thao tác: 0 = không ghi nhật ký; N = chỉ giữ N ngày gần nhất (cũ hơn tự xóa)
     auditLogRetentionDays: { type: Number, default: 30, min: 0, max: 3650 },

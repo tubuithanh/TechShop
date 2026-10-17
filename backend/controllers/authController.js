@@ -10,7 +10,8 @@ const { sendOtp } = require('../utils/sendOtp');
 const { isMailConfigured } = require('../utils/mailer');
 const { sendPasswordResetCode, sendChangeEmailCode } = require('../utils/notifyEmail');
 const Setting = require('../models/Setting');
-const { buildAuthUrl, exchangeCodeForToken } = require('../utils/zaloAuth');
+const { buildAuthUrl, exchangeCodeForToken, fetchZaloProfile } = require('../utils/zaloAuth');
+const { disconnectAccount } = require('../utils/socketAuth');
 const {
   normalizeName,
   validateName,
@@ -31,6 +32,15 @@ const REFRESH_COOKIE_OPTIONS = {
   sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   secure: process.env.NODE_ENV === 'production',
   maxAge: 7 * 24 * 60 * 60 * 1000
+};
+
+// Cookie giữ state + code_verifier giữa bước bắt đầu đăng nhập Zalo và bước Zalo gọi lại
+const ZALO_PKCE_COOKIE = 'zalo_pkce';
+const ZALO_PKCE_COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 10 * 60 * 1000
 };
 
 function getPasswordStrength(password) {
@@ -163,7 +173,9 @@ const register = asyncHandler(async (req, res) => {
 
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: 'Vui lòng nhập email và mật khẩu' });
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
+    return res.status(400).json({ message: 'Vui lòng nhập email và mật khẩu' });
+  }
 
   const normalizedEmail = email.toLowerCase();
 
@@ -204,7 +216,9 @@ const login = asyncHandler(async (req, res) => {
     }
   }
 
-  if ((user && !user.isActive) || (admin && !admin.isActive)) {
+  // Chỉ báo "đã bị khóa" khi mật khẩu ĐÚNG - nếu không, ai biết email cũng dò được tài khoản nào bị khóa
+  const locked = [user, admin].find((acc) => acc && !acc.isActive);
+  if (locked && (await locked.comparePassword(password))) {
     return res.status(401).json({ message: 'Tài khoản đã bị khóa' });
   }
   return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
@@ -216,14 +230,27 @@ const zaloLoginRedirect = asyncHandler(async (req, res) => {
   if (!process.env.ZALO_APP_ID || !process.env.ZALO_REDIRECT_URI) {
     return res.status(500).json({ message: 'Đăng nhập Zalo chưa được cấu hình (thiếu ZALO_APP_ID/ZALO_REDIRECT_URI)' });
   }
-  const url = buildAuthUrl({ appId: process.env.ZALO_APP_ID, redirectUri: process.env.ZALO_REDIRECT_URI });
+  const { url, state, codeVerifier } = buildAuthUrl({ appId: process.env.ZALO_APP_ID, redirectUri: process.env.ZALO_REDIRECT_URI });
+  // Cất state + code_verifier trong cookie httpOnly có chữ ký, sống 10 phút. sameSite=lax: trình duyệt vẫn
+  // gửi kèm cookie khi Zalo chuyển hướng (điều hướng cấp cao nhất, GET) về callback.
+  const pkce = jwt.sign({ state, v: codeVerifier }, process.env.JWT_ACCESS_SECRET, { expiresIn: '10m' });
+  res.cookie(ZALO_PKCE_COOKIE, pkce, ZALO_PKCE_COOKIE_OPTIONS);
   res.redirect(url);
 });
 
 const zaloCallback = asyncHandler(async (req, res) => {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   const { code, state } = req.query;
-  if (!code || !state) {
+  // Chỉ nhận callback khớp đúng lượt đăng nhập vừa bắt đầu từ chính trình duyệt này (state trong cookie)
+  let pkce = null;
+  try {
+    pkce = jwt.verify(req.cookies?.[ZALO_PKCE_COOKIE] || '', process.env.JWT_ACCESS_SECRET);
+  } catch {
+    pkce = null;
+  }
+  const { maxAge, ...clearOptions } = ZALO_PKCE_COOKIE_OPTIONS;
+  res.clearCookie(ZALO_PKCE_COOKIE, clearOptions); // dùng 1 lần
+  if (!code || typeof state !== 'string' || !pkce || pkce.state !== state) {
     return res.redirect(`${clientUrl}/login?error=zalo_failed`);
   }
 
@@ -232,7 +259,7 @@ const zaloCallback = asyncHandler(async (req, res) => {
       appId: process.env.ZALO_APP_ID,
       appSecret: process.env.ZALO_APP_SECRET,
       code,
-      codeVerifier: state
+      codeVerifier: pkce.v
     });
 
     // KHÔNG gọi lấy hồ sơ (graph.zalo.me) ngay tại đây - Zalo chặn trả về thông tin cá nhân nếu
@@ -264,8 +291,9 @@ const zaloComplete = asyncHandler(async (req, res) => {
   // Bắt buộc "session" hợp lệ (JWT do chính backend ký ở zaloCallback ngay sau khi đổi code lấy
   // access_token THẬT với Zalo) - chứng minh request bắt nguồn từ một lượt đăng nhập Zalo vừa hoàn
   // tất, không phải một request giả mạo tự chế { id, name, picture } gửi thẳng tới endpoint này.
+  let zaloAccessToken;
   try {
-    jwt.verify(session, process.env.JWT_ACCESS_SECRET);
+    ({ zaloAccessToken } = jwt.verify(session, process.env.JWT_ACCESS_SECRET));
   } catch (err) {
     return res.status(401).json({ message: 'Phiên đăng nhập Zalo không hợp lệ hoặc đã hết hạn' });
   }
@@ -274,6 +302,22 @@ const zaloComplete = asyncHandler(async (req, res) => {
   // truy vấn Mongo bên dưới khớp với BẤT KỲ user nào đã liên kết Zalo thay vì đúng 1 user.
   if (typeof id !== 'string' || !id.trim()) {
     return res.status(400).json({ message: 'Thiếu thông tin định danh Zalo' });
+  }
+
+  // Phiên chỉ chứng minh "vừa đăng nhập Zalo", KHÔNG chứng minh id gửi lên là của chính người đó: người đã
+  // đăng nhập Zalo bằng tài khoản của mình có thể gửi id của người khác. Backend tự hỏi Zalo id thật của
+  // access_token (Zalo vẫn trả "id" cho máy chủ ở nước ngoài, chỉ chặn tên / ảnh) và bắt buộc phải khớp.
+  let verifiedId = null;
+  try {
+    verifiedId = String((await fetchZaloProfile(zaloAccessToken)).id);
+  } catch (err) {
+    console.error('[Zalo] Không xác minh được id từ máy chủ:', err.message);
+  }
+  if (verifiedId === null && process.env.ZALO_ALLOW_UNVERIFIED_ID !== 'true') {
+    return res.status(502).json({ message: 'Không xác minh được tài khoản Zalo, vui lòng thử lại sau' });
+  }
+  if (verifiedId !== null && verifiedId !== id) {
+    return res.status(401).json({ message: 'Thông tin tài khoản Zalo không khớp' });
   }
 
   const safeName = typeof name === 'string' && name.trim() ? name.trim() : 'Người dùng Zalo';
@@ -327,7 +371,11 @@ const refresh = asyncHandler(async (req, res) => {
 });
 
 const logout = asyncHandler(async (req, res) => {
-  res.clearCookie('refreshToken');
+  // Phải xóa với ĐÚNG sameSite/secure lúc đặt cookie: trên production (frontend và backend khác site),
+  // lệnh xóa thiếu "SameSite=None; Secure" bị trình duyệt chặn -> cookie còn nguyên, mở lại trang là
+  // tự đăng nhập lại. Bỏ maxAge (Express 4 sẽ dùng nó đặt hạn mới thay vì xóa).
+  const { maxAge, ...clearOptions } = REFRESH_COOKIE_OPTIONS;
+  res.clearCookie('refreshToken', clearOptions);
   res.json({ message: 'Đăng xuất thành công' });
 });
 
@@ -350,6 +398,7 @@ const changePassword = asyncHandler(async (req, res) => {
   account.password = newPassword;
   // Đăng xuất mọi thiết bị khác (token cũ hết hiệu lực); thiết bị đang thao tác nhận token mới để ở lại
   account.tokenVersion = (account.tokenVersion || 0) + 1;
+  disconnectAccount(req, account._id); // các thiết bị khác mất kết nối real-time; thiết bị này kết nối lại bằng token mới
   await account.save();
   const role = req.accountRole;
   res.cookie('refreshToken', generateRefreshToken({ _id: account._id, role, tokenVersion: account.tokenVersion }), REFRESH_COOKIE_OPTIONS);
@@ -419,6 +468,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   if (!user) return res.status(400).json({ message: 'Mã xác thực không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
   user.password = newPassword;
   user.tokenVersion = (user.tokenVersion || 0) + 1; // đăng xuất mọi thiết bị đang dùng mật khẩu cũ
+  disconnectAccount(req, user._id);
   await user.save();
   await Otp.deleteMany({ email, purpose: 'reset_password' }); // mã chỉ dùng được một lần
   res.json({ message: 'Đặt lại mật khẩu thành công, vui lòng đăng nhập bằng mật khẩu mới' });

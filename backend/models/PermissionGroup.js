@@ -16,7 +16,9 @@ const PERMISSIONS = [
   { key: 'articles.manage', label: 'Quản lý tin tức (thêm/sửa)' },
   { key: 'customers.view', label: 'Xem danh sách khách hàng' },
   { key: 'chat.support', label: 'Chat hỗ trợ khách hàng' },
-  { key: 'dashboard.view', label: 'Xem thống kê tổng quan' }
+  { key: 'dashboard.view', label: 'Xem thống kê tổng quan' },
+  { key: 'deliveries.manage', label: 'Phân công giao hàng, đối soát tiền COD' },
+  { key: 'deliveries.perform', label: 'Giao hàng (nhân viên giao hàng)' }
 ];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 

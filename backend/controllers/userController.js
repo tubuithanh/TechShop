@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
+const { disconnectAccount } = require('../utils/socketAuth');
 const { searchFilter } = require('../utils/search');
 const { normalizeName, validateName, normalizePhone, validatePhone } = require('../utils/customerValidation');
 
@@ -139,6 +140,7 @@ const toggleCustomerActive = asyncHandler(async (req, res) => {
   if (!customer) return res.status(404).json({ message: 'Không tìm thấy khách hàng' });
   customer.isActive = !customer.isActive;
   await customer.save();
+  if (!customer.isActive) disconnectAccount(req, customer._id); // bị khóa -> ngắt kết nối real-time ngay
   res.json({ message: customer.isActive ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản', user: customer.toSafeObject() });
 });
 

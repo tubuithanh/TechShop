@@ -58,6 +58,9 @@ async function saveLocally(file, req) {
 const uploadImages = asyncHandler(async (req, res) => {
   const files = req.files || [];
   if (!files.length) return res.status(400).json({ message: 'Chưa chọn ảnh nào' });
+  // Kiểm tra hết trước khi lưu, để 1 tệp giả không làm lưu dở các ảnh khác
+  const fake = files.find((f) => !detectImageMime(f.buffer));
+  if (fake) return res.status(400).json({ message: `Tệp "${fake.originalname}" không phải ảnh JPG, PNG, WEBP hoặc GIF hợp lệ` });
   // Phân thư mục theo loại tài khoản cho dễ quản lý trên Cloudinary
   const folder = req.accountRole === 'customer' ? 'techshop/reviews' : 'techshop/products';
   const urls = [];
@@ -65,10 +68,29 @@ const uploadImages = asyncHandler(async (req, res) => {
   res.status(201).json({ data: { urls } });
 });
 
-// Lưu 1 ảnh ({ buffer, mimetype, originalname }) lên Cloudinary nếu đã cấu hình, không thì lưu vào ổ đĩa.
-// Dùng chung cho tải ảnh từ máy và nhập sản phẩm từ link. Trả về URL ảnh.
-function storeImage(file, req, folder = 'techshop/products') {
-  return cloudinaryConfigured() ? uploadToCloudinary(file, folder) : saveLocally(file, req);
+// Nhận diện loại ảnh theo NỘI DUNG tệp (vài byte đầu - "chữ ký tệp"), không tin loại do trình duyệt khai báo:
+// đổi đuôi một tệp .html / .svg / .exe thành .jpg vẫn bị phát hiện. Trả về mimetype hoặc null.
+function detectImageMime(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  const head = buffer.subarray(0, 6).toString('latin1');
+  if (head === 'GIF87a' || head === 'GIF89a') return 'image/gif';
+  if (buffer.subarray(0, 4).toString('latin1') === 'RIFF' && buffer.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  return null;
 }
 
-module.exports = { uploadImages, storeImage, cloudinaryConfig, UPLOAD_DIR, EXT };
+// Lưu 1 ảnh ({ buffer, mimetype, originalname }) lên Cloudinary nếu đã cấu hình, không thì lưu vào ổ đĩa.
+// Dùng chung cho tải ảnh từ máy và nhập sản phẩm từ link. Trả về URL ảnh. Loại ảnh lấy theo nội dung tệp.
+function storeImage(file, req, folder = 'techshop/products') {
+  const mimetype = detectImageMime(file.buffer);
+  if (!mimetype) {
+    const err = new Error('Tệp không phải ảnh JPG, PNG, WEBP hoặc GIF hợp lệ');
+    err.statusCode = 400;
+    return Promise.reject(err);
+  }
+  const checked = { ...file, mimetype };
+  return cloudinaryConfigured() ? uploadToCloudinary(checked, folder) : saveLocally(checked, req);
+}
+
+module.exports = { uploadImages, storeImage, detectImageMime, cloudinaryConfig, UPLOAD_DIR, EXT };

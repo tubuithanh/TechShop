@@ -55,9 +55,14 @@ const getPostsAdmin = asyncHandler(async (req, res) => {
 });
 
 const createPost = asyncHandler(async (req, res) => {
-  const { title } = req.body;
+  // Chỉ nhận các trường nội dung (giống updatePost) - trước đây { ...req.body } cho phép tự đặt lượt xem,
+  // chèn bình luận giả hay ngày đăng
+  const { title, category, shortDescription, content, featuredImage, relatedProductIds, isPublished, isFeatured } = req.body;
   const slug = makeSlug(title) + '-' + Date.now().toString().slice(-5);
-  const post = await Post.create({ ...req.body, slug, userId: req.account._id, nameAuthor: req.account.name });
+  const post = await Post.create({
+    title, category, shortDescription, content, featuredImage, relatedProductIds, isPublished, isFeatured,
+    slug, userId: req.account._id, nameAuthor: req.account.name
+  });
   res.status(201).json({ data: post });
 });
 

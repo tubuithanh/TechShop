@@ -4,8 +4,8 @@ import { Container, Alert, ListGroup, Card, Button, Form, Spinner } from 'react-
 import { orderService } from '../services/orderService';
 import { warrantyService } from '../services/warrantyService';
 import { paymentService, PAYMENT_GATEWAYS } from '../services/paymentService';
-import { io } from 'socket.io-client';
 import { getAccessToken } from '../services/api';
+import { connectSocket } from '../services/socket';
 
 const statusSteps = ['pending', 'confirmed', 'processing', 'shipping', 'delivered'];
 const statusLabel = {
@@ -54,9 +54,8 @@ export default function OrderDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return;
-    const socket = io('/', { auth: { token } });
+    if (!getAccessToken()) return;
+    const socket = connectSocket();
     socket.on('order:statusUpdated', (payload) => {
       if (payload.orderId === id) {
         orderService.getOrderById(id).then(setOrder);

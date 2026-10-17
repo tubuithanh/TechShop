@@ -16,7 +16,10 @@ const { protect, authorize, can } = require('../middlewares/authMiddleware');
 const { reviewLimiter, uploadLimiter } = require('../middlewares/rateLimits');
 const { importFromUrl, importFromHtml } = require('../controllers/productImportController');
 
-router.get('/', getProducts);
+// includeInactive=true (xem cả sản phẩm đã ẩn) chỉ dành cho người quản lý sản phẩm
+const manageViewOnly = (req, res, next) =>
+  req.query.includeInactive === 'true' ? protect(req, res, () => can('products.manage')(req, res, next)) : next();
+router.get('/', manageViewOnly, getProducts);
 router.post('/compare', compareProducts);
 // Khoảng giá / thông số thực tế cho thanh kéo lọc (đặt TRƯỚC '/:slug' để không bị hiểu nhầm là slug)
 router.get('/filter-ranges', getFilterRanges);

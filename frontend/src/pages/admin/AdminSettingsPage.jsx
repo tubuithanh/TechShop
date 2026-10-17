@@ -372,6 +372,17 @@ export default function AdminSettingsPage() {
                       />
                       <Form.Text className="text-muted">Để 0 nếu không áp dụng miễn phí vận chuyển</Form.Text>
                     </Form.Group>
+                    <Form.Group className="mt-3">
+                      <Form.Label className="small fw-medium">Số lần giao không thành công tối đa</Form.Label>
+                      <Form.Control
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={form.maxDeliveryAttempts ?? 3}
+                        onChange={(e) => setField('maxDeliveryAttempts', Number(e.target.value))}
+                      />
+                      <Form.Text className="text-muted">Đến số lần này mà vẫn chưa giao được thì đơn tự chuyển sang trả hàng</Form.Text>
+                    </Form.Group>
                   </>
                 )}
 

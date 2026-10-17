@@ -18,19 +18,19 @@ function generateCodeChallenge(verifier) {
   return base64url(crypto.createHash('sha256').update(verifier).digest());
 }
 
-// Backend không dùng session (chỉ JWT stateless) nên không thể lưu code_verifier giữa 2 request
-// (bước xin quyền và bước callback) ở phía server. Thay vào đó, tận dụng tham số "state" - theo
-// chuẩn OAuth2, Zalo LUÔN trả lại nguyên vẹn giá trị "state" ở bước callback - để mang chính
-// code_verifier đi vòng qua trình duyệt người dùng và lấy lại ở bước sau, không cần lưu trạng thái.
+// code_verifier phải giữ BÍ MẬT ở phía backend (đó là ý nghĩa của PKCE); "state" là chuỗi ngẫu nhiên riêng
+// để đối chiếu khi Zalo gọi lại (chống giả mạo yêu cầu). Trước đây code_verifier được gửi luôn trong "state"
+// (đi qua URL, lịch sử trình duyệt) và không có bước đối chiếu. Hàm trả về cả 2 giá trị để controller cất vào
+// cookie httpOnly có chữ ký (backend không dùng session).
 function buildAuthUrl({ appId, redirectUri }) {
   const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = base64url(crypto.randomBytes(16));
   const url = new URL(AUTH_URL);
   url.searchParams.set('app_id', appId);
   url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('code_challenge', codeChallenge);
-  url.searchParams.set('state', codeVerifier);
-  return url.toString();
+  url.searchParams.set('code_challenge', generateCodeChallenge(codeVerifier));
+  url.searchParams.set('state', state);
+  return { url: url.toString(), state, codeVerifier };
 }
 
 async function exchangeCodeForToken({ appId, appSecret, code, codeVerifier }) {

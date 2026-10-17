@@ -2,6 +2,7 @@ const Admin = require('../models/Admin');
 const PermissionGroup = require('../models/PermissionGroup');
 const Store = require('../models/Store');
 const asyncHandler = require('../utils/asyncHandler');
+const { disconnectAccount } = require('../utils/socketAuth');
 
 // @route GET /api/staff - danh sách tài khoản quản trị (admin + staff), chỉ admin xem được
 const getStaffList = asyncHandler(async (req, res) => {
@@ -102,6 +103,8 @@ const updateStaff = asyncHandler(async (req, res) => {
   }
 
   await target.save();
+  // Khóa / đổi vai trò / nhóm quyền / mật khẩu: ngắt kết nối real-time đang mở để quyền mới có hiệu lực ngay
+  disconnectAccount(req, target._id);
   res.json({ data: target.toSafeObject() });
 });
 
@@ -112,6 +115,7 @@ const deleteStaff = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Không thể tự xóa tài khoản của chính mình' });
   }
   await target.deleteOne();
+  disconnectAccount(req, target._id);
   res.json({ message: 'Đã xóa tài khoản' });
 });
 

@@ -12,7 +12,9 @@ export const PAGE_PERMISSIONS = {
   '/admin/vouchers': 'vouchers.view',
   '/admin/reviews': 'reviews.manage',
   '/admin/articles': 'articles.manage',
-  '/admin/chat': 'chat.support'
+  '/admin/chat': 'chat.support',
+  '/admin/deliveries': 'deliveries.manage',
+  '/admin/my-deliveries': 'deliveries.perform'
   // '/admin/audit-logs' và '/admin/settings' KHÔNG có trong danh sách này - đây là các trang chỉ
   // admin mới vào được, không nhóm quyền nào cấp được (khớp với authorize('admin') ở backend).
 };

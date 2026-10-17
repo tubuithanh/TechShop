@@ -57,6 +57,8 @@ import TitleManager from './components/TitleManager';
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminPermissionGroupsPage from './pages/admin/AdminPermissionGroupsPage';
+import AdminDeliveriesPage from './pages/admin/AdminDeliveriesPage';
+import AdminMyDeliveriesPage from './pages/admin/AdminMyDeliveriesPage';
 
 // Chặn truy cập toàn site khi bật chế độ bảo trì (Admin > Cấu hình hệ thống), trừ trang /login
 // (để admin/staff vẫn đăng nhập được và tự tắt bảo trì) và các tài khoản admin/staff đã đăng nhập.
@@ -187,6 +189,8 @@ export default function App() {
                   <Route path="inventory" element={<PrivateRoute permissionPath="/admin/inventory"><AdminInventoryPage /></PrivateRoute>} />
                   <Route path="articles" element={<PrivateRoute permissionPath="/admin/articles"><AdminArticlesPage /></PrivateRoute>} />
                   <Route path="chat" element={<PrivateRoute permissionPath="/admin/chat"><AdminChatPage /></PrivateRoute>} />
+                  <Route path="deliveries" element={<PrivateRoute permissionPath="/admin/deliveries"><AdminDeliveriesPage /></PrivateRoute>} />
+                  <Route path="my-deliveries" element={<PrivateRoute permissionPath="/admin/my-deliveries"><AdminMyDeliveriesPage /></PrivateRoute>} />
                   <Route path="audit-logs" element={<PrivateRoute roles={['admin']}><AdminAuditLogPage /></PrivateRoute>} />
                   <Route path="locations" element={<PrivateRoute roles={['admin']}><AdminLocationsPage /></PrivateRoute>} />
                   <Route path="slides" element={<PrivateRoute roles={['admin']}><AdminSlidesPage /></PrivateRoute>} />

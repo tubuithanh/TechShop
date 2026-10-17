@@ -54,7 +54,7 @@ export default function AdminInventoryPage() {
   const handleUpsert = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/store-inventories', { ...form, storeId: selectedStoreId, stock: Number(form.stock) });
+      await api.post('/store-inventories', { ...form, storeId: selectedStoreId, stock: Number(form.stock), lowStockThreshold: Number(form.lowStockThreshold) });
       setForm({ productId: '', variantId: '', stock: 0, lowStockThreshold: 5 });
       loadInventories(selectedStoreId);
     } catch (err) {
@@ -62,13 +62,15 @@ export default function AdminInventoryPage() {
     }
   };
 
-  const handleQuickUpdate = async (id, newStock) => {
+  // Nhập thêm / xuất bớt theo số chênh lệch (máy chủ cộng trừ nguyên tử) - không ghi đè số tuyệt đối tính từ
+  // số đang hiển thị, vì trong lúc đó có thể đã có đơn hàng trừ kho
+  const handleQuickUpdate = async (id, delta) => {
     try {
-      await api.put(`/store-inventories/${id}`, { stock: Number(newStock) });
-      loadInventories(selectedStoreId);
+      await api.put(`/store-inventories/${id}`, { adjust: delta });
     } catch (err) {
       alert(err.response?.data?.message || 'Không thể cập nhật tồn kho');
     }
+    loadInventories(selectedStoreId);
   };
 
   return (
@@ -200,13 +202,14 @@ export default function AdminInventoryPage() {
                 <td className="small text-muted">{new Date(inv.lastUpdated).toLocaleString('vi-VN')}</td>
                 <td>
                   <div className="d-flex gap-1">
-                    <Button size="sm" variant="outline-secondary" onClick={() => handleQuickUpdate(inv._id, inv.stock + 10)}>
+                    <Button size="sm" variant="outline-secondary" onClick={() => handleQuickUpdate(inv._id, 10)}>
                       +10
                     </Button>
                     <Button
                       size="sm"
                       variant="outline-secondary"
-                      onClick={() => handleQuickUpdate(inv._id, Math.max(0, inv.stock - 10))}
+                      disabled={inv.stock === 0}
+                      onClick={() => handleQuickUpdate(inv._id, -Math.min(10, inv.stock))}
                     >
                       -10
                     </Button>

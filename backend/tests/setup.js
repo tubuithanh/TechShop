@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { MongoMemoryReplSet } = require('mongodb-memory-server');
 
 let mongoServer;
 
@@ -15,7 +15,8 @@ beforeAll(async () => {
   // "listen EACCES" - thử lại với cổng khác thay vì làm hỏng cả file test.
   for (let attempt = 1; ; attempt++) {
     try {
-      mongoServer = await MongoMemoryServer.create();
+      // Replica set 1 nút (giống MongoDB Atlas) để transaction hoạt động như trên production
+      mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
       break;
     } catch (err) {
       if (attempt >= 5 || !/EACCES|EADDRINUSE/.test(String(err?.message))) throw err;

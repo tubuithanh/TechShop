@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
 import { Container, Row, Col, Form, Button, ListGroup } from 'react-bootstrap';
 import { useAuth } from '../../store/AuthContext';
-import { getAccessToken } from '../../services/api';
+import { connectSocket } from '../../services/socket';
 import { chatService } from '../../services/chatService';
 
 export default function AdminChatPage() {
@@ -18,7 +17,7 @@ export default function AdminChatPage() {
   useEffect(() => {
     chatService.getConversations().then(setConversations);
 
-    const socket = io('/', { auth: { token: getAccessToken() } });
+    const socket = connectSocket();
     socketRef.current = socket;
     socket.on('chat:message', (msg) => {
       // Đọc từ ref thay vì closure của activeConv để luôn thấy hội thoại đang mở mới nhất
