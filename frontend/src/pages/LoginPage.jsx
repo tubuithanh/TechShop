@@ -117,6 +117,9 @@ export default function LoginPage() {
         <p className="fw-medium mb-1">Tài khoản demo:</p>
         <p className="mb-0">Khách hàng: customer@example.com / customer123</p>
         <p className="mb-0">Quản trị: admin@example.com / admin123</p>
+        <p className="mb-0">Nhân viên CSKH: staff@example.com / staff123</p>
+        <p className="mb-0">Quản lý chi nhánh: manager@example.com / manager123</p>
+        <p className="mb-0">Giao hàng: shipper@example.com / shipper123</p>
       </div>
     </Container>
   );
