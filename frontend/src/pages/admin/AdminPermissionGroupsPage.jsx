@@ -69,6 +69,7 @@ export default function AdminPermissionGroupsPage() {
             Admin luôn có toàn quyền. Nhóm quyền chỉ áp dụng cho tài khoản staff - gán 1 staff vào 1 hoặc nhiều
             nhóm ở trang "Quản lý nhân viên" để cấp đúng những quyền thao tác cần thiết.
           </p>
+          <p className="small text-muted mb-0">Để tiếp nhận chat, gán nhân viên vào nhóm Chăm sóc khách hàng và bật quyền Chat hỗ trợ khách hàng trong nhóm này.</p>
         </div>
         <Button
           variant="primary"
@@ -171,7 +172,7 @@ export default function AdminPermissionGroupsPage() {
                     <Button size="sm" variant="outline-primary" onClick={() => handleEdit(g)}>
                       Sửa
                     </Button>
-                    <Button size="sm" variant="outline-danger" onClick={() => handleDelete(g._id)}>
+                    <Button size="sm" variant="outline-danger" disabled={g.code === 'customer_support'} onClick={() => handleDelete(g._id)}>
                       Xóa
                     </Button>
                   </div>

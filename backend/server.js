@@ -3,15 +3,26 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+<<<<<<< HEAD
 
 const app = require('./app');
 const connectDB = require('./config/db');
 const { attachSocket } = require('./utils/socketServer');
+=======
+const { Server } = require('socket.io');
+
+const app = require('./app');
+const connectDB = require('./config/db');
+const { migrateChat } = require('./utils/migrateChat');
+const { registerChatSockets } = require('./services/chatSupport');
+const socketAuth = require('./middlewares/socketAuth');
+>>>>>>> e846496448bebd851c1c76c93074f72922d069ac
 
 const PORT = process.env.PORT || 5000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
 
-connectDB().then(() => {
+const dbReady = connectDB().then(async () => {
+  await migrateChat();
   // Chưa có dữ liệu tỉnh/thành, phường/xã -> nạp dữ liệu mặc định (chỉ lần đầu)
   require('./utils/seedLocations')
     .ensureLocationsSeeded()
@@ -45,8 +56,37 @@ if (fs.existsSync(certKeyPath) && fs.existsSync(certPath)) {
     });
 }
 
+<<<<<<< HEAD
 // ----- Socket.io: real-time (theo dõi đơn hàng, thông báo, chat) - xem utils/socketServer.js -----
 attachSocket(server, app);
+=======
+// ----- Socket.io: real-time (theo dõi đơn hàng, thông báo, chat) -----
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    credentials: true
+  }
+});
+
+io.use(socketAuth);
+
+registerChatSockets(io);
+
+io.on('connection', (socket) => {
+  if (socket.userId) {
+    socket.join(`user_${socket.userId}`);
+    console.log(`[Socket.io] Tài khoản ${socket.userId} (${socket.userRole}) đã kết nối (${socket.id})`);
+  }
+
+  // Chat writes use authenticated HTTP endpoints, allowing acknowledgement and safe retries.
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket.io] Ngắt kết nối: ${socket.id}`);
+  });
+});
+
+app.set('io', io);
+>>>>>>> e846496448bebd851c1c76c93074f72922d069ac
 
 // Tự hủy đơn VNPay quá hạn chưa thanh toán (trả lại tồn kho) - chạy mỗi 5 phút
 const { expireUnpaidVnpayOrders } = require('./utils/expireUnpaidOrders');
@@ -67,6 +107,9 @@ const runAuditPurge = () =>
 setInterval(runAuditPurge, 60 * 60 * 1000).unref();
 setTimeout(runAuditPurge, 60 * 1000).unref(); // lần đầu sau khi server khởi động xong
 
-server.listen(PORT, () => {
+dbReady.then(() => server.listen(PORT, () => {
   console.log(`[Server] Đang chạy tại http://localhost:${PORT}`);
+})).catch((err) => {
+  console.error('[Chat] Không thể khởi tạo chat:', err.message);
+  process.exit(1);
 });

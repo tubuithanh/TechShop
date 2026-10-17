@@ -1,0 +1,10 @@
+[
+  { "id": "hello", "label": "Chào bạn", "color": "#a78bfa", "caption": "CHÀO BẠN!", "mood": "happy" },
+  { "id": "thanks", "label": "Cảm ơn", "color": "#fb7185", "caption": "CẢM ƠN ♥", "mood": "love" },
+  { "id": "okay", "label": "Đồng ý OK", "color": "#34d399", "caption": "OK NHA!", "mood": "happy" },
+  { "id": "wait", "label": "Đợi một chút", "color": "#fbbf24", "caption": "ĐỢI XÍU…", "mood": "wait" },
+  { "id": "love", "label": "Thả tim yêu thích", "color": "#f472b6", "caption": "THẢ TIM", "mood": "love" },
+  { "id": "great", "label": "Tuyệt vời vui vẻ", "color": "#38bdf8", "caption": "TUYỆT VỜI!", "mood": "happy" },
+  { "id": "sorry", "label": "Xin lỗi buồn", "color": "#93c5fd", "caption": "XIN LỖI…", "mood": "sad" },
+  { "id": "bye", "label": "Tạm biệt", "color": "#fdba74", "caption": "HẸN GẶP LẠI", "mood": "happy" }
+]

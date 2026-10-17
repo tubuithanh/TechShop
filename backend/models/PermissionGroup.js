@@ -25,6 +25,7 @@ const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 const permissionGroupSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, unique: true, trim: true },
+    code: { type: String, unique: true, sparse: true, immutable: true },
     description: { type: String, default: '' },
     permissions: [{ type: String, enum: PERMISSION_KEYS }]
   },

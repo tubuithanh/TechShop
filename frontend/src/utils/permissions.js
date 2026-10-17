@@ -24,7 +24,9 @@ export const PAGE_PERMISSIONS = {
 export function getUserPermissions(user) {
   if (!user || user.role !== 'staff') return null;
   const perms = new Set();
-  (user.groupIds || []).forEach((g) => (g.permissions || []).forEach((p) => perms.add(p)));
+  (user.groupIds || []).forEach((g) => (g.permissions || []).forEach((p) => {
+    if (p !== 'chat.support' || g.code === 'customer_support') perms.add(p);
+  }));
   return [...perms];
 }
 

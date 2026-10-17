@@ -27,7 +27,7 @@ const protect = async (req, res, next) => {
       // chỉ cần đúng ObjectId, không cần populate. Luôn populate cho cả admin lẫn staff, vì role có
       // thể vừa đổi (xem giải thích accountRole bên dưới) và trở thành staff ngay trong request này.
       account = await Admin.findById(decoded.id)
-        .populate('groupIds', 'name permissions')
+        .populate('groupIds', 'name code permissions')
         .populate('storeId', 'name city');
       // LẤY role TỪ DATABASE (account.role), KHÔNG dùng decoded.role (giá trị cũ lưu trong access
       // token lúc đăng nhập/làm mới gần nhất). Nếu chỉ dùng decoded.role, một admin vừa bị hạ xuống
@@ -72,6 +72,9 @@ function hasPermission(req, permission) {
   if (req.accountRole === 'admin') return true;
   if (req.accountRole !== 'staff') return false;
   const groups = req.account?.groupIds || [];
+  if (permission === 'chat.support') {
+    return groups.some((g) => g.code === 'customer_support' && g.permissions?.includes(permission));
+  }
   return groups.some((g) => g.permissions?.includes(permission));
 }
 

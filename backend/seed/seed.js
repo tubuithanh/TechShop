@@ -59,6 +59,7 @@ async function run() {
   });
   const supportGroup = await PermissionGroup.create({
     name: 'Chăm sóc khách hàng',
+    code: 'customer_support',
     description: 'Chat hỗ trợ, xem đơn hàng và khách hàng',
     permissions: ['chat.support', 'orders.manage', 'customers.view']
   });
@@ -76,7 +77,7 @@ async function run() {
     email: 'staff@example.com',
     password: 'staff123',
     role: 'staff',
-    groupIds: [fullOpsGroup._id]
+    groupIds: [fullOpsGroup._id, supportGroup._id]
   });
   console.log('[Seed] Đã tạo admin:', admin.email, '| staff:', staff.email, '(nhóm quyền:', fullOpsGroup.name + ')');
 
