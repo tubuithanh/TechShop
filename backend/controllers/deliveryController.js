@@ -54,17 +54,23 @@ const assignShipper = asyncHandler(async (req, res) => {
   if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
   if (!inScope(req, order)) return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác' });
   if (order.deliveryMethod !== 'home_delivery') return res.status(400).json({ message: 'Đơn nhận tại cửa hàng không cần giao' });
-  if (!ASSIGNABLE.includes(order.status)) {
+  const { shipperId } = req.body;
+  const shippers = await findShippers(order.storeId);
+  // Đơn đang giao chỉ được đổi người khi người đang giữ hàng không còn giao được (tài khoản bị khóa, mất quyền
+  // giao hàng, chuyển chi nhánh) - nếu không, đơn bị kẹt "Đang giao" mà không ai cập nhật được
+  const holderGone = order.status === 'shipping' && !shippers.some((s) => String(s._id) === String(order.shipperId));
+  if (!ASSIGNABLE.includes(order.status) && !holderGone) {
     return res.status(400).json({ message: 'Chỉ phân công được đơn đã xác nhận / đang xử lý (hàng chưa rời chi nhánh)' });
   }
-  const { shipperId } = req.body;
+  if (shipperId === null && holderGone) return res.status(400).json({ message: 'Đơn đang giao cần chọn người giao thay' });
   if (shipperId !== null) {
     if (!isId(shipperId)) return res.status(400).json({ message: 'Vui lòng chọn nhân viên giao hàng' });
-    const allowed = (await findShippers(order.storeId)).some((s) => String(s._id) === shipperId);
-    if (!allowed) return res.status(400).json({ message: 'Nhân viên này không giao hàng cho chi nhánh của đơn' });
+    if (!shippers.some((s) => String(s._id) === shipperId)) {
+      return res.status(400).json({ message: 'Nhân viên này không giao hàng cho chi nhánh của đơn' });
+    }
   }
   const updated = await Order.findOneAndUpdate(
-    { _id: order._id, status: { $in: ASSIGNABLE } },
+    { _id: order._id, status: order.status, shipperId: order.shipperId },
     { $set: { shipperId: shipperId || null, assignedAt: shipperId ? new Date() : null } },
     { new: true }
   ).populate(...POPULATE_SHIPPER);

@@ -5,6 +5,7 @@ import { List, Cart3, PersonCircle, Search, Telephone } from 'react-bootstrap-ic
 import { useAuth } from '../store/AuthContext';
 import { useCart } from '../store/CartContext';
 import { useSettings } from '../store/SettingsContext';
+import { firstAdminPath } from '../utils/permissions';
 import { productService } from '../services/productService';
 
 const MAIN_LINKS = [
@@ -68,7 +69,9 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const firstName = (user?.displayName || user?.name || '').split(' ').pop();
-  const isStaff = ['admin', 'staff'].includes(user?.role);
+  // Trang quản trị đầu tiên tài khoản được vào (nhân viên chỉ có quyền giao hàng không có Dashboard)
+  const adminHome = firstAdminPath(user);
+  const isStaff = ['admin', 'staff'].includes(user?.role) && Boolean(adminHome);
 
   // Đóng ngăn menu khi chuyển trang
   useEffect(() => setMenuOpen(false), [location.pathname, location.search]);
@@ -149,7 +152,7 @@ export default function Header() {
                 {isStaff && (
                   <>
                     <NavDropdown.Divider />
-                    <NavDropdown.Item as={Link} to="/admin">
+                    <NavDropdown.Item as={Link} to={adminHome}>
                       Trang quản trị
                     </NavDropdown.Item>
                   </>
@@ -233,7 +236,7 @@ export default function Header() {
                   </Nav.Link>
                 ))}
                 {isStaff && (
-                  <Nav.Link as={Link} to="/admin" className="site-menu-link fw-semibold">
+                  <Nav.Link as={Link} to={adminHome} className="site-menu-link fw-semibold">
                     Trang quản trị
                   </Nav.Link>
                 )}

@@ -35,5 +35,8 @@ const permissionGroupSchema = new mongoose.Schema(
 const PermissionGroup = mongoose.model('PermissionGroup', permissionGroupSchema);
 PermissionGroup.PERMISSIONS = PERMISSIONS;
 PermissionGroup.PERMISSION_KEYS = PERMISSION_KEYS;
+// Quyền nghiệp vụ cho nhóm "toàn quyền vận hành": mọi quyền TRỪ "Giao hàng" (deliveries.perform) - quyền này
+// đánh dấu tài khoản là nhân viên giao hàng (hiện trong danh sách chọn người giao), không phải quyền quản lý
+PermissionGroup.OPERATIONS_PERMISSIONS = PERMISSION_KEYS.filter((k) => k !== 'deliveries.perform');
 
 module.exports = PermissionGroup;

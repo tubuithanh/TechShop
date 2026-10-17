@@ -111,3 +111,35 @@ describe('Giao nhận hàng (UC37 – UC40)', () => {
     expect((await Order.findById(b._id)).codCollectedAt).toBeFalsy();
   });
 });
+
+describe('Nhóm quyền giao hàng', () => {
+  test('TC-147: Đơn đang giao chỉ đổi người được khi người giữ hàng bị khóa / mất quyền', async () => {
+    const { t, shipper, placeOrder } = await setup();
+    const perform = await PermissionGroup.findOne({ name: 'Giao hàng' });
+    const backup = await Admin.create({ name: 'ship3', email: 'ship3@example.com', password: 'abc12345', role: 'staff', groupIds: [perform._id], storeId: shipper.storeId });
+    const order = await placeOrder();
+    const assign = (id) => auth(request(app).put(`/api/deliveries/${order._id}/assign`), t.manager).send({ shipperId: id });
+    await assign(String(shipper._id));
+    await auth(request(app).post(`/api/deliveries/${order._id}/pickup`), t.ship);
+
+    // Người giao còn hoạt động -> không đổi được giữa đường
+    expect((await assign(String(backup._id))).statusCode).toBe(400);
+    // Người giao bị khóa -> quản lý chọn người giao thay, người mới cập nhật được kết quả
+    await Admin.updateOne({ _id: shipper._id }, { isActive: false });
+    expect((await assign(null)).statusCode).toBe(400);
+    expect((await assign(String(backup._id))).statusCode).toBe(200);
+    const t3 = await login('ship3@example.com');
+    const done = await auth(request(app).post(`/api/deliveries/${order._id}/result`), t3).send({ result: 'success' });
+    expect(done.body.data.status).toBe('delivered');
+  });
+
+  test('TC-148: Nhóm toàn quyền vận hành không tự có quyền "Giao hàng" (không lẫn vào danh sách người giao)', async () => {
+    expect(PermissionGroup.OPERATIONS_PERMISSIONS).toContain('deliveries.manage');
+    expect(PermissionGroup.OPERATIONS_PERMISSIONS).not.toContain('deliveries.perform');
+    const { t } = await setup();
+    const ops = await PermissionGroup.create({ name: 'Vận hành', permissions: PermissionGroup.OPERATIONS_PERMISSIONS });
+    await Admin.create({ name: 'vanhanh', email: 'vh@example.com', password: 'abc12345', role: 'staff', groupIds: [ops._id] });
+    const names = (await auth(request(app).get('/api/deliveries/shippers'), t.manager)).body.data.map((s) => s.name);
+    expect(names).not.toContain('vanhanh');
+  });
+});

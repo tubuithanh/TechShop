@@ -92,7 +92,11 @@ export default function AdminDeliveriesPage() {
                   )}
                 </td>
                 <td>
-                  {ASSIGNABLE.includes(o.status) ? (
+                  {/* Đơn đang giao chỉ đổi được người khi người giữ hàng không còn giao được (bị khóa / mất quyền) */}
+                  {o.status === 'shipping' && !shippers.some((s) => s._id === o.shipperId?._id) && (
+                    <div className="small text-danger mb-1">Người giao hiện tại không còn hoạt động - chọn người giao thay</div>
+                  )}
+                  {ASSIGNABLE.includes(o.status) || !shippers.some((s) => s._id === o.shipperId?._id) ? (
                     <Form.Select size="sm" value={o.shipperId?._id || ''} onChange={(e) => assign(o._id, e.target.value)}>
                       <option value="">-- Chưa phân công --</option>
                       {shippers.map((s) => (

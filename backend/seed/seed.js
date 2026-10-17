@@ -55,7 +55,7 @@ async function run() {
   const fullOpsGroup = await PermissionGroup.create({
     name: 'Quản lý vận hành',
     description: 'Toàn bộ quyền thao tác nghiệp vụ hàng ngày (không gồm các thao tác chỉ-admin như xóa, cấu hình hệ thống)',
-    permissions: PermissionGroup.PERMISSION_KEYS
+    permissions: PermissionGroup.OPERATIONS_PERMISSIONS
   });
   const supportGroup = await PermissionGroup.create({
     name: 'Chăm sóc khách hàng',

@@ -30,6 +30,15 @@ export function getUserPermissions(user) {
   return [...perms];
 }
 
+// Trang quản trị đầu tiên tài khoản được vào - dùng cho nút "Quản trị" và khi bị chặn ở Dashboard. Trước đây
+// luôn dẫn tới /admin (cần dashboard.view): nhân viên không có quyền này (VD nhân viên giao hàng) bị đẩy về trang
+// chủ, không bao giờ vào được trang của mình. Không có trang nào -> null.
+export function firstAdminPath(user) {
+  if (!user) return null;
+  if (user.role === 'admin') return '/admin';
+  return Object.keys(PAGE_PERMISSIONS).find((path) => hasPagePermission(user, path)) || null;
+}
+
 // Kiểm tra user có quyền vào 1 trang admin cụ thể hay không (theo path đã khai báo ở PAGE_PERMISSIONS).
 export function hasPagePermission(user, path) {
   if (!user) return false;

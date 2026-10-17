@@ -60,7 +60,8 @@ export default function AdminLayout() {
   const { user } = useAuth();
   // Staff chỉ thấy đúng những trang mà nhóm quyền của họ thực sự truy cập được - trước đây sidebar
   // hiện TẤT CẢ link bất kể nhóm quyền, staff bấm vào vẫn thấy link nhưng trang gọi API sẽ báo lỗi.
-  const visibleMenu = menu.filter((m) => hasPagePermission(user, m.path));
+  // "Đơn tôi cần giao" chỉ dành cho nhân viên giao hàng (staff) - quản trị viên không được phân công giao hàng
+  const visibleMenu = menu.filter((m) => hasPagePermission(user, m.path) && !(m.path === '/admin/my-deliveries' && user?.role === 'admin'));
   const fullMenu = user?.role === 'admin' ? [...visibleMenu, ...adminAbsoluteMenu, ...adminOnlyMenu] : visibleMenu;
   return (
     <div className="d-flex min-vh-100">

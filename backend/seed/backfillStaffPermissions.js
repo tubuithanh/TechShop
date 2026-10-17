@@ -22,7 +22,7 @@ async function run() {
     group = await PermissionGroup.create({
       name: DEFAULT_GROUP_NAME,
       description: 'Toàn bộ quyền thao tác nghiệp vụ hàng ngày (không gồm các thao tác chỉ-admin như xóa, cấu hình hệ thống)',
-      permissions: PermissionGroup.PERMISSION_KEYS
+      permissions: PermissionGroup.OPERATIONS_PERMISSIONS
     });
     console.log(`Đã tạo nhóm quyền mặc định "${DEFAULT_GROUP_NAME}".`);
   } else {
