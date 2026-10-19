@@ -21,3 +21,6 @@ backend/uploads/
 
 # Tài liệu báo cáo, sơ đồ (chỉ giữ trên máy, không đưa lên GitHub)
 docs/
+
+# Cấu hình riêng của Claude Code trên máy (không đưa lên GitHub)
+.claude/
