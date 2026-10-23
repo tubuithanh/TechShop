@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Review = require('../models/Review');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
@@ -39,10 +40,21 @@ const getProductReviews = asyncHandler(async (req, res) => {
 });
 
 const createReview = asyncHandler(async (req, res) => {
-  const { rating, message, images, orderId } = req.body;
+  const { rating, images, orderId } = req.body;
   const productId = req.params.productId;
+  // Chỉ khách hàng được đánh giá: trước đây tài khoản nhân viên / admin cũng gửi được đánh giá (kéo điểm trung
+  // bình sản phẩm lên), cho cả sản phẩm không tồn tại, nội dung dài tùy ý
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ khách hàng mới đánh giá sản phẩm' });
+  if (req.body.message !== undefined && typeof req.body.message !== 'string') {
+    return res.status(400).json({ message: 'Nội dung đánh giá không hợp lệ' });
+  }
+  const message = (req.body.message || '').trim();
+  if (message.length > 2000) return res.status(400).json({ message: 'Nội dung đánh giá tối đa 2000 ký tự' });
   const inputError = validateRating(rating) || validateReviewImages(images);
   if (inputError) return res.status(400).json({ message: inputError });
+  if (!mongoose.isValidObjectId(productId) || !(await Product.exists({ _id: productId, isActive: true }))) {
+    return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+  }
 
   // Mỗi khách chỉ được đánh giá 1 lần cho 1 sản phẩm - trước đây không kiểm tra, 1 khách có thể gửi
   // nhiều đánh giá liên tiếp cho cùng sản phẩm, làm sai lệch điểm trung bình (tính trùng nhiều lần
@@ -125,7 +137,9 @@ const hideReview = asyncHandler(async (req, res) => {
 const replyReview = asyncHandler(async (req, res) => {
   const review = await Review.findById(req.params.id);
   if (!review) return res.status(404).json({ message: 'Không tìm thấy đánh giá' });
-  review.reply = { content: req.body.content, repliedAt: new Date(), repliedBy: req.account._id };
+  const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
+  if (!content || content.length > 2000) return res.status(400).json({ message: 'Nội dung trả lời từ 1 đến 2000 ký tự' });
+  review.reply = { content, repliedAt: new Date(), repliedBy: req.account._id };
   await review.save();
   res.json({ data: review });
 });

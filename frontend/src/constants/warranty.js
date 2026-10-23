@@ -42,3 +42,15 @@ export const WARRANTY_STATUS_OPTIONS = Object.keys(WARRANTY_STATUS_LABEL);
 // hoặc admin thêm/sửa khi xử lý) - độc lập với "Số ảnh tối đa mỗi sản phẩm" trong
 // Cấu hình hệ thống vì đây là ảnh minh chứng lỗi, không phải ảnh catalog sản phẩm.
 export const MAX_WARRANTY_IMAGES = 10;
+
+// Bước tiếp theo hợp lệ của phiếu bảo hành (khớp WARRANTY_TRANSITIONS ở backend/controllers/warrantyController.js)
+export const WARRANTY_NEXT = {
+  received: ['checking'],
+  checking: ['repairing', 'waiting_parts', 'done'],
+  repairing: ['waiting_parts', 'done'],
+  waiting_parts: ['repairing', 'done'],
+  done: ['returned'],
+  returned: []
+};
+// Lựa chọn cho ô trạng thái: giữ nguyên trạng thái hiện tại hoặc chuyển sang bước hợp lệ
+export const warrantyStatusChoices = (current) => [current, ...(WARRANTY_NEXT[current] || [])];

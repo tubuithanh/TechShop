@@ -142,6 +142,8 @@ describe('Email đơn hàng, thanh toán, bảo hành', () => {
     await Order.updateOne({ _id: order._id }, { status: 'delivered', $push: { statusHistory: { status: 'delivered', changedAt: new Date() } } });
     const w = (await customer.post('/api/warranties', { orderId: order._id, productId: product._id, issueDescription: 'Màn hình nhấp nháy' })).body.data;
     expect(w.ticketCode).toBeTruthy();
+    // Đi đúng quy trình: tiếp nhận -> kiểm tra -> sửa chữa
+    await admin.put(`/api/warranties/${w._id}/status`, { status: 'checking', note: 'Đang kiểm tra' });
     await admin.put(`/api/warranties/${w._id}/status`, { status: 'repairing', note: 'Đang thay màn hình' });
     await flushEmails();
     const created = mailsTo(email).find((m) => m.subject.startsWith('Đã tiếp nhận yêu cầu bảo hành'));

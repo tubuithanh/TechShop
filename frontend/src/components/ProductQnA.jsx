@@ -11,22 +11,31 @@ export default function ProductQnA({ productId, questions, setQuestions }) {
   const handleAskQuestion = async (e) => {
     e.preventDefault();
     if (!newQuestion.trim()) return;
-    const created = await productService.createQuestion(productId, newQuestion);
-    setQuestions([created, ...questions]);
-    setNewQuestion('');
+    try {
+      const created = await productService.createQuestion(productId, newQuestion);
+      setQuestions([created, ...questions]);
+      setNewQuestion('');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không gửi được câu hỏi');
+    }
   };
 
   const handleAnswer = async (questionId) => {
     const content = answerDrafts[questionId];
     if (!content?.trim()) return;
-    const updated = await productService.answerQuestion(questionId, content);
-    setQuestions(questions.map((q) => (q._id === questionId ? updated : q)));
-    setAnswerDrafts({ ...answerDrafts, [questionId]: '' });
+    try {
+      const updated = await productService.answerQuestion(questionId, content);
+      setQuestions(questions.map((q) => (q._id === questionId ? updated : q)));
+      setAnswerDrafts({ ...answerDrafts, [questionId]: '' });
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không gửi được câu trả lời');
+    }
   };
 
   return (
     <div>
-      {user ? (
+      {/* Chỉ khách hàng đặt câu hỏi (nhân viên trả lời ở từng câu hỏi) */}
+      {user?.role === 'customer' ? (
         <Form onSubmit={handleAskQuestion} className="d-flex gap-2 mb-4" style={{ maxWidth: '32rem' }}>
           <Form.Control
             value={newQuestion}
@@ -38,9 +47,9 @@ export default function ProductQnA({ productId, questions, setQuestions }) {
             Gửi câu hỏi
           </Button>
         </Form>
-      ) : (
+      ) : !user ? (
         <p className="small text-muted mb-4">Vui lòng đăng nhập để đặt câu hỏi về sản phẩm.</p>
-      )}
+      ) : null}
 
       <div className="d-flex flex-column gap-3">
         {questions.map((q) => (

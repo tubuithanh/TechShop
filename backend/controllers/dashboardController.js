@@ -5,6 +5,12 @@ const mongoose = require('mongoose');
 const asyncHandler = require('../utils/asyncHandler');
 const { getScopedStoreId } = require('../middlewares/authMiddleware');
 
+// Số nguyên trong khoảng [min, max]; không hợp lệ thì dùng giá trị mặc định
+const clampInt = (v, def, min, max) => {
+  const n = Number.parseInt(v, 10);
+  return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : def;
+};
+
 // Tài khoản quản lý chi nhánh (staff gắn storeId) chỉ thấy số liệu đơn hàng/doanh thu của CHI NHÁNH MÌNH
 function storeMatch(req) {
   const storeId = getScopedStoreId(req);
@@ -33,18 +39,20 @@ const getSummary = asyncHandler(async (req, res) => {
 });
 
 const getRevenueByDay = asyncHandler(async (req, res) => {
-  const days = Number(req.query.days) || 7;
+  const days = clampInt(req.query.days, 7, 1, 365);
   const fromDate = new Date();
   fromDate.setDate(fromDate.getDate() - days);
 
+  // Số đơn: mọi đơn đặt trong ngày trừ đơn đã hủy / trả hàng. Doanh thu: CHỈ đơn đã giao (giống tổng doanh thu
+  // ở getSummary) - trước đây cộng cả đơn chờ thanh toán, đơn trả hàng nên tổng các ngày lệch với tổng doanh thu.
   const data = await Order.aggregate([
-    { $match: { createdAt: { $gte: fromDate }, status: { $ne: 'cancelled' }, ...storeMatch(req) } },
+    { $match: { createdAt: { $gte: fromDate }, status: { $nin: ['cancelled', 'returned'] }, ...storeMatch(req) } },
     {
       $group: {
         // Không truyền timezone, $dateToString mặc định gộp theo ngày UTC - đơn đặt buổi tối giờ
         // Việt Nam (UTC+7) sẽ bị gộp nhầm sang ngày hôm sau trên biểu đồ doanh thu.
         _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Asia/Ho_Chi_Minh' } },
-        revenue: { $sum: '$grandTotal' },
+        revenue: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, '$grandTotal', 0] } },
         orderCount: { $sum: 1 }
       }
     },
@@ -55,12 +63,27 @@ const getRevenueByDay = asyncHandler(async (req, res) => {
 });
 
 const getBestSellingProducts = asyncHandler(async (req, res) => {
-  const limit = Number(req.query.limit) || 5;
-  const products = await Product.find({ isActive: true })
-    .sort({ soldCount: -1 })
-    .limit(limit)
-    .select('title featuredImage soldCount price ratingAverage');
-  res.json({ data: products });
+  const limit = clampInt(req.query.limit, 5, 1, 50);
+  const scoped = storeMatch(req);
+  if (!scoped.storeId) {
+    const products = await Product.find({ isActive: true })
+      .sort({ soldCount: -1 })
+      .limit(limit)
+      .select('title featuredImage soldCount price ratingAverage');
+    return res.json({ data: products });
+  }
+  // Quản lý chi nhánh: số bán của RIÊNG chi nhánh mình (từ đơn đã giao), không phải soldCount toàn hệ thống
+  const data = await Order.aggregate([
+    { $match: { status: 'delivered', ...scoped } },
+    { $unwind: '$items' },
+    { $group: { _id: '$items.productId', soldCount: { $sum: '$items.quantity' } } },
+    { $sort: { soldCount: -1 } },
+    { $limit: limit },
+    { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'p' } },
+    { $unwind: '$p' },
+    { $project: { title: '$p.title', featuredImage: '$p.featuredImage', price: '$p.price', ratingAverage: '$p.ratingAverage', soldCount: 1 } }
+  ]);
+  res.json({ data });
 });
 
 const getOrderStatusStats = asyncHandler(async (req, res) => {

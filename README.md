@@ -118,7 +118,7 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có **171 test case** (40 bộ test), bao gồm:
+Có **176 test case** (41 bộ test), bao gồm:
 - tài khoản: đăng ký/đăng nhập, quên mật khẩu, đổi mật khẩu (đăng xuất thiết bị khác), đăng xuất xóa đúng cookie, không lộ trạng thái khóa khi sai mật khẩu, đăng nhập Zalo, thêm/đổi email có xác thực;
 - mua hàng: giỏ hàng (cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, tự hủy đơn VNPay quá hạn, số lượng "đã bán" chỉ tính khi giao thành công;
 - thanh toán VNPay và MoMo: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, giới hạn số tiền của MoMo, cấu hình trong trang quản trị;

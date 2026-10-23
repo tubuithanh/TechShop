@@ -1,4 +1,6 @@
+const mongoose = require('mongoose');
 const Warranty = require('../models/Warranty');
+const Admin = require('../models/Admin');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Notification = require('../models/Notification');
@@ -13,6 +15,36 @@ function generateTicketCode() {
 }
 
 const MAX_WARRANTY_IMAGES = 10;
+
+// Quy trình phiếu bảo hành: tiếp nhận -> kiểm tra -> sửa chữa / chờ linh kiện -> hoàn tất -> trả máy cho khách.
+// Kiểm tra xong không có lỗi thì "hoàn tất" luôn. Trước đây không có quy tắc nào: phiếu đã trả máy có thể bị
+// chuyển ngược về "tiếp nhận", hoặc nhảy thẳng từ "tiếp nhận" sang "hoàn tất".
+const WARRANTY_TRANSITIONS = {
+  received: ['checking'],
+  checking: ['repairing', 'waiting_parts', 'done'],
+  repairing: ['waiting_parts', 'done'],
+  waiting_parts: ['repairing', 'done'],
+  done: ['returned'],
+  returned: []
+};
+const FINISHED = ['done', 'returned'];
+
+// Kiểm tra các trường nhân viên gửi lên khi cập nhật phiếu; trả về thông báo lỗi hoặc null
+async function validateWarrantyUpdate(warranty, { status, cost, assignedTo }) {
+  if (status !== undefined && status !== warranty.status && !(WARRANTY_TRANSITIONS[warranty.status] || []).includes(status)) {
+    return `Không thể chuyển phiếu từ "${warranty.status}" sang "${status}"`;
+  }
+  if (cost !== undefined && !(typeof cost === 'number' && Number.isFinite(cost) && cost >= 0)) return 'Chi phí phải là số >= 0';
+  if (assignedTo) {
+    // Người phụ trách phải là tài khoản quản trị còn hoạt động có quyền xử lý bảo hành
+    const staff = mongoose.isValidObjectId(assignedTo)
+      ? await Admin.findOne({ _id: assignedTo, isActive: true }).populate('groupIds', 'permissions')
+      : null;
+    const canHandle = staff && (staff.role === 'admin' || (staff.groupIds || []).some((g) => g.permissions?.includes('warranties.manage')));
+    if (!canHandle) return 'Người phụ trách phải là nhân viên có quyền xử lý bảo hành';
+  }
+  return null;
+}
 
 const createWarrantyRequest = asyncHandler(async (req, res) => {
   const { orderId, productId, issueDescription, returnReason, images, method } = req.body;
@@ -35,6 +67,9 @@ const createWarrantyRequest = asyncHandler(async (req, res) => {
   // đơn giao từ nhiều năm trước vẫn tạo được yêu cầu bảo hành hợp lệ.
   const product = await Product.findById(productId);
   if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+  // 1 sản phẩm của 1 đơn chỉ có 1 phiếu đang xử lý: trước đây gửi lại nhiều lần tạo nhiều phiếu trùng
+  const open = await Warranty.findOne({ orderId, productId, userId: req.account._id, status: { $nin: FINISHED } });
+  if (open) return res.status(409).json({ message: `Sản phẩm này đang có phiếu bảo hành ${open.ticketCode} chưa xử lý xong` });
   const deliveredEntry = [...order.statusHistory].reverse().find((h) => h.status === 'delivered');
   const deliveredAt = deliveredEntry?.changedAt || order.createdAt;
   const warrantyMonths = product.warrantyMonths ?? 12;
@@ -107,8 +142,15 @@ const submitWarrantyFeedback = asyncHandler(async (req, res) => {
   if (warranty.userId.toString() !== req.account._id.toString()) {
     return res.status(403).json({ message: 'Không có quyền thao tác' });
   }
-  warranty.customerRating = req.body.rating;
-  warranty.customerFeedback = req.body.feedback;
+  // Chỉ đánh giá được khi phiếu đã xử lý xong (trước đây đánh giá được cả khi máy còn đang sửa); 1 – 5 sao
+  if (!FINISHED.includes(warranty.status)) {
+    return res.status(400).json({ message: 'Chỉ đánh giá được khi phiếu bảo hành đã xử lý xong' });
+  }
+  const { rating } = req.body;
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ message: 'Số sao từ 1 đến 5' });
+  const feedback = typeof req.body.feedback === 'string' ? req.body.feedback.trim().slice(0, 1000) : '';
+  warranty.customerRating = rating;
+  warranty.customerFeedback = feedback;
   await warranty.save();
   res.json({ data: warranty });
 });
@@ -133,6 +175,9 @@ const updateWarrantyStatus = asyncHandler(async (req, res) => {
   const { status, note, cost, assignedTo } = req.body;
   const warranty = await Warranty.findById(req.params.id);
   if (!warranty) return res.status(404).json({ message: 'Không tìm thấy phiếu bảo hành' });
+  if (status === undefined) return res.status(400).json({ message: 'Vui lòng chọn trạng thái' });
+  const invalid = await validateWarrantyUpdate(warranty, { status, cost, assignedTo });
+  if (invalid) return res.status(400).json({ message: invalid });
 
   warranty.status = status;
   if (cost !== undefined) warranty.cost = cost;
@@ -162,6 +207,8 @@ const updateWarranty = asyncHandler(async (req, res) => {
   const { issueDescription, returnReason, status, note, cost, assignedTo, images } = req.body;
   const warranty = await Warranty.findById(req.params.id);
   if (!warranty) return res.status(404).json({ message: 'Không tìm thấy phiếu bảo hành' });
+  const invalid = await validateWarrantyUpdate(warranty, { status, cost, assignedTo });
+  if (invalid) return res.status(400).json({ message: invalid });
 
   if (images !== undefined) {
     if (images.length > MAX_WARRANTY_IMAGES) {

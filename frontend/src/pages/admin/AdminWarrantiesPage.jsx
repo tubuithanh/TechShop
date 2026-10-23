@@ -14,6 +14,7 @@ import {
   WARRANTY_STATUS_LABEL,
   WARRANTY_STATUS_VARIANT,
   WARRANTY_STATUS_OPTIONS,
+  warrantyStatusChoices,
   WARRANTY_METHOD_LABEL,
   MAX_WARRANTY_IMAGES
 } from '../../constants/warranty';
@@ -41,7 +42,11 @@ export default function AdminWarrantiesPage() {
 
 
   const handleChangeStatus = async (id, status) => {
-    await api.put(`/warranties/${id}/status`, { status, note: `Cập nhật: ${WARRANTY_STATUS_LABEL[status]}` });
+    try {
+      await api.put(`/warranties/${id}/status`, { status, note: `Cập nhật: ${WARRANTY_STATUS_LABEL[status]}` });
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không cập nhật được trạng thái');
+    }
     loadWarranties();
   };
 
@@ -152,7 +157,7 @@ export default function AdminWarrantiesPage() {
                     value={w.status}
                     onChange={(e) => handleChangeStatus(w._id, e.target.value)}
                   >
-                    {WARRANTY_STATUS_OPTIONS.map((s) => (
+                    {warrantyStatusChoices(w.status).map((s) => (
                       <option key={s} value={s}>
                         {WARRANTY_STATUS_LABEL[s]}
                       </option>
@@ -293,7 +298,7 @@ export default function AdminWarrantiesPage() {
                       value={editForm.status}
                       onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                     >
-                      {WARRANTY_STATUS_OPTIONS.map((s) => (
+                      {warrantyStatusChoices(editing?.status || editForm.status).map((s) => (
                         <option key={s} value={s}>
                           {WARRANTY_STATUS_LABEL[s]}
                         </option>

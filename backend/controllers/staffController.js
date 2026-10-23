@@ -1,4 +1,7 @@
 const Admin = require('../models/Admin');
+// Email nhân viên không được trùng email khách hàng: đăng nhập tìm bảng khách hàng trước, nên tài khoản nhân
+// viên trùng email có thể bị đăng nhập nhầm thành khách hàng
+const User = require('../models/User');
 const PermissionGroup = require('../models/PermissionGroup');
 const Store = require('../models/Store');
 const asyncHandler = require('../utils/asyncHandler');
@@ -24,8 +27,8 @@ const createStaff = asyncHandler(async (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Vui lòng nhập đầy đủ họ tên, email, mật khẩu' });
   }
-  const existed = await Admin.findOne({ email: email.toLowerCase() });
-  if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' });
+  const existed = (await Admin.findOne({ email: email.toLowerCase() })) || (await User.exists({ email: email.toLowerCase() }));
+  if (existed) return res.status(409).json({ message: 'Email đã được sử dụng (bởi nhân viên hoặc khách hàng)' });
 
   if (groupIds?.length) {
     const validCount = await PermissionGroup.countDocuments({ _id: { $in: groupIds } });
@@ -66,8 +69,9 @@ const updateStaff = asyncHandler(async (req, res) => {
   }
 
   if (email !== undefined && email.toLowerCase() !== target.email) {
-    const existed = await Admin.findOne({ email: email.toLowerCase(), _id: { $ne: target._id } });
-    if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' });
+    const existed =
+      (await Admin.findOne({ email: email.toLowerCase(), _id: { $ne: target._id } })) || (await User.exists({ email: email.toLowerCase() }));
+    if (existed) return res.status(409).json({ message: 'Email đã được sử dụng (bởi nhân viên hoặc khách hàng)' });
     target.email = email.toLowerCase();
   }
   if (name !== undefined) target.name = name;
