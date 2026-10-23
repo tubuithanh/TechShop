@@ -34,7 +34,20 @@ export default function OrderDetailPage() {
   const location = useLocation();
   const [order, setOrder] = useState(null);
   const [warrantyForm, setWarrantyForm] = useState({ productId: '', issueDescription: '' });
-  const [warrantyMsg, setWarrantyMsg] = useState('');
+  const [warrantyMsg, setWarrantyMsg] = useState(null); // { ok, text }
+  // Phiếu bảo hành CHƯA XỬ LÝ XONG của đơn này, theo sản phẩm: productId -> mã phiếu. Sản phẩm đang bảo hành
+  // không gửi thêm phiếu được (backend chặn 409) - khi phiếu cũ hoàn tất / trả máy thì gửi phiếu mới được.
+  const [openWarranties, setOpenWarranties] = useState({});
+  const loadOpenWarranties = () =>
+    warrantyService.getMyWarranties().then((list) =>
+      setOpenWarranties(
+        Object.fromEntries(
+          list
+            .filter((w) => String(w.orderId) === id && !['done', 'returned'].includes(w.status))
+            .map((w) => [String(w.productId), w.ticketCode])
+        )
+      )
+    ).catch(() => {});
   const [paying, setPaying] = useState(false);
   const [paymentError, setPaymentError] = useState(location.state?.paymentError || '');
 
@@ -52,6 +65,10 @@ export default function OrderDetailPage() {
   useEffect(() => {
     orderService.getOrderById(id).then(setOrder);
   }, [id]);
+
+  useEffect(() => {
+    if (order?.status === 'delivered') loadOpenWarranties();
+  }, [order?.status, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!getAccessToken()) return;
@@ -73,11 +90,13 @@ export default function OrderDetailPage() {
   const handleWarrantyRequest = async (e) => {
     e.preventDefault();
     try {
-      await warrantyService.createRequest({ orderId: id, ...warrantyForm });
-      setWarrantyMsg('Đã gửi yêu cầu bảo hành thành công! Vui lòng theo dõi trong mục "Bảo hành".');
+      const created = await warrantyService.createRequest({ orderId: id, ...warrantyForm });
+      setWarrantyMsg({ ok: true, text: `Đã gửi yêu cầu bảo hành (mã phiếu ${created.ticketCode}). Vui lòng theo dõi trong mục "Bảo hành".` });
+      setWarrantyForm({ productId: '', issueDescription: '' });
     } catch (err) {
-      setWarrantyMsg(err.response?.data?.message || 'Có lỗi xảy ra');
+      setWarrantyMsg({ ok: false, text: err.response?.data?.message || 'Có lỗi xảy ra' });
     }
+    loadOpenWarranties();
   };
 
   if (!order)
@@ -215,9 +234,14 @@ export default function OrderDetailPage() {
             >
               <option value="">-- Chọn sản phẩm cần bảo hành --</option>
               {order.items.map((item) => (
-                <option key={`${item.productId}-${item.variantId}`} value={item.productId}>
+                <option
+                  key={`${item.productId}-${item.variantId}`}
+                  value={item.productId}
+                  disabled={Boolean(openWarranties[String(item.productId)])}
+                >
                   {item.name}
                   {item.variantLabel ? ` (${item.variantLabel})` : ''}
+                  {openWarranties[String(item.productId)] ? ` - đang bảo hành (${openWarranties[String(item.productId)]})` : ''}
                 </option>
               ))}
             </Form.Select>
@@ -235,7 +259,7 @@ export default function OrderDetailPage() {
               Gửi yêu cầu bảo hành
             </Button>
           </Form>
-          {warrantyMsg && <div className="small mt-2 text-success">{warrantyMsg}</div>}
+          {warrantyMsg && <div className={`small mt-2 ${warrantyMsg.ok ? 'text-success' : 'text-danger'}`}>{warrantyMsg.text}</div>}
         </div>
       )}
     </Container>

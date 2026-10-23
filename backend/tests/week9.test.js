@@ -126,4 +126,19 @@ describe('Tuần 9: đánh giá, hỏi đáp, bảo hành, dashboard, nhân viê
     const res = await auth(request(app).post('/api/staff'), t.admin).send({ name: 'NV', email: 'TRUNG@example.com', password: 'abc12345', role: 'staff' });
     expect(res.statusCode).toBe(409);
   });
+test('TC-154: Gửi bảo hành lại nhiều lần được khi phiếu trước đã hoàn tất; đang có phiếu xử lý thì chặn dù khác lý do', async () => {
+    const { product, store1, t, deliveredOrder } = await setup();
+    const order = await deliveredOrder(store1._id, 1, 1000000);
+    const create = (returnReason) => auth(request(app).post('/api/warranties'), t.customer)
+      .send({ orderId: order._id, productId: String(product._id), issueDescription: 'Lỗi', returnReason });
+    const finish = async (id) => {
+      for (const s of ['checking', 'done']) await auth(request(app).put(`/api/warranties/${id}/status`), t.tech).send({ status: s });
+    };
+    for (let lan = 1; lan <= 3; lan++) {
+      const w = await create('loi_nha_san_xuat');
+      expect(w.statusCode).toBe(201);
+      expect((await create('thieu_phu_kien')).statusCode).toBe(409); // khác lý do vẫn chặn khi đang xử lý
+      await finish(w.body.data._id); // hoàn tất (chưa cần trả máy) là gửi lại được
+    }
+  });
 });
