@@ -1,0 +1,38 @@
+const mongoose = require('mongoose');
+const { searchablePlugin } = require('../utils/search');
+
+const reviewSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    displayName: { type: String, default: '' },
+    photoURL: { type: String, default: '' },
+    message: { type: String, default: '' },
+    rating: { type: Number, required: true, min: 1, max: 5 },
+
+    // Mở rộng thêm
+    orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+    images: [String],
+    isVerifiedPurchase: { type: Boolean, default: false },
+    status: { type: String, enum: ['visible', 'hidden'], default: 'visible' },
+    editedAt: { type: Date, default: null }, // lần khách sửa đánh giá gần nhất (hiển thị "Đã chỉnh sửa")
+    reply: {
+      content: String,
+      repliedAt: Date,
+      repliedBy: { type: mongoose.Schema.Types.ObjectId }
+    }
+  },
+  { timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'reviews' }
+);
+
+reviewSchema.index({ productId: 1 });
+
+// Tìm kiếm không dấu: tên khách, nội dung, tên sản phẩm
+reviewSchema.plugin(searchablePlugin, {
+  getParts: async (doc) => {
+    const product = doc.productId?.title !== undefined ? doc.productId : doc.productId ? await mongoose.model('Product').findById(doc.productId).select('title').lean() : null;
+    return [doc.displayName, doc.message, product?.title];
+  }
+});
+
+module.exports = mongoose.model('Review', reviewSchema);

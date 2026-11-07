@@ -1,0 +1,126 @@
+const Admin = require('../models/Admin');
+// Email nhân viên không được trùng email khách hàng: đăng nhập tìm bảng khách hàng trước, nên tài khoản nhân
+// viên trùng email có thể bị đăng nhập nhầm thành khách hàng
+const User = require('../models/User');
+const PermissionGroup = require('../models/PermissionGroup');
+const Store = require('../models/Store');
+const asyncHandler = require('../utils/asyncHandler');
+const { disconnectAccount } = require('../utils/socketAuth');
+
+// @route GET /api/staff - danh sách tài khoản quản trị (admin + staff), chỉ admin xem được
+const getStaffList = asyncHandler(async (req, res) => {
+  const staff = await Admin.find()
+    .select('-password')
+    .populate('groupIds', 'name')
+    .populate('storeId', 'name city')
+    .sort({ createdAt: -1 });
+  res.json({ data: staff });
+});
+
+async function assertStoreExists(storeId) {
+  if (!storeId) return true;
+  return Boolean(await Store.findById(storeId));
+}
+
+const createStaff = asyncHandler(async (req, res) => {
+  const { name, email, password, role, groupIds, storeId } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: 'Vui lòng nhập đầy đủ họ tên, email, mật khẩu' });
+  }
+  const existed = (await Admin.findOne({ email: email.toLowerCase() })) || (await User.exists({ email: email.toLowerCase() }));
+  if (existed) return res.status(409).json({ message: 'Email đã được sử dụng (bởi nhân viên hoặc khách hàng)' });
+
+  if (groupIds?.length) {
+    const validCount = await PermissionGroup.countDocuments({ _id: { $in: groupIds } });
+    if (validCount !== new Set(groupIds.map(String)).size) {
+      return res.status(400).json({ message: 'Một hoặc nhiều nhóm quyền không tồn tại' });
+    }
+  }
+  if (storeId && !(await assertStoreExists(storeId))) {
+    return res.status(400).json({ message: 'Chi nhánh không tồn tại' });
+  }
+
+  const staff = await Admin.create({
+    name,
+    email: email.toLowerCase(),
+    password,
+    role: role === 'admin' ? 'admin' : 'staff',
+    groupIds: role === 'admin' ? [] : groupIds || [],
+    // storeId chỉ có ý nghĩa với staff - admin không bị giới hạn theo chi nhánh nên luôn để trống.
+    storeId: role === 'admin' ? null : storeId || null
+  });
+  res.status(201).json({ data: staff.toSafeObject() });
+});
+
+const updateStaff = asyncHandler(async (req, res) => {
+  const target = await Admin.findById(req.params.id);
+  if (!target) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
+
+  const { name, email, role, groupIds, storeId, isActive, newPassword } = req.body;
+  const isSelf = target._id.toString() === req.account._id.toString();
+
+  // Chặn tự khóa/tự hạ quyền chính mình - tránh admin duy nhất vô tình khóa/tự tước quyền admin
+  // của bản thân, dẫn tới không còn ai đăng nhập được vào trang quản trị để sửa lại.
+  if (isSelf && isActive === false) {
+    return res.status(400).json({ message: 'Không thể tự khóa tài khoản của chính mình' });
+  }
+  if (isSelf && role === 'staff' && target.role === 'admin') {
+    return res.status(400).json({ message: 'Không thể tự hạ quyền admin của chính mình' });
+  }
+
+  if (email !== undefined && email.toLowerCase() !== target.email) {
+    const existed =
+      (await Admin.findOne({ email: email.toLowerCase(), _id: { $ne: target._id } })) || (await User.exists({ email: email.toLowerCase() }));
+    if (existed) return res.status(409).json({ message: 'Email đã được sử dụng (bởi nhân viên hoặc khách hàng)' });
+    target.email = email.toLowerCase();
+  }
+  if (name !== undefined) target.name = name;
+  if (isActive !== undefined) target.isActive = isActive;
+  if (role !== undefined) {
+    target.role = role === 'admin' ? 'admin' : 'staff';
+    // Luôn dọn sạch groupIds ngay khi lên admin - dù request KHÔNG gửi kèm groupIds. Nếu không, tài
+    // khoản này vẫn giữ nguyên nhóm quyền cũ (dữ liệu "treo", vô hại lúc đang là admin vì admin luôn
+    // toàn quyền bất kể groupIds), nhưng nếu sau này bị hạ lại xuống staff mà không ai chủ động chọn
+    // lại nhóm, họ sẽ ÂM THẦM kế thừa đúng nhóm quyền cũ trước khi được thăng lên admin.
+    // Cùng lý do với groupIds - dọn luôn storeId (chi nhánh) khi lên admin, tránh dữ liệu "treo".
+    if (target.role === 'admin') target.storeId = null;
+  }
+  if (groupIds !== undefined && target.role === 'staff') {
+    if (groupIds.length) {
+      const validCount = await PermissionGroup.countDocuments({ _id: { $in: groupIds } });
+      if (validCount !== new Set(groupIds.map(String)).size) {
+        return res.status(400).json({ message: 'Một hoặc nhiều nhóm quyền không tồn tại' });
+      }
+    }
+    target.groupIds = groupIds;
+  }
+  if (storeId !== undefined && target.role === 'staff') {
+    if (storeId && !(await assertStoreExists(storeId))) {
+      return res.status(400).json({ message: 'Chi nhánh không tồn tại' });
+    }
+    target.storeId = storeId || null;
+  }
+  if (newPassword) {
+    if (newPassword.length < 6) return res.status(400).json({ message: 'Mật khẩu mới phải từ 6 ký tự' });
+    target.password = newPassword;
+    target.tokenVersion = (target.tokenVersion || 0) + 1; // admin đặt lại mật khẩu -> nhân viên phải đăng nhập lại
+  }
+
+  await target.save();
+  // Khóa / đổi vai trò / nhóm quyền / mật khẩu: ngắt kết nối real-time đang mở để quyền mới có hiệu lực ngay
+  disconnectAccount(req, target._id);
+  res.json({ data: target.toSafeObject() });
+});
+
+const deleteStaff = asyncHandler(async (req, res) => {
+  const target = await Admin.findById(req.params.id);
+  if (!target) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
+  if (target._id.toString() === req.account._id.toString()) {
+    return res.status(400).json({ message: 'Không thể tự xóa tài khoản của chính mình' });
+  }
+  await target.deleteOne();
+  disconnectAccount(req, target._id);
+  res.json({ message: 'Đã xóa tài khoản' });
+});
+
+module.exports = { getStaffList, createStaff, updateStaff, deleteStaff };
