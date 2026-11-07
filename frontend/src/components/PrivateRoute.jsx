@@ -1,0 +1,39 @@
+import { useEffect, useRef } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../store/AuthContext';
+import { firstAdminPath, hasPagePermission } from '../utils/permissions';
+
+// Bảo vệ route yêu cầu đăng nhập, có thể giới hạn theo vai trò (roles) và/hoặc theo quyền chi tiết
+// (permissionPath - khớp với 1 key trong utils/permissions.js). "permissionPath" chỉ có tác dụng với
+// role='staff' (admin luôn qua được, customer bị chặn ở bước roles phía trên rồi).
+export default function PrivateRoute({ children, roles, permissionPath }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const denied = Boolean(user && permissionPath && !hasPagePermission(user, permissionPath));
+  // Bị chặn ở Dashboard (/admin) nhưng còn trang quản trị khác được vào (VD nhân viên giao hàng) -> chuyển
+  // thẳng tới trang đó, không báo lỗi
+  const insteadPath = denied && permissionPath === '/admin' ? firstAdminPath(user) : null;
+  const deniedByPermission = denied && !insteadPath;
+  // Chỉ báo đúng 1 lần cho mỗi lượt "bị chặn" (không phải mỗi lần render) - tránh alert() lặp lại
+  // nhiều lần nếu component re-render trước khi điều hướng thực sự xảy ra.
+  const hasAlerted = useRef(false);
+
+  useEffect(() => {
+    if (deniedByPermission && !hasAlerted.current) {
+      hasAlerted.current = true;
+      alert('Bạn không có quyền truy cập chức năng này. Vui lòng liên hệ quản trị viên nếu cần cấp thêm quyền.');
+    }
+    if (!deniedByPermission) hasAlerted.current = false;
+  }, [deniedByPermission]);
+
+  if (loading) return <div className="text-center py-5">Đang tải...</div>;
+  // Ghi lại trang đang mở để đăng nhập xong quay về đúng trang đó (không về trang chủ)
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
+  // Điều hướng về trang chủ (không phải /admin) khi thiếu quyền - nếu redirect về /admin và chính
+  // /admin (Dashboard) cũng nằm trong permissionPath bị chặn, sẽ tạo vòng lặp redirect vô hạn.
+  if (insteadPath) return <Navigate to={insteadPath} replace />;
+  if (deniedByPermission) return <Navigate to="/" replace />;
+
+  return children;
+}
