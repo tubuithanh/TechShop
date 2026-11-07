@@ -9,6 +9,7 @@ import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import ProductUrlImport from '../../components/admin/ProductUrlImport';
+import MarkdownEditor from '../../components/admin/MarkdownEditor';
 
 const DELETE_ALL_CONFIRM = 'XOA TAT CA';
 
@@ -250,15 +251,13 @@ export default function AdminArticlesPage() {
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Nội dung bài viết</Form.Label>
-              <Form.Control
+              <MarkdownEditor
                 required
-                as="textarea"
-                rows={10}
                 value={form.content}
-                onChange={(e) => setForm({ ...form, content: e.target.value })}
+                onChange={(content) => setForm((prev) => ({ ...prev, content }))}
               />
               <Form.Text className="text-muted">
-                Chèn ảnh vào giữa bài: viết một dòng riêng dạng <code>![mô tả ảnh](https://link-anh.jpg)</code>.
+                Dùng thanh công cụ để định dạng; bấm <b>Xem trước</b> để xem bài hiển thị thế nào.
               </Form.Text>
             </Form.Group>
             {form.featuredImage && (
