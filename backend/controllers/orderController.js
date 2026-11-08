@@ -342,7 +342,7 @@ const createOrder = asyncHandler(async (req, res) => {
     type: 'order',
     title: 'Đặt hàng thành công',
     message: `Đơn hàng ${order.orderCode} đã được tiếp nhận`,
-    link: `/orders/${order._id}`
+    link: `/account/orders/${order._id}`
   });
 
   emailOrderPlaced(order); // email xác nhận đơn (chạy nền)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import { Container, Alert, ListGroup, Card, Button, Form, Spinner } from 'react-bootstrap';
 import { orderService } from '../services/orderService';
 import { warrantyService } from '../services/warrantyService';
@@ -65,8 +65,20 @@ export default function OrderDetailPage() {
     }
   };
 
+  // Đơn không tồn tại / đã bị xóa / không thuộc tài khoản này -> báo lỗi thay vì quay vòng tải mãi
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
-    orderService.getOrderById(id).then(setOrder);
+    setLoadError('');
+    orderService
+      .getOrderById(id)
+      .then(setOrder)
+      .catch((err) =>
+        setLoadError(
+          [400, 403, 404].includes(err.response?.status)
+            ? 'Đơn hàng không tồn tại hoặc không còn nữa.'
+            : 'Không tải được đơn hàng, vui lòng thử lại sau.'
+        )
+      );
   }, [id]);
 
   useEffect(() => {
@@ -102,6 +114,17 @@ export default function OrderDetailPage() {
     loadOpenWarranties();
   };
 
+  if (loadError)
+    return (
+      <div className="text-center py-5">
+        <div className="fs-1 mb-2">📦</div>
+        <div className="fw-semibold mb-1">{loadError}</div>
+        <div className="small text-muted mb-3">Đơn có thể đã bị xóa khỏi hệ thống hoặc đường dẫn không đúng.</div>
+        <Link to="/account/orders" className="btn btn-primary btn-sm">
+          Xem danh sách đơn hàng
+        </Link>
+      </div>
+    );
   if (!order)
     return (
       <div className="text-center py-5">

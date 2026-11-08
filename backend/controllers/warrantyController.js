@@ -196,7 +196,7 @@ const updateWarrantyStatus = asyncHandler(async (req, res) => {
     type: 'warranty',
     title: 'Cập nhật bảo hành',
     message: `Phiếu bảo hành ${warranty.ticketCode} đã chuyển sang trạng thái "${status}"`,
-    link: `/warranties/${warranty._id}`
+    link: '/account/warranties'
   });
   emailWarranty(warranty, { note });
 
@@ -240,7 +240,7 @@ const updateWarranty = asyncHandler(async (req, res) => {
       type: 'warranty',
       title: 'Cập nhật bảo hành',
       message: `Phiếu bảo hành ${warranty.ticketCode} đã chuyển sang trạng thái "${status}"`,
-      link: `/warranties/${warranty._id}`
+      link: '/account/warranties'
     });
     emailWarranty(warranty, { note });
     const io = req.app.get('io');

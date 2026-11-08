@@ -8,6 +8,7 @@ import Footer from './components/Footer';
 import PrivateRoute from './components/PrivateRoute';
 import ChatWidget from './components/ChatWidget';
 import CompareBar from './components/CompareBar';
+import NotFoundPage from './pages/NotFoundPage';
 import MobileBottomNav from './components/MobileBottomNav';
 import MaintenancePage from './pages/MaintenancePage';
 
@@ -222,6 +223,8 @@ export default function App() {
                     }
                   />
                 </Route>
+                {/* Mọi đường dẫn không khớp trang nào -> trang 404 (trước đây ra trang trắng) */}
+                <Route path="*" element={<StorefrontLayout><NotFoundPage /></StorefrontLayout>} />
               </Routes>
             </MaintenanceGate>
           </SettingsProvider>
