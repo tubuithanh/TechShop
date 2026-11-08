@@ -132,8 +132,28 @@ function validateDeliveryAddress(address, deliveryMethod) {
 // Chạy trong transaction (session): lỗi ở BẤT KỲ bước nào MongoDB tự hủy mọi thao tác đã ghi, kể cả khi máy
 // chủ dừng đột ngột giữa chừng. Không có transaction (MongoDB đơn lẻ lúc lập trình) thì hoàn tác thủ công
 // theo danh sách `undo`. Lỗi nghiệp vụ ném BusinessError (mã HTTP + thông báo cho khách).
+// Thông tin xuất hóa đơn công ty (không bắt buộc). Mã số thuế VN: 10 số (doanh nghiệp), 10 số + "-" + 3 số
+// (chi nhánh / đơn vị phụ thuộc) hoặc 12 số (cá nhân dùng số CCCD làm MST từ 01/07/2025).
+const TAX_CODE_RE = /^(\d{10}(-\d{3})?|\d{12})$/;
+function validateInvoiceInfo(raw) {
+  if (!raw || typeof raw !== 'object') return { value: undefined };
+  const v = {
+    companyName: String(raw.companyName || '').trim(),
+    taxCode: String(raw.taxCode || '').replace(/\s/g, ''),
+    address: String(raw.address || '').trim(),
+    email: String(raw.email || '').trim().toLowerCase()
+  };
+  if (!v.companyName && !v.taxCode && !v.address && !v.email) return { value: undefined };
+  if (!v.companyName) return { error: 'Vui lòng nhập tên công ty để xuất hóa đơn' };
+  if (!TAX_CODE_RE.test(v.taxCode)) return { error: 'Mã số thuế không hợp lệ (10 số, 10 số-3 số hoặc 12 số)' };
+  if (!v.address) return { error: 'Vui lòng nhập địa chỉ công ty để xuất hóa đơn' };
+  if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) return { error: 'Email nhận hóa đơn không hợp lệ' };
+  if (v.companyName.length > 200 || v.address.length > 300 || v.email.length > 120) return { error: 'Thông tin xuất hóa đơn quá dài' };
+  return { value: v };
+}
+
 async function placeOrder(userId, input, session) {
-  const { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note } = input;
+  const { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo } = input;
   const undo = [];
   const rollback = async () => {
     if (session) return; // transaction tự hủy
@@ -263,6 +283,7 @@ async function placeOrder(userId, input, session) {
           vat,
           shippingVat,
           note,
+          invoiceInfo,
           statusHistory: [{ status: 'pending', note: 'Đơn hàng được tạo', changedBy: userId }]
         }
       ],
@@ -280,6 +301,8 @@ async function placeOrder(userId, input, session) {
 const createOrder = asyncHandler(async (req, res) => {
   const { storeId, deliveryAddress, deliveryMethod = 'home_delivery', paymentMode = 'cod', voucherCode, note } =
     req.body;
+  const { error: invoiceError, value: invoiceInfo } = validateInvoiceInfo(req.body.invoiceInfo);
+  if (invoiceError) return res.status(400).json({ message: invoiceError });
 
   if (req.accountRole !== 'customer') {
     return res.status(403).json({ message: 'Chỉ tài khoản khách hàng mới đặt hàng được' });
@@ -304,7 +327,7 @@ const createOrder = asyncHandler(async (req, res) => {
   let order;
   try {
     order = await withTransaction((session) =>
-      placeOrder(req.account._id, { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note }, session)
+      placeOrder(req.account._id, { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo }, session)
     );
   } catch (err) {
     if (err instanceof BusinessError) return res.status(err.status).json({ message: err.message });
@@ -552,6 +575,7 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
 
 module.exports = {
   restoreStock,
+  validateInvoiceInfo,
   createOrder,
   getMyOrders,
   getOrderById,

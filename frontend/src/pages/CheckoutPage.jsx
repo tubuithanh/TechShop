@@ -13,6 +13,9 @@ import VatBreakdown from '../components/VatBreakdown';
 import { orderVat } from '../utils/vat';
 import CheckoutSteps from '../components/CheckoutSteps';
 
+// Mã số thuế: 10 số, 10 số-3 số (chi nhánh) hoặc 12 số (CCCD) - khớp kiểm tra ở backend (orderController)
+const TAX_CODE_RE = /^(\d{10}(-\d{3})?|\d{12})$/;
+
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
 }
@@ -61,6 +64,8 @@ export default function CheckoutPage() {
   }, [user]);
   const [deliveryMethod, setDeliveryMethod] = useState('home_delivery');
   const [paymentMode, setPaymentMode] = useState('cod');
+  const [wantInvoice, setWantInvoice] = useState(false);
+  const [invoice, setInvoice] = useState({ companyName: '', taxCode: '', address: '', email: '' });
   // Cổng thanh toán online đã cấu hình trên máy chủ (cổng chưa cấu hình thì ẩn lựa chọn)
   const [methods, setMethods] = useState({ vnpay: false, momo: false, momoLimits: { min: 1000, max: 50000000 } });
   useEffect(() => {
@@ -145,6 +150,16 @@ export default function CheckoutPage() {
       setError(`Cửa hàng ${selectedStore.name} không đủ hàng: ${selectedStore.missing.join(', ')}. Vui lòng chọn cửa hàng khác.`);
       return;
     }
+    if (wantInvoice) {
+      if (!invoice.companyName.trim() || !invoice.address.trim()) {
+        setError('Vui lòng nhập đủ tên và địa chỉ công ty để xuất hóa đơn');
+        return;
+      }
+      if (!TAX_CODE_RE.test(invoice.taxCode.replace(/\s/g, ''))) {
+        setError('Mã số thuế không hợp lệ (10 số, 10 số-3 số hoặc 12 số)');
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const order = await orderService.createOrder({
@@ -152,7 +167,8 @@ export default function CheckoutPage() {
         deliveryAddress: address,
         deliveryMethod,
         paymentMode,
-        voucherCode: discount > 0 ? voucherCode : undefined
+        voucherCode: discount > 0 ? voucherCode : undefined,
+        invoiceInfo: wantInvoice ? invoice : undefined
       });
       await refreshCart();
       if (paymentMode === 'vnpay' || paymentMode === 'momo') {
@@ -348,6 +364,50 @@ export default function CheckoutPage() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+
+          {/* Xuất hóa đơn điện tử cho doanh nghiệp (thông tin lưu kèm đơn, quản trị xuất file gửi lên hệ thống HĐĐT) */}
+          <div className="mt-4">
+            <Form.Check
+              type="switch"
+              id="want-invoice"
+              label={<span className="fw-medium">Xuất hóa đơn công ty (hóa đơn GTGT)</span>}
+              checked={wantInvoice}
+              onChange={(e) => setWantInvoice(e.target.checked)}
+            />
+            {wantInvoice && (
+              <div className="border rounded-3 p-3 mt-2 d-flex flex-column gap-2">
+                <Form.Control
+                  placeholder="Tên công ty *"
+                  value={invoice.companyName}
+                  maxLength={200}
+                  onChange={(e) => setInvoice({ ...invoice, companyName: e.target.value })}
+                />
+                <Form.Control
+                  placeholder="Mã số thuế * (VD: 0101234567)"
+                  value={invoice.taxCode}
+                  inputMode="numeric"
+                  maxLength={14}
+                  isInvalid={invoice.taxCode !== '' && !TAX_CODE_RE.test(invoice.taxCode.replace(/\s/g, ''))}
+                  onChange={(e) => setInvoice({ ...invoice, taxCode: e.target.value })}
+                />
+                <Form.Control.Feedback type="invalid">Mã số thuế gồm 10 số, 10 số-3 số hoặc 12 số</Form.Control.Feedback>
+                <Form.Control
+                  placeholder="Địa chỉ công ty (theo đăng ký thuế) *"
+                  value={invoice.address}
+                  maxLength={300}
+                  onChange={(e) => setInvoice({ ...invoice, address: e.target.value })}
+                />
+                <Form.Control
+                  type="email"
+                  placeholder="Email nhận hóa đơn (không bắt buộc)"
+                  value={invoice.email}
+                  maxLength={120}
+                  onChange={(e) => setInvoice({ ...invoice, email: e.target.value })}
+                />
+                <div className="small text-muted">Hóa đơn điện tử được gửi qua email sau khi đơn hàng hoàn tất.</div>
+              </div>
             )}
           </div>
         </Col>

@@ -12,6 +12,8 @@ import AdminPagination from '../../components/admin/AdminPagination';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
+import EInvoiceExportModal from '../../components/admin/EInvoiceExportModal';
+import { FileEarmarkSpreadsheet } from 'react-bootstrap-icons';
 
 const statusOptions = Object.keys(ORDER_LABELS);
 
@@ -23,6 +25,7 @@ export default function AdminOrdersPage() {
   const [handover, setHandover] = useState(null);
   const [details, setDetails] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showInvoiceExport, setShowInvoiceExport] = useState(false);
   const { settings } = useSettings();
   const { user } = useAuth();
   const pageSize = settings.productsPerPage || 20;
@@ -95,7 +98,19 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
-      <h1 className="fs-4 fw-bold mb-4">Quản lý đơn hàng</h1>
+      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <h1 className="fs-4 fw-bold mb-0">Quản lý đơn hàng</h1>
+        <Button variant="success" className="d-flex align-items-center gap-2" onClick={() => setShowInvoiceExport(true)}>
+          <FileEarmarkSpreadsheet /> Xuất hóa đơn điện tử
+        </Button>
+      </div>
+      {showInvoiceExport && (
+        <EInvoiceExportModal
+          apiParams={query.apiParams}
+          shippingVatRate={settings.shippingVatRate ?? 10}
+          onHide={() => setShowInvoiceExport(false)}
+        />
+      )}
 
       <AdminSearchBar
         query={query}
@@ -120,7 +135,13 @@ export default function AdminOrdersPage() {
           <tbody>
             {orders.map((o) => (
               <tr key={o._id}>
-                <td className="p-3"><Button variant="link" size="sm" onClick={() => setDetails(o)}>{o.orderCode}</Button><div className="small">{orderMethod(o)}</div></td>
+                <td className="p-3"><Button variant="link" size="sm" onClick={() => setDetails(o)}>{o.orderCode}</Button><div className="small">{orderMethod(o)}</div>
+                  {o.invoiceInfo?.taxCode && (
+                    <span className="badge bg-info mt-1" title={`${o.invoiceInfo.companyName} - MST ${o.invoiceInfo.taxCode}`}>
+                      HĐ công ty
+                    </span>
+                  )}
+                </td>
                 <td className="p-3">
                   {o.deliveryAddress?.fullName || o.userId?.displayName}
                   <div className="small text-muted">{o.deliveryAddress?.phone || o.userId?.phoneNumber}</div>

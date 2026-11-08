@@ -82,6 +82,20 @@ const orderSchema = new mongoose.Schema(
       }
     ],
     note: String,
+    // Thông tin xuất hóa đơn điện tử (GTGT) cho doanh nghiệp - khách tích "Xuất hóa đơn công ty" ở trang
+    // thanh toán. Không có -> xuất hóa đơn cho người mua cá nhân (tên + địa chỉ nhận hàng).
+    invoiceInfo: {
+      type: new mongoose.Schema(
+        {
+          companyName: { type: String, trim: true, maxlength: 200 },
+          taxCode: { type: String, trim: true, maxlength: 14 },
+          address: { type: String, trim: true, maxlength: 300 },
+          email: { type: String, trim: true, lowercase: true, maxlength: 120 }
+        },
+        { _id: false }
+      ),
+      default: undefined
+    },
     cancelReason: String,
     // ----- Giao nhận hàng (UC37 – UC40) -----
     // Nhân viên giao hàng được phân công (tài khoản quản trị có quyền deliveries.perform)
