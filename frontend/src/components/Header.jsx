@@ -303,15 +303,8 @@ export default function Header() {
           </Nav>
 
           <div className="d-flex align-items-center gap-1 gap-lg-3 text-nowrap">
-            <Button
-              variant="link"
-              className="header-icon-btn text-white p-0"
-              onClick={toggleColorMode}
-              aria-label={colorMode === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-              title={colorMode === 'dark' ? 'Giao diện sáng' : 'Giao diện tối'}
-            >
-              {colorMode === 'dark' ? <Sun size={19} /> : <MoonStars size={18} />}
-            </Button>
+
+
             {cartLink}
             {user ? (
               <NavDropdown
