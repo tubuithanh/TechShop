@@ -152,8 +152,8 @@ const getAllReviewsAdmin = asyncHandler(async (req, res) => {
   if (replied === 'false') filter.$or = [{ 'reply.content': { $exists: false } }, { 'reply.content': '' }];
   Object.assign(filter, searchFilter(q)); // tên khách, nội dung, tên sản phẩm (không dấu)
   const reviews = await Review.find(filter)
-    .populate('userId', 'displayName email')
-    .populate('productId', 'title slug')
+    .populate('userId', 'displayName email avatar')
+    .populate('productId', 'title slug featuredImage')
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(Number(limit));

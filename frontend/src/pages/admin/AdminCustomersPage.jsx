@@ -3,6 +3,7 @@ import { userService } from '../../services/userService';
 import { useSettings } from '../../store/SettingsContext';
 import { useAuth } from '../../store/AuthContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminThumb from '../../components/admin/AdminThumb';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
@@ -57,7 +58,12 @@ export default function AdminCustomersPage() {
           <tbody>
             {customers.map((c) => (
               <tr key={c._id}>
-                <td className="p-3">{c.displayName}</td>
+                <td className="p-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <AdminThumb src={c.avatar} name={c.displayName} size={36} rounded />
+                    <span className="fw-medium">{c.displayName}</span>
+                  </div>
+                </td>
                 <td className="p-3">{c.email || <span className="text-muted fst-italic">Chưa có email{c.zaloId ? ' (Zalo)' : ''}</span>}</td>
                 <td className="p-3">{c.phoneNumber}</td>
                 <td className="p-3 text-nowrap">

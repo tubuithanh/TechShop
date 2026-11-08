@@ -3,6 +3,7 @@ import { Container, Card, Badge, Form, Button, InputGroup } from 'react-bootstra
 import { reviewService } from '../../services/reviewService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminThumb from '../../components/admin/AdminThumb';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
@@ -57,10 +58,19 @@ export default function AdminReviewsPage() {
           <Card key={r._id} className="shadow-sm">
             <Card.Body>
               <div className="d-flex justify-content-between align-items-start mb-1">
-                <div>
-                  <span className="fw-medium small">{r.userId?.displayName || r.displayName}</span>
-                  <span className="text-warning small ms-2">{'★'.repeat(r.rating)}</span>
-                  <span className="small text-muted ms-2">→ {r.productId?.title}</span>
+                <div className="d-flex align-items-center gap-3" style={{ minWidth: 0 }}>
+                  <AdminThumb src={r.productId?.featuredImage} alt={r.productId?.title} size={52} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="small fw-medium admin-list-title">{r.productId?.title}</div>
+                    <div className="d-flex align-items-center gap-2 small">
+                      <AdminThumb src={r.userId?.avatar} name={r.userId?.displayName || r.displayName} size={20} rounded />
+                      <span>{r.userId?.displayName || r.displayName}</span>
+                      <span className="text-warning">
+                        {'★'.repeat(r.rating)}
+                        <span className="text-body-tertiary">{'★'.repeat(5 - r.rating)}</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <Badge bg={r.status === 'visible' ? 'success' : 'danger'}>
                   {r.status === 'visible' ? 'Đang hiển thị' : 'Đã ẩn'}

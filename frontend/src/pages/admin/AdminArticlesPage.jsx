@@ -10,6 +10,7 @@ import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import ProductUrlImport from '../../components/admin/ProductUrlImport';
 import MarkdownEditor from '../../components/admin/MarkdownEditor';
+import AdminThumb from '../../components/admin/AdminThumb';
 
 const DELETE_ALL_CONFIRM = 'XOA TAT CA';
 
@@ -326,7 +327,15 @@ export default function AdminArticlesPage() {
                     <Form.Check aria-label={`Chọn bài ${a.title}`} checked={selected.has(a._id)} onChange={() => toggleOne(a._id)} />
                   </td>
                 )}
-                <td>{a.title}</td>
+                <td>
+                  <div className="d-flex align-items-center gap-3">
+                    <AdminThumb src={a.featuredImage} alt={a.title} size={48} ratio={16 / 10} contain={false} />
+                    <div style={{ minWidth: 0 }}>
+                      <div className="admin-list-title">{a.title}</div>
+                      {a.createdAt && <div className="small text-muted">{new Date(a.createdAt).toLocaleDateString('vi-VN')}</div>}
+                    </div>
+                  </div>
+                </td>
                 <td>{a.category}</td>
                 <td>{a.viewCount}</td>
                 <td>

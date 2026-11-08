@@ -3,6 +3,7 @@ import { Button, Card, Col, Form, Row, Table, Alert, Spinner, Badge } from 'reac
 import api from '../../services/api';
 import { productService } from '../../services/productService';
 import { placeholderImage } from '../../utils/placeholderImage';
+import AdminThumb from '../../components/admin/AdminThumb';
 import { uploadService } from '../../services/uploadService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
@@ -440,14 +441,23 @@ export default function AdminProductsPage() {
           <tbody>
             {products.map((p) => (
               <tr key={p._id}>
-                <td className="p-3">{p.title}</td>
+                <td className="p-3">
+                  <div className="d-flex align-items-center gap-3">
+                    <AdminThumb src={p.featuredImage || p.imageURLs?.[0]} alt={p.title} size={56} />
+                    <div style={{ minWidth: 0 }}>
+                      <div className="admin-list-title">{p.title}</div>
+                      {p.categoryId?.name && <div className="small text-muted">{p.categoryId.name}</div>}
+                    </div>
+                  </div>
+                </td>
                 <td className="p-3">{p.brandId?.name}</td>
                 <td className="p-3">{formatVND(p.effectivePrice ?? (p.salePrice || p.price))}</td>
                 <td className="p-3">{p.soldCount}</td>
                 <td className="p-3">
                   <Badge bg={p.isActive ? 'success' : 'secondary'}>{p.isActive ? 'Đang bán' : 'Đã ẩn'}</Badge>
                 </td>
-                <td className="p-3 d-flex gap-2">
+                <td className="p-3">
+                  <div className="d-flex gap-2">
                   <Button variant="outline-primary" size="sm" onClick={() => handleEdit(p)}>
                     Sửa
                   </Button>
@@ -460,6 +470,7 @@ export default function AdminProductsPage() {
                       Khôi phục
                     </Button>
                   )}
+                  </div>
                 </td>
               </tr>
             ))}

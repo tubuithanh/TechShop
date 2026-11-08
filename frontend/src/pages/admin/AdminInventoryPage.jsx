@@ -7,6 +7,7 @@ import api from '../../services/api';
 import { useSettings } from '../../store/SettingsContext';
 import { useAuth } from '../../store/AuthContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AdminThumb from '../../components/admin/AdminThumb';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
@@ -187,8 +188,13 @@ export default function AdminInventoryPage() {
             {inventories.map((inv) => (
               <tr key={inv._id} className={inv.stock <= inv.lowStockThreshold ? 'table-danger' : ''}>
                 <td>
-                  {inv.productId?.title}
-                  <div className="small text-muted">{inv.variantLabel}</div>
+                  <div className="d-flex align-items-center gap-3">
+                    <AdminThumb src={inv.productId?.featuredImage} alt={inv.productId?.title} size={48} />
+                    <div style={{ minWidth: 0 }}>
+                      <div className="admin-list-title">{inv.productId?.title}</div>
+                      <div className="small text-muted">{inv.variantLabel}</div>
+                    </div>
+                  </div>
                 </td>
                 <td className="fw-medium">
                   {inv.stock}
