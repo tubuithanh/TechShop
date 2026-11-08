@@ -2,6 +2,15 @@ const mongoose = require('mongoose');
 const { makeSlug } = require('../utils/slug');
 const Product = require('../models/Product');
 const StoreInventory = require('../models/StoreInventory');
+const Order = require('../models/Order');
+const Warranty = require('../models/Warranty');
+const Review = require('../models/Review');
+const Question = require('../models/Question');
+const Cart = require('../models/Cart');
+const User = require('../models/User');
+const ProductCollection = require('../models/ProductCollection');
+const Post = require('../models/Post');
+const { withTransaction, BusinessError } = require('../utils/transaction');
 const asyncHandler = require('../utils/asyncHandler');
 const { searchFilter } = require('../utils/search');
 const { NUMERIC_KEYS } = require('../utils/specNumbers');
@@ -265,7 +274,68 @@ const deleteProduct = asyncHandler(async (req, res) => {
   res.json({ message: 'Đã ẩn sản phẩm khỏi cửa hàng' });
 });
 
+// ---------- XÓA VĨNH VIỄN ----------
+// Chỉ cho xóa hẳn sản phẩm CHƯA từng phát sinh giao dịch: đơn hàng, phiếu bảo hành, đánh giá đều lưu
+// tham chiếu tới sản phẩm - xóa đi sẽ làm hỏng lịch sử đơn/bảo hành và sai thống kê. Sản phẩm đã có giao
+// dịch thì dùng "Ẩn" (deleteProduct ở trên). Dùng cho trường hợp tạo nhầm / nhập trùng.
+async function productUsage(productId) {
+  const [orders, warranties, reviews] = await Promise.all([
+    Order.countDocuments({ 'items.productId': productId }),
+    Warranty.countDocuments({ productId }),
+    Review.countDocuments({ productId })
+  ]);
+  return { orders, warranties, reviews, deletable: orders + warranties + reviews === 0 };
+}
+
+// @route GET /api/products/:id/delete-check (admin) -> cho biết có xóa vĩnh viễn được không và vì sao
+const checkPermanentDelete = asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ' });
+  const product = await Product.findById(req.params.id).select('title');
+  if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+  res.json({ data: { title: product.title, ...(await productUsage(product._id)) } });
+});
+
+// @route DELETE /api/products/:id/permanent { confirm: <tên sản phẩm> } (admin)
+const deleteProductPermanently = asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ' });
+  const product = await Product.findById(req.params.id).select('title');
+  if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+  // Bắt gõ lại đúng tên sản phẩm -> chặn bấm nhầm hoặc gọi API vô tình
+  if (String(req.body?.confirm || '').trim() !== product.title.trim()) {
+    return res.status(400).json({ message: 'Tên xác nhận không khớp với tên sản phẩm' });
+  }
+  const usage = await productUsage(product._id);
+  if (!usage.deletable) {
+    return res.status(409).json({
+      message: `Không thể xóa vĩnh viễn: sản phẩm đã có ${usage.orders} đơn hàng, ${usage.warranties} phiếu bảo hành, ${usage.reviews} đánh giá. Hãy dùng "Ẩn" để ngừng bán.`,
+      data: usage
+    });
+  }
+
+  const id = product._id;
+  await withTransaction(async (session) => {
+    const opt = session ? { session } : {};
+    // Kiểm tra lại trong transaction: tránh trường hợp vừa có đơn mới đặt giữa lúc kiểm tra và lúc xóa
+    if (session && (await Order.exists({ 'items.productId': id }).session(session))) {
+      throw new BusinessError(409, 'Sản phẩm vừa phát sinh đơn hàng - không thể xóa vĩnh viễn');
+    }
+    await StoreInventory.deleteMany({ productId: id }, opt);
+    await Question.deleteMany({ productId: id }, opt);
+    await Cart.updateMany({ 'items.productId': id }, { $pull: { items: { productId: id } } }, opt);
+    await User.updateMany({ favoriteProductIds: id }, { $pull: { favoriteProductIds: id } }, opt);
+    await ProductCollection.updateMany({ productIds: id }, { $pull: { productIds: id } }, opt);
+    await Post.updateMany({ relatedProductIds: id }, { $pull: { relatedProductIds: id } }, opt);
+    await Product.deleteOne({ _id: id }, opt);
+  }).catch((err) => {
+    if (err instanceof BusinessError) err.statusCode = err.status; // errorMiddleware đọc statusCode
+    throw err;
+  });
+  res.json({ message: `Đã xóa vĩnh viễn sản phẩm "${product.title}"` });
+});
+
 module.exports = {
+  checkPermanentDelete,
+  deleteProductPermanently,
   getFilterRanges,
   getProducts,
   getProductBySlug,

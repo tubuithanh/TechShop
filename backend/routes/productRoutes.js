@@ -8,7 +8,9 @@ const {
   compareProducts,
   createProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  checkPermanentDelete,
+  deleteProductPermanently
 } = require('../controllers/productController');
 const { getProductReviews, createReview, updateReview } = require('../controllers/reviewController');
 const { getQuestions, createQuestion, answerQuestion } = require('../controllers/questionController');
@@ -42,6 +44,9 @@ router.post('/import-html', protect, can('products.manage'), uploadLimiter, impo
 router.post('/', protect, can('products.manage'), createProduct);
 router.put('/:id', protect, can('products.manage'), updateProduct);
 router.delete('/:id', protect, authorize('admin'), deleteProduct);
+// Xóa vĩnh viễn - chỉ sản phẩm chưa có đơn hàng / bảo hành / đánh giá (xem productController)
+router.get('/:id/delete-check', protect, authorize('admin'), checkPermanentDelete);
+router.delete('/:id/permanent', protect, authorize('admin'), deleteProductPermanently);
 
 module.exports = router;
 

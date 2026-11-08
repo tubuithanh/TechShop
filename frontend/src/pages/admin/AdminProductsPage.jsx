@@ -13,6 +13,9 @@ import useAdminList from '../../hooks/useAdminList';
 import SpecificationsEditor from '../../components/admin/SpecificationsEditor';
 import VariantsEditor, { newVariant } from '../../components/admin/VariantsEditor';
 import ProductUrlImport from '../../components/admin/ProductUrlImport';
+import DeleteProductModal from '../../components/admin/DeleteProductModal';
+import { useAuth } from '../../store/AuthContext';
+import { Trash } from 'react-bootstrap-icons';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -47,6 +50,9 @@ export default function AdminProductsPage() {
   const [editingId, setEditingId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const { settings } = useSettings();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [deleting, setDeleting] = useState(null); // sản phẩm đang mở hộp thoại xóa vĩnh viễn
   const maxImages = settings.maxImagesPerProduct || 10;
   const pageSize = settings.productsPerPage || 20;
   const query = useListQuery(['categoryId', 'brandId', 'isActive']);
@@ -470,6 +476,11 @@ export default function AdminProductsPage() {
                       Khôi phục
                     </Button>
                   )}
+                  {isAdmin && (
+                    <Button variant="outline-danger" size="sm" title="Xóa vĩnh viễn" aria-label={`Xóa vĩnh viễn ${p.title}`} onClick={() => setDeleting(p)}>
+                      <Trash />
+                    </Button>
+                  )}
                   </div>
                 </td>
               </tr>
@@ -480,6 +491,27 @@ export default function AdminProductsPage() {
           <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
         </Card.Body>
       </Card>
+
+      {deleting && (
+        <DeleteProductModal
+          product={deleting}
+          onHide={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            loadProducts();
+          }}
+          onHideProduct={async () => {
+            const id = deleting._id;
+            setDeleting(null);
+            try {
+              await api.delete(`/products/${id}`);
+            } catch (err) {
+              alert(err.response?.data?.message || 'Không ẩn được sản phẩm');
+            }
+            loadProducts();
+          }}
+        />
+      )}
 
       <Alert variant="warning" className="mt-4 small">
         💡 Tồn kho được quản lý riêng theo từng cửa hàng (mô hình multi-store). Vào mục
