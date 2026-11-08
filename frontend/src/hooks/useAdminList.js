@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // MỚI NHẤT - khi gõ nhanh, kết quả của từ khóa cũ về trễ sẽ không ghi đè kết quả mới.
 // fetcher(params) trả về { data, total, totalPages } hoặc một mảng.
 export default function useAdminList(fetcher, params) {
-  const [state, setState] = useState({ data: [], total: 0, totalPages: 1 });
+  const [state, setState] = useState({ data: [], total: 0, totalPages: 1, meta: {} });
   const [loading, setLoading] = useState(true);
   const latest = useRef(0);
   const paramsKey = JSON.stringify(params);
@@ -15,7 +15,12 @@ export default function useAdminList(fetcher, params) {
     try {
       const res = await fetcher(JSON.parse(paramsKey));
       if (id !== latest.current) return;
-      setState(Array.isArray(res) ? { data: res, total: res.length, totalPages: 1 } : { data: res.data || [], total: res.total || 0, totalPages: res.totalPages || 1 });
+      // meta: các trường thêm của API (VD statusCounts của danh sách đơn hàng)
+      setState(
+        Array.isArray(res)
+          ? { data: res, total: res.length, totalPages: 1, meta: {} }
+          : { data: res.data || [], total: res.total || 0, totalPages: res.totalPages || 1, meta: res }
+      );
     } finally {
       if (id === latest.current) setLoading(false);
     }

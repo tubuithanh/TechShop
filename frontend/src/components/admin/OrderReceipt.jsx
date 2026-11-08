@@ -19,6 +19,14 @@ export default function OrderReceipt({ order: o, onHide }) {
   return <Modal show onHide={onHide} size="lg"><Modal.Header closeButton><Modal.Title>Chi tiết đơn / Phiếu bán hàng</Modal.Title></Modal.Header>
     <Modal.Body className="order-receipt">
       <h4>{o.orderCode}</h4><p>{orderMethod(o)} · {orderLabel(o)}<br />Chi nhánh: {o.storeId?.name || '—'}<br />Ngày lập: {new Date(o.createdAt).toLocaleString('vi-VN')}<br />Khách: {o.deliveryAddress?.fullName} — {o.deliveryAddress?.phone}</p>
+            {o.invoiceInfo?.taxCode && (
+              <div className="border rounded p-2 mb-2 small">
+                <b>Xuất hóa đơn công ty:</b> {o.invoiceInfo.companyName}
+                <br />
+                MST: {o.invoiceInfo.taxCode} · Địa chỉ: {o.invoiceInfo.address}
+                {o.invoiceInfo.email && <> · Email: {o.invoiceInfo.email}</>}
+              </div>
+            )}
       <p>Người tạo phiếu: {o.createdByName || o.createdBy?.name || (o.source === 'pos' ? o.receipt?.by?.name || 'Chưa có thông tin người tạo' : 'Khách đặt online')}</p>
       <Table size="sm"><thead><tr><th>Sản phẩm</th><th>SL</th><th>Thành tiền</th><th>VAT sau giảm giá</th></tr></thead><tbody>{o.items.map((i,k) => <tr key={k}><td>{i.name} {i.variantLabel}</td><td>{i.quantity}</td><td>{money(i.quantity * i.unitPrice)}</td><td>{i.vat ? <>{i.vat.rate}% · {money(i.vat.amount)}</> : '—'}</td></tr>)}</tbody></Table>
       <p>Tiền hàng: {money(o.itemsTotal)} · Phí giao: {money(o.shippingFee)} · Giảm: {money(o.discountAmount)}<br /><strong>Tổng tiền: {money(o.grandTotal)}</strong><br />Thanh toán: {({ cash: 'Tiền mặt', cod: 'Khi nhận hàng', bank_transfer: 'Chuyển khoản', vnpay: 'VNPay', momo: 'MoMo' })[o.paymentMode]} · {o.paymentStatus === 'paid' ? 'Đã thanh toán' : o.paymentStatus === 'refunded' ? 'Đã hoàn tiền' : 'Chưa thanh toán'}</p>

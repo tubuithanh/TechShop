@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Form, Table } from 'react-bootstrap';
+import { Badge, Button, Card, Form, Table } from 'react-bootstrap';
 import api from '../../services/api';
 import HandoverModal from '../../components/admin/HandoverModal';
 import OrderReceipt from '../../components/admin/OrderReceipt';
@@ -16,6 +16,18 @@ import EInvoiceExportModal from '../../components/admin/EInvoiceExportModal';
 import { FileEarmarkSpreadsheet } from 'react-bootstrap-icons';
 
 const statusOptions = Object.keys(ORDER_LABELS);
+// Màu badge theo trạng thái (admin.css đổi sang dạng pill nền nhạt)
+const STATUS_VARIANT = {
+  pending: 'warning',
+  confirmed: 'info',
+  processing: 'info',
+  ready_for_pickup: 'primary',
+  shipping: 'primary',
+  returning: 'warning',
+  delivered: 'success',
+  cancelled: 'danger',
+  returned: 'secondary'
+};
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -30,7 +42,7 @@ export default function AdminOrdersPage() {
   const { user } = useAuth();
   const pageSize = settings.productsPerPage || 20;
   const query = useListQuery(['status', 'paymentStatus', 'paymentMode', 'storeId', 'source', 'deliveryMethod', 'from', 'to']);
-  const { data: orders, total, totalPages, loading, reload: loadOrders } = useAdminList(orderService.getAllOrdersAdmin, {
+  const { data: orders, total, totalPages, loading, meta, reload: loadOrders } = useAdminList(orderService.getAllOrdersAdmin, {
     ...query.apiParams,
     limit: pageSize
   });
@@ -120,6 +132,30 @@ export default function AdminOrdersPage() {
         loading={loading}
       />
 
+      {/* Tab lọc nhanh theo trạng thái - số đếm theo đúng các bộ lọc khác đang chọn */}
+      <div className="order-status-tabs mb-3" role="tablist" aria-label="Lọc theo trạng thái">
+        {[{ value: '', label: 'Tất cả' }, ...statusOptions.map((s) => ({ value: s, label: ORDER_LABELS[s] }))].map((t) => {
+          const counts = meta?.statusCounts || {};
+          const count = t.value ? counts[t.value] || 0 : Object.values(counts).reduce((a, b) => a + b, 0);
+          const active = (query.values.status || '') === t.value;
+          if (t.value && !count && !active) return null; // ẩn trạng thái không có đơn nào cho gọn
+          return (
+            <button
+              key={t.value || 'all'}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={`order-status-tab${active ? ' active' : ''}`}
+              onClick={() => query.update({ status: t.value })}
+            >
+              {t.value && <span className={`order-status-dot bg-${STATUS_VARIANT[t.value]}`} />}
+              {t.label}
+              <span className="order-status-count">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <Card className="shadow-sm">
         <Table striped hover responsive className="mb-0">
           <thead>
@@ -148,7 +184,11 @@ export default function AdminOrdersPage() {
                 </td>
                 <td className="p-3">{o.storeId?.name}</td>
                 <td className="p-3">{formatVND(o.grandTotal)}</td>
-                <td className="p-3">{orderLabel(o)}{o.refundStatus === 'pending' && <div className="text-warning">Chờ hoàn tiền</div>}</td>
+                <td className="p-3">
+                  <Badge bg={STATUS_VARIANT[o.status] || 'secondary'}>{orderLabel(o)}</Badge>
+                  {o.paymentStatus === 'paid' && <div className="small text-success mt-1">Đã thanh toán</div>}
+                  {o.refundStatus === 'pending' && <div className="small text-warning mt-1">Chờ hoàn tiền</div>}
+                </td>
                 <td className="p-3">
                   <Form.Select
                     size="sm"

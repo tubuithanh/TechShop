@@ -452,7 +452,16 @@ const getAllOrders = asyncHandler(async (req, res) => {
     .limit(Number(limit));
 
   const total = await Order.countDocuments(filter);
-  res.json({ data: orders, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+  // Số đơn theo từng trạng thái (cùng bộ lọc, KHÔNG tính bộ lọc trạng thái) -> tab lọc nhanh trên trang quản trị
+  const { status: _ignored, ...countFilter } = filter;
+  // aggregate() không tự ép kiểu như find() -> đổi mã chi nhánh dạng chuỗi sang ObjectId
+  if (typeof countFilter.storeId === 'string') {
+    if (!mongoose.isValidObjectId(countFilter.storeId)) return res.json({ data: orders, total, page: Number(page), totalPages: Math.ceil(total / limit), statusCounts: {} });
+    countFilter.storeId = new mongoose.Types.ObjectId(countFilter.storeId);
+  }
+  const grouped = await Order.aggregate([{ $match: countFilter }, { $group: { _id: '$status', n: { $sum: 1 } } }]);
+  const statusCounts = Object.fromEntries(grouped.map((g) => [g._id, g.n]));
+  res.json({ data: orders, total, page: Number(page), totalPages: Math.ceil(total / limit), statusCounts });
 });
 
 // @route PUT /api/orders/:id/status

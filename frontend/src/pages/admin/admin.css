@@ -466,6 +466,56 @@
   vertical-align: 0.1em;
 }
 
+/* Tab lọc nhanh theo trạng thái (trang Đơn hàng) */
+.order-status-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+.order-status-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.order-status-tab:hover {
+  border-color: rgba(var(--bs-primary-rgb), 0.5);
+}
+.order-status-tab.active {
+  background: var(--bs-primary);
+  border-color: var(--bs-primary);
+  color: #fff;
+}
+.order-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.order-status-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+.order-status-tab.active .order-status-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
 /* Nút & form */
 .admin-main .btn {
   border-radius: 8px;

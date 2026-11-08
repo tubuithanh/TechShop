@@ -7,7 +7,8 @@ import { exportEInvoiceFile, fetchAllOrders } from '../../utils/einvoiceExport';
 // Hộp thoại xuất đơn hàng ra Excel để import lên hệ thống hóa đơn điện tử.
 // Lấy đúng các đơn đang khớp bộ lọc / tìm kiếm của trang Quản lý đơn hàng (apiParams), thêm 2 tùy chọn lọc.
 export default function EInvoiceExportModal({ apiParams, shippingVatRate, onHide }) {
-  const [onlyDelivered, setOnlyDelivered] = useState(true);
+  // Bật sẵn khi chưa lọc trạng thái (hoặc đang lọc đúng "đã giao"); đang lọc trạng thái khác thì tôn trọng bộ lọc đó
+  const [onlyDelivered, setOnlyDelivered] = useState(!apiParams.status || apiParams.status === 'delivered');
   const [onlyCompany, setOnlyCompany] = useState(false);
   const [progress, setProgress] = useState(null);
   const [result, setResult] = useState(null);
@@ -65,6 +66,9 @@ export default function EInvoiceExportModal({ apiParams, shippingVatRate, onHide
           onChange={(e) => setOnlyDelivered(e.target.checked)}
           label="Chỉ đơn đã hoàn tất (đã giao / đã nhận hàng)"
         />
+        {onlyDelivered && apiParams.status && apiParams.status !== 'delivered' && (
+          <div className="small text-warning-emphasis ms-5 mb-2">Tùy chọn này thay cho bộ lọc trạng thái đang chọn ở trang danh sách.</div>
+        )}
         <Form.Check
           type="switch"
           id="einv-company"

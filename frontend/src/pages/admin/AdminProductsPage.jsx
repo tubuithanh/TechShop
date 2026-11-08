@@ -223,7 +223,7 @@ export default function AdminProductsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa (ẩn) sản phẩm này khỏi cửa hàng?')) return;
+    if (!confirm('Ẩn sản phẩm này khỏi cửa hàng? (Có thể khôi phục lại bất cứ lúc nào)')) return;
     try {
       await api.delete(`/products/${id}`);
     } catch (err) {
@@ -467,15 +467,18 @@ export default function AdminProductsPage() {
                   <Button variant="outline-primary" size="sm" onClick={() => handleEdit(p)}>
                     Sửa
                   </Button>
-                  {p.isActive ? (
-                    <Button variant="outline-danger" size="sm" onClick={() => handleDelete(p._id)}>
-                      Ẩn
-                    </Button>
-                  ) : (
-                    <Button variant="outline-success" size="sm" onClick={() => handleRestore(p._id)}>
-                      Khôi phục
-                    </Button>
-                  )}
+                  {/* Ẩn sản phẩm: API chỉ cho admin (authorize('admin')) -> nhân viên không thấy nút */}
+                  {p.isActive
+                    ? isAdmin && (
+                        <Button variant="outline-danger" size="sm" onClick={() => handleDelete(p._id)}>
+                          Ẩn
+                        </Button>
+                      )
+                    : (
+                      <Button variant="outline-success" size="sm" onClick={() => handleRestore(p._id)}>
+                        Khôi phục
+                      </Button>
+                    )}
                   {isAdmin && (
                     <Button variant="outline-danger" size="sm" title="Xóa vĩnh viễn" aria-label={`Xóa vĩnh viễn ${p.title}`} onClick={() => setDeleting(p)}>
                       <Trash />

@@ -224,6 +224,17 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {order.invoiceInfo?.taxCode && (
+        <div className="small mb-4 border rounded-3 p-3">
+          <div className="fw-medium mb-1">Thông tin xuất hóa đơn công ty</div>
+          <div>{order.invoiceInfo.companyName}</div>
+          <div>Mã số thuế: {order.invoiceInfo.taxCode}</div>
+          <div>Địa chỉ: {order.invoiceInfo.address}</div>
+          {order.invoiceInfo.email && <div>Email nhận hóa đơn: {order.invoiceInfo.email}</div>}
+          <div className="text-muted mt-1">Hóa đơn điện tử sẽ được gửi sau khi đơn hàng hoàn tất.</div>
+        </div>
+      )}
+
       {['pending', 'confirmed'].includes(order.status) && (
         <Button variant="outline-danger" size="sm" onClick={handleCancel} className="mb-5">
           Hủy đơn hàng
