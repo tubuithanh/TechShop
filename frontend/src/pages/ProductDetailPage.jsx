@@ -1,6 +1,10 @@
 import { Fragment, useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal } from 'react-bootstrap';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal, ProgressBar } from 'react-bootstrap';
+import { GiftFill, Truck, ShieldCheck, ArrowRepeat, ArrowLeftRight, Check2, StarFill, CartPlus, LightningChargeFill } from 'react-bootstrap-icons';
+import RecentlyViewed from '../components/RecentlyViewed';
+import { addRecentlyViewed, COMPARE_KEY, toggleCompare, useLocalList } from '../utils/localLists';
+import { flyToCart } from '../utils/flyToCart';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
 import ReviewForm from '../components/ReviewForm';
@@ -34,6 +38,9 @@ export default function ProductDetailPage() {
   const { slug } = useParams();
   const { user } = useAuth();
   const { addToCart } = useCart();
+  const navigate = useNavigate();
+  const compareList = useLocalList(COMPARE_KEY);
+  const [buying, setBuying] = useState(false);
 
   const [product, setProduct] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
@@ -77,6 +84,7 @@ export default function ProductDetailPage() {
         const data = await productService.getProductBySlug(slug);
         if (ignore) return;
         setProduct(data);
+        addRecentlyViewed(data);
         // Mặc định chọn phiên bản đang bán đầu tiên còn hàng ở bất kỳ cửa hàng nào
         const active = (data.variants || []).filter((v) => v.isActive);
         const inStock = active.find((v) => data.inventories?.some((inv) => inv.variantId === v._id && inv.stock > 0));
@@ -124,6 +132,12 @@ export default function ProductDetailPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Thanh "Mua ngay" đang hiện -> báo cho CSS: ẩn thanh so sánh nổi, đẩy nút chat lên trên thanh mua
+  useEffect(() => {
+    document.body.classList.toggle('has-sticky-buy', showStickyBar);
+    return () => document.body.classList.remove('has-sticky-buy');
+  }, [showStickyBar]);
+
   if (loadError)
     return (
       <Container className="py-5 text-center">
@@ -159,9 +173,15 @@ export default function ProductDetailPage() {
     selectVariant(product, sameStorage || activeVariants.find((v) => v.color === color), selectedStoreId);
   };
 
-  const handleAddToCart = async () => {
+  // buyNow = true: thêm vào giỏ rồi chuyển thẳng tới trang thanh toán ("Mua ngay")
+  const handleAddToCart = async (buyNow = false) => {
+    // Chưa đăng nhập -> tới trang đăng nhập (giỏ hàng gắn với tài khoản)
+    if (!user) {
+      navigate('/login');
+      return;
+    }
     // Tài khoản quản trị không đặt hàng được (backend trả 403 khi thanh toán) - báo ngay tại đây
-    if (user && !isCustomer) {
+    if (!isCustomer) {
       setMessage('Tài khoản quản trị không mua hàng được, vui lòng dùng tài khoản khách hàng');
       return;
     }
@@ -173,14 +193,34 @@ export default function ProductDetailPage() {
       setMessage('Vui lòng chọn cửa hàng trước khi thêm vào giỏ');
       return;
     }
+    setBuying(true);
     try {
       await addToCart(product._id, selectedVariant._id, quantity, selectedStoreId);
+      if (buyNow === true) {
+        navigate('/checkout');
+        return;
+      }
+      flyToCart(document.querySelector('.gallery-main img'));
       setMessage('Đã thêm vào giỏ hàng!');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       setMessage(err.response?.data?.message || 'Có lỗi xảy ra');
+    } finally {
+      setBuying(false);
     }
   };
+
+  const inCompare = compareList.some((p) => p._id === product._id);
+  const handleCompare = () => {
+    const r = toggleCompare(product);
+    if (r.full) setMessage('Chỉ so sánh tối đa 4 sản phẩm - hãy bỏ bớt ở thanh so sánh bên dưới');
+  };
+
+  // 4 thông số nổi bật đầu tiên (theo mẫu thông số của danh mục) hiện ngay dưới giá
+  const highlightSpecs = specGroups.flatMap((g) => g.items).slice(0, 4);
+  // Phân bố số sao của các đánh giá (5 -> 1)
+  const starCounts = [5, 4, 3, 2, 1].map((s) => ({ star: s, count: reviews.filter((r) => r.rating === s).length }));
+  const discountPercent = displayPrice < originalPrice ? Math.round(100 - (displayPrice / originalPrice) * 100) : 0;
 
   const handleToggleWishlist = async () => {
     if (!user) {
@@ -269,12 +309,29 @@ export default function ProductDetailPage() {
             </Button>
           )}
 
-          <div className="mb-4">
-            <span className="fs-3 text-primary fw-bold">{formatVND(displayPrice)}</span>
-            {displayPrice < originalPrice && (
-              <span className="text-muted text-decoration-line-through ms-3">{formatVND(originalPrice)}</span>
-            )}
+          <div className="detail-price-box mb-3">
+            <div className="d-flex align-items-baseline flex-wrap gap-2">
+              <span className="fs-3 text-primary fw-bold">{formatVND(displayPrice)}</span>
+              {discountPercent > 0 && (
+                <>
+                  <span className="text-muted text-decoration-line-through">{formatVND(originalPrice)}</span>
+                  <Badge bg="primary">-{discountPercent}%</Badge>
+                </>
+              )}
+            </div>
+            <div className="small text-muted">Giá đã bao gồm VAT</div>
           </div>
+
+          {highlightSpecs.length > 0 && (
+            <div className="detail-highlights mb-3">
+              {highlightSpecs.map((s) => (
+                <div key={s.key} className="detail-highlight">
+                  <span className="text-muted">{s.key}</span>
+                  <span className="fw-semibold text-truncate">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Chọn phiên bản: màu (ô màu) + dung lượng/kích thước của màu đó - mỗi phiên bản có giá, ảnh, tồn kho riêng */}
           {colorOptions.length > 0 && (
@@ -356,16 +413,45 @@ export default function ProductDetailPage() {
             </InputGroup>
           </div>
 
-          <div className="d-flex gap-3 mb-2">
-            <Button
-              onClick={handleAddToCart}
-              disabled={currentStock === 0}
-              variant="primary"
-              className="flex-fill fw-medium py-3"
-            >
-              {currentStock === 0 ? 'Hết hàng tại cửa hàng này' : 'Thêm vào giỏ hàng'}
-            </Button>
+          {/* Khuyến mãi kèm theo */}
+          <div className="detail-promo mb-3">
+            <div className="detail-promo-head">
+              <GiftFill /> Khuyến mãi & ưu đãi
+            </div>
+            <ul className="mb-0">
+              <li>Trả góp 0% qua thẻ tín dụng, duyệt nhanh trong 5 phút</li>
+              <li>Miễn phí giao hàng tận nơi hoặc nhận tại {variantInventories.length} cửa hàng</li>
+              <li>Nhập mã giảm giá ở bước thanh toán để được giảm thêm</li>
+            </ul>
           </div>
+
+          {currentStock === 0 ? (
+            <Button disabled variant="secondary" className="w-100 fw-medium py-3 mb-2">
+              Hết hàng tại cửa hàng này
+            </Button>
+          ) : (
+            <div className="d-flex gap-2 mb-2">
+              <Button onClick={() => handleAddToCart(true)} disabled={buying} variant="primary" className="flex-fill py-2 detail-buy-now">
+                <span className="d-block fw-bold">
+                  <LightningChargeFill /> MUA NGAY
+                </span>
+                <span className="d-block small opacity-75">Giao tận nơi hoặc nhận tại cửa hàng</span>
+              </Button>
+              <Button
+                onClick={() => handleAddToCart(false)}
+                disabled={buying}
+                variant="outline-primary"
+                className="px-3 d-flex flex-column align-items-center justify-content-center"
+                style={{ minWidth: '6.5rem' }}
+              >
+                <CartPlus size={20} />
+                <span style={{ fontSize: '0.7rem' }}>Thêm vào giỏ</span>
+              </Button>
+            </div>
+          )}
+          <Button variant="link" size="sm" className="p-0 mb-2 text-decoration-none d-inline-flex align-items-center gap-1" onClick={handleCompare}>
+            {inCompare ? <Check2 /> : <ArrowLeftRight />} {inCompare ? 'Đã thêm vào so sánh' : 'Thêm vào so sánh'}
+          </Button>
           {message && (
             <Alert variant={message.startsWith('Đã') ? 'success' : 'warning'} className="py-1 px-2 small mb-2">
               {message}
@@ -374,9 +460,16 @@ export default function ProductDetailPage() {
 
           <InstallmentCalculator price={displayPrice} />
 
-          <div className="bg-light rounded p-3 small text-muted mt-3">
-            🛡️ Bảo hành chính hãng {product.warrantyMonths} tháng. Miễn phí đổi trả trong 30 ngày nếu lỗi nhà sản
-            xuất.
+          <div className="detail-policies mt-3">
+            <div>
+              <ShieldCheck className="text-primary" /> Bảo hành chính hãng {product.warrantyMonths} tháng
+            </div>
+            <div>
+              <ArrowRepeat className="text-primary" /> Đổi trả miễn phí 30 ngày nếu lỗi nhà sản xuất
+            </div>
+            <div>
+              <Truck className="text-primary" /> Giao nhanh 2 giờ nội thành
+            </div>
           </div>
         </Col>
       </Row>
@@ -431,6 +524,32 @@ export default function ProductDetailPage() {
 
         {activeTab === 'reviews' && (
           <div>
+            {reviews.length > 0 && (
+              <div className="rating-summary mb-4">
+                <div className="text-center px-3">
+                  <div className="display-6 fw-bold">{product.ratingAverage}</div>
+                  <div className="text-warning">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <StarFill key={i} className={i <= Math.round(product.ratingAverage) ? '' : 'opacity-25'} />
+                    ))}
+                  </div>
+                  <div className="small text-muted">{reviews.length} đánh giá</div>
+                </div>
+                <div className="flex-grow-1 d-flex flex-column gap-1">
+                  {starCounts.map(({ star, count }) => (
+                    <div key={star} className="d-flex align-items-center gap-2 small">
+                      <span className="text-nowrap" style={{ width: 28 }}>
+                        {star} <StarFill className="text-warning" size={10} />
+                      </span>
+                      <ProgressBar now={(count / reviews.length) * 100} variant="warning" className="flex-grow-1" style={{ height: 8 }} />
+                      <span className="text-muted text-end" style={{ width: 28 }}>
+                        {count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {isCustomer && !myReview && (
               <div className="mb-4">
                 <ReviewForm onSubmit={handleCreateReview} />
@@ -517,21 +636,22 @@ export default function ProductDetailPage() {
         </div>
       )}
 
+      <RecentlyViewed excludeId={product._id} className="mt-5" />
+
+      {/* Thanh mua hàng dính đáy màn hình khi đã cuộn qua khu vực nút mua */}
       {showStickyBar && (
-        <div className="position-fixed bottom-0 start-0 end-0 bg-white border-top shadow-lg py-3 px-4" style={{ zIndex: 1030 }}>
-          <Container fluid="xl" className="d-flex align-items-center gap-4">
-            <img src={sizedImage(images?.[0], 96)} alt="" className="d-none d-sm-block rounded" style={{ width: '2.5rem', height: '2.5rem', objectFit: 'cover' }} />
-            <div className="flex-fill text-truncate">
+        <div className="detail-sticky-bar">
+          <Container fluid="xl" className="d-flex align-items-center gap-3">
+            <img src={sizedImage(images?.[0], 96)} alt="" className="d-none d-sm-block rounded bg-white" style={{ width: '2.75rem', height: '2.75rem', objectFit: 'contain' }} />
+            <div className="flex-fill min-w-0">
               <div className="small fw-medium text-truncate">{product.title}</div>
               <div className="text-primary fw-bold">{formatVND(displayPrice)}</div>
             </div>
-            <Button
-              onClick={handleAddToCart}
-              disabled={currentStock === 0}
-              variant="primary"
-              className="fw-medium px-4 py-2 text-nowrap"
-            >
-              Thêm vào giỏ
+            <Button onClick={() => handleAddToCart(false)} disabled={currentStock === 0 || buying} variant="outline-primary" className="px-3" aria-label="Thêm vào giỏ">
+              <CartPlus size={18} />
+            </Button>
+            <Button onClick={() => handleAddToCart(true)} disabled={currentStock === 0 || buying} variant="primary" className="fw-semibold px-3 px-sm-4 text-nowrap">
+              Mua ngay
             </Button>
           </Container>
         </div>

@@ -33,6 +33,7 @@ import { useSettings } from '../../store/SettingsContext';
 import { hasPagePermission } from '../../utils/permissions';
 import { orderService } from '../../services/orderService';
 import { chatService } from '../../services/chatService';
+import { applyColorMode } from '../../utils/colorMode';
 import './admin.css';
 
 // Menu chia nhóm. Mỗi mục:
@@ -282,6 +283,13 @@ export default function AdminLayout() {
 
   useEffect(() => setMobileOpen(false), [pathname]);
 
+  // Trang quản trị luôn dùng giao diện sáng (kể cả modal/menu render ra ngoài khung) - rời trang quản trị thì
+  // trả lại chế độ sáng/tối khách đã chọn ở trang bán hàng
+  useEffect(() => {
+    document.documentElement.setAttribute('data-bs-theme', 'light');
+    return () => applyColorMode();
+  }, []);
+
   const toggleCollapsed = () =>
     setCollapsed((c) => {
       try {
@@ -300,7 +308,7 @@ export default function AdminLayout() {
   const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.groupIds?.[0]?.name || 'Nhân viên';
 
   return (
-    <div className={`admin-shell${collapsed ? ' is-collapsed' : ''}`}>
+    <div className={`admin-shell${collapsed ? ' is-collapsed' : ''}`} data-bs-theme="light">
       {/* Sidebar desktop */}
       <aside className="admin-sidebar d-none d-lg-flex">
         <Brand settings={settings} collapsed={collapsed} />

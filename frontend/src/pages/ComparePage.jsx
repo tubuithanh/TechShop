@@ -3,6 +3,7 @@ import { Container, Row, Col, Table, Button, Form } from 'react-bootstrap';
 import { productService } from '../services/productService';
 import { buildCompareGroups, getBestSpecValue } from '../utils/specs';
 import ProductImage from '../components/ProductImage';
+import { getCompare, removeCompare, toggleCompare } from '../utils/localLists';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -10,12 +11,33 @@ function formatVND(value) {
 
 export default function ComparePage() {
   const [allProducts, setAllProducts] = useState([]);
-  const [selectedIds, setSelectedIds] = useState([]);
+  // Khởi tạo từ thanh so sánh nổi (nút "So sánh" trên card sản phẩm) - xem utils/localLists.js
+  const [selectedIds, setSelectedIds] = useState(() => getCompare().map((p) => p._id));
   const [compareResult, setCompareResult] = useState([]);
   // Tìm theo tên (API tìm không dấu): trước đây chỉ chọn được trong 50 sản phẩm mới nhất
   const [keyword, setKeyword] = useState('');
-  const [selectedNames, setSelectedNames] = useState({}); // giữ tên sản phẩm đã chọn khi đổi từ khóa
+  // giữ tên sản phẩm đã chọn khi đổi từ khóa
+  const [selectedNames, setSelectedNames] = useState(() => Object.fromEntries(getCompare().map((p) => [p._id, p.title])));
   const [error, setError] = useState('');
+
+  // Đã chọn sẵn >= 2 sản phẩm từ thanh so sánh -> so sánh luôn, không bắt bấm thêm
+  useEffect(() => {
+    if (selectedIds.length >= 2) handleCompare();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Giữ thanh so sánh nổi khớp với lựa chọn trên trang này
+  useEffect(() => {
+    const current = getCompare();
+    const ids = current.map((p) => p._id);
+    if (ids.join() === selectedIds.join()) return;
+    ids.filter((id) => !selectedIds.includes(id)).forEach(removeCompare);
+    selectedIds
+      .filter((id) => !ids.includes(id))
+      .forEach((id) => {
+        const p = allProducts.find((x) => x._id === id);
+        if (p) toggleCompare(p);
+      });
+  }, [selectedIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let ignore = false;

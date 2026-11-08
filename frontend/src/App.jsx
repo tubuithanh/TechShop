@@ -7,6 +7,8 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import PrivateRoute from './components/PrivateRoute';
 import ChatWidget from './components/ChatWidget';
+import CompareBar from './components/CompareBar';
+import MobileBottomNav from './components/MobileBottomNav';
 import MaintenancePage from './pages/MaintenancePage';
 
 import HomePage from './pages/HomePage';
@@ -87,6 +89,8 @@ function StorefrontLayout({ children }) {
       <div className="flex-grow-1">{children}</div>
       <Footer />
       <ChatWidget />
+      <CompareBar />
+      <MobileBottomNav />
     </div>
   );
 }

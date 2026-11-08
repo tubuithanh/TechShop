@@ -4,8 +4,10 @@ import { Container, Row, Col, Spinner, Carousel, Nav, Badge, Button, Card, Progr
 import {
   Phone, Laptop, Tablet, Watch, Headphones, Display, Plug,
   Truck, ArrowRepeat, ShieldCheck, Headset, LightningChargeFill, GeoAltFill, StarFill,
-  Boxes, Award, ShopWindow
+  Boxes, Award, ShopWindow, TagsFill
 } from 'react-bootstrap-icons';
+import ProductGridSkeleton from '../components/ProductCardSkeleton';
+import RecentlyViewed from '../components/RecentlyViewed';
 import { productService } from '../services/productService';
 import { collectionService } from '../services/collectionService';
 import { postService } from '../services/postService';
@@ -110,6 +112,73 @@ function FlashSaleCard({ product }) {
   );
 }
 
+// Khối "Mua sắm theo danh mục": hàng tab danh mục, bấm tab nào tải 8 sản phẩm bán chạy của danh mục đó
+// (kết quả được nhớ lại, bấm lại tab cũ không gọi API nữa).
+function CategoryShowcase({ categories }) {
+  const [activeId, setActiveId] = useState(categories[0]?._id);
+  const [cache, setCache] = useState({});
+  const products = cache[activeId];
+
+  useEffect(() => {
+    if (!activeId || cache[activeId]) return;
+    let ignore = false;
+    productService
+      .getProducts({ categoryId: activeId, sort: 'best_selling', limit: 8 })
+      .then((res) => !ignore && setCache((c) => ({ ...c, [activeId]: res.data })))
+      .catch(() => !ignore && setCache((c) => ({ ...c, [activeId]: [] })));
+    return () => {
+      ignore = true;
+    };
+  }, [activeId, cache]);
+
+  return (
+    <>
+      <SectionTitle
+        action={
+          <Link to={`/products?categoryId=${activeId}`} className="text-primary fw-medium text-decoration-none small">
+            Xem tất cả →
+          </Link>
+        }
+      >
+        Mua sắm theo danh mục
+      </SectionTitle>
+      <div className="category-tabs mb-3" role="tablist">
+        {categories.map((c) => {
+          const style = CATEGORY_STYLE[c.slug] || { icon: Plug };
+          const Icon = style.icon;
+          return (
+            <button
+              key={c._id}
+              type="button"
+              role="tab"
+              aria-selected={c._id === activeId}
+              className={`category-tab${c._id === activeId ? ' active' : ''}`}
+              onClick={() => setActiveId(c._id)}
+            >
+              <Icon /> {c.name}
+            </button>
+          );
+        })}
+      </div>
+      <Row className="g-3 row-cols-2 row-cols-md-4">
+        {!products ? (
+          <ProductGridSkeleton count={4} colProps={{}} />
+        ) : products.length === 0 ? (
+          <Col xs={12} className="w-100 text-center text-muted py-4">
+            Danh mục này chưa có sản phẩm
+          </Col>
+        ) : (
+          products.map((p) => (
+            <Col key={p._id}>
+              <ProductCard product={p} />
+            </Col>
+          ))
+        )}
+      </Row>
+    </>
+  );
+}
+
 export default function HomePage() {
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
@@ -178,20 +247,42 @@ export default function HomePage() {
 
   return (
     <Container fluid="xl" className="py-4 py-md-5">
-      {/* ===== Hero banner carousel (quản lý ở Admin -> Slide trang chủ) ===== */}
-      {slides === null ? (
-        <div className="mb-4 rounded-4 shadow skeleton" style={{ minHeight: 280 }} />
-      ) : (
-        slides.length > 0 && (
-          <Carousel className="mb-4 rounded-4 overflow-hidden shadow" indicators={slides.length > 1} controls={slides.length > 1} fade>
-            {slides.map((slide) => (
-              <Carousel.Item key={slide._id}>
-                <HeroSlide slide={slide} />
-              </Carousel.Item>
-            ))}
-          </Carousel>
-        )
-      )}
+      {/* ===== Hero: slide lớn (Admin -> Slide trang chủ) + 2 banner phụ bên phải (máy tính) ===== */}
+      <Row className="g-3 mb-4">
+        <Col lg={8}>
+          {slides === null ? (
+            <div className="rounded-4 shadow skeleton h-100" style={{ minHeight: 280 }} />
+          ) : (
+            slides.length > 0 && (
+              <Carousel className="rounded-4 overflow-hidden shadow h-100 home-hero" indicators={slides.length > 1} controls={slides.length > 1} fade>
+                {slides.map((slide) => (
+                  <Carousel.Item key={slide._id}>
+                    <HeroSlide slide={slide} />
+                  </Carousel.Item>
+                ))}
+              </Carousel>
+            )
+          )}
+        </Col>
+        <Col lg={4} className="d-none d-lg-flex flex-column gap-3">
+          <Link to="/promotions" className="home-side-banner home-side-banner-sale text-decoration-none">
+            <span className="home-side-kicker">
+              <LightningChargeFill /> Flash Sale hôm nay
+            </span>
+            <span className="home-side-title">Giảm đến {flashSale[0]?.__discount || 30}%</span>
+            <span className="home-side-cta">Săn deal ngay →</span>
+            <TagsFill className="home-side-deco" />
+          </Link>
+          <Link to="/stores" className="home-side-banner home-side-banner-store text-decoration-none">
+            <span className="home-side-kicker">
+              <GeoAltFill /> {stores.length || ''} cửa hàng
+            </span>
+            <span className="home-side-title">Nhận hàng tại cửa hàng gần bạn</span>
+            <span className="home-side-cta">Xem bản đồ →</span>
+            <ShopWindow className="home-side-deco" />
+          </Link>
+        </Col>
+      </Row>
 
       {/* ===== Con số ấn tượng ===== */}
       <Reveal className="mb-5">
@@ -256,10 +347,9 @@ export default function HomePage() {
       </Reveal>
 
       {loading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" variant="primary" className="mb-2" />
-          <div className="text-muted">Đang tải dữ liệu...</div>
-        </div>
+        <Row className="g-3 row-cols-2 row-cols-md-4 mb-5">
+          <ProductGridSkeleton count={8} colProps={{}} />
+        </Row>
       ) : (
         <>
           {/* ===== Flash Sale ===== */}
@@ -319,6 +409,15 @@ export default function HomePage() {
               ))}
             </Row>
           </Reveal>
+
+          {/* ===== Sản phẩm theo danh mục (tab chuyển nhanh) ===== */}
+          {categories.length > 0 && (
+            <Reveal className="mb-5">
+              <CategoryShowcase categories={categories} />
+            </Reveal>
+          )}
+
+          <RecentlyViewed className="mb-5" />
 
           {/* ===== Bộ sưu tập nổi bật ===== */}
           {collections.map((col) => (

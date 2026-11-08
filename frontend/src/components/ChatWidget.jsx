@@ -139,7 +139,7 @@ export default function ChatWidget() {
   };
 
   if (!visible) return null;
-  return <div className="position-fixed d-flex flex-column align-items-end" style={{ bottom: '1rem', right: '1rem', zIndex: 1040 }}>
+  return <div className="position-fixed d-flex flex-column align-items-end" style={{ bottom: 'calc(var(--float-bottom, 0px) + 1rem)', right: '1rem', zIndex: 1040 }}>
     {open && <Card className="shadow-lg mb-3 border-0" role="region" aria-label="Chat với nhân viên"
       style={{ width: 'min(360px, calc(100vw - 2rem))', height: 'min(580px, calc(100dvh - 6.5rem))' }}>
       <Card.Header className="bg-primary text-white d-flex align-items-center justify-content-between">

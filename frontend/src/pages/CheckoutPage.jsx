@@ -11,6 +11,7 @@ import api from '../services/api';
 import LocationFields from '../components/LocationFields';
 import VatBreakdown from '../components/VatBreakdown';
 import { orderVat } from '../utils/vat';
+import CheckoutSteps from '../components/CheckoutSteps';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -180,6 +181,7 @@ export default function CheckoutPage() {
 
   return (
     <Container style={{ maxWidth: '56rem' }} className="py-4">
+      <CheckoutSteps current={1} />
       <h1 className="fs-4 fw-bold mb-4">Thanh toán đơn hàng</h1>
 
       <Row className="g-4">

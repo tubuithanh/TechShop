@@ -1,8 +1,18 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Container, Row, Col, Form, Spinner, Nav, Button, Badge } from 'react-bootstrap';
+import { Container, Row, Col, Nav, Button, Badge, Offcanvas } from 'react-bootstrap';
+import { Funnel, X, Search as SearchIcon } from 'react-bootstrap-icons';
 import { productService } from '../services/productService';
 import ProductCard from '../components/ProductCard';
+import ProductGridSkeleton from '../components/ProductCardSkeleton';
+
+const SORTS = [
+  { value: 'newest', label: 'Mới nhất' },
+  { value: 'best_selling', label: 'Bán chạy' },
+  { value: 'price_asc', label: 'Giá thấp → cao' },
+  { value: 'price_desc', label: 'Giá cao → thấp' },
+  { value: 'top_rated', label: 'Đánh giá cao' }
+];
 import { useSettings } from '../store/SettingsContext';
 import RangeSlider from '../components/RangeSlider';
 
@@ -42,6 +52,7 @@ export default function ProductListPage() {
   const [nextCursor, setNextCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const { settings } = useSettings();
 
   const keyword = searchParams.get('keyword') || '';
@@ -192,10 +203,34 @@ export default function ProductListPage() {
     setSearchParams(params);
   };
 
-  return (
-    <Container fluid="xl" className="py-4">
-      <Row className="g-4">
-        <Col xs={12} md={3}>
+  // Các bộ lọc đang áp dụng -> hiện thành "chip" có nút × để bỏ nhanh từng cái
+  const chips = [
+    keyword && { key: 'keyword', label: `Từ khóa: "${keyword}"`, clear: () => updateParams({ keyword: '' }) },
+    selectedCategory && { key: 'cat', label: selectedCategory.name, clear: () => handleCategoryChange('') },
+    brandId && { key: 'brand', label: 'Thương hiệu đã chọn', clear: () => updateParams({ brandId: '' }) },
+    (minPrice || maxPrice) && {
+      key: 'price',
+      label: `Giá: ${formatMoneyShort(priceValue[0])} – ${formatMoneyShort(priceValue[1])}`,
+      clear: () => updateParams({ minPrice: '', maxPrice: '' })
+    },
+    appliedSpecFilters && {
+      key: 'specs',
+      label: `${JSON.parse(appliedSpecFilters).length} thông số`,
+      clear: () => {
+        setSpecInputs({});
+        setAppliedSpecFilters('');
+      }
+    }
+  ].filter(Boolean);
+  const activeFilterCount = chips.filter((c) => c.key !== 'keyword').length;
+  const clearAll = () => {
+    setSpecInputs({});
+    setAppliedSpecFilters('');
+    setSearchParams(sort !== 'newest' ? { sort } : {}, { replace: true });
+  };
+
+  const filterPanel = (
+    <>
           <h3 className="fw-bold mb-2 fs-6">Danh mục</h3>
           <Nav className="flex-column mb-4">
             <Nav.Item>
@@ -294,29 +329,78 @@ export default function ProductListPage() {
                 })}
             </div>
           )}
+    </>
+  );
+
+  return (
+    <Container fluid="xl" className="py-4">
+      <Row className="g-4">
+        <Col md={3} className="d-none d-md-block">
+          <div className="filter-panel">{filterPanel}</div>
         </Col>
 
         <Col xs={12} md={9}>
-          <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
-            <h2 className="fw-bold fs-5 mb-0">
-              {keyword ? `Kết quả tìm kiếm: "${keyword}"` : 'Danh sách sản phẩm'} ({total})
-            </h2>
-            <Form.Select value={sort} onChange={(e) => updateParams({ sort: e.target.value === 'newest' ? '' : e.target.value })} className="small w-auto">
-              <option value="newest">Mới nhất</option>
-              <option value="price_asc">Giá tăng dần</option>
-              <option value="price_desc">Giá giảm dần</option>
-              <option value="best_selling">Bán chạy</option>
-              <option value="top_rated">Đánh giá cao</option>
-            </Form.Select>
+          <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <h1 className="fw-bold fs-5 mb-0">
+              {keyword ? `Kết quả cho "${keyword}"` : selectedCategory?.name || 'Tất cả sản phẩm'}{' '}
+              <span className="text-muted fw-normal fs-6">({total})</span>
+            </h1>
+            <Button variant="outline-secondary" size="sm" className="d-md-none d-flex align-items-center gap-2" onClick={() => setShowFilters(true)}>
+              <Funnel /> Bộ lọc {activeFilterCount > 0 && <Badge pill bg="primary">{activeFilterCount}</Badge>}
+            </Button>
           </div>
+
+          {/* Sắp xếp nhanh dạng tab (cuộn ngang trên điện thoại) */}
+          <div className="sort-tabs mb-3" role="tablist" aria-label="Sắp xếp">
+            <span className="small text-muted me-1 d-none d-sm-inline">Sắp xếp:</span>
+            {SORTS.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                role="tab"
+                aria-selected={sort === s.value}
+                className={`sort-tab${sort === s.value ? ' active' : ''}`}
+                onClick={() => updateParams({ sort: s.value === 'newest' ? '' : s.value })}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {chips.length > 0 && (
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+              {chips.map((c) => (
+                <span key={c.key} className="filter-chip">
+                  {c.label}
+                  <button type="button" aria-label={`Bỏ lọc ${c.label}`} onClick={c.clear}>
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+              {chips.length > 1 && (
+                <Button variant="link" size="sm" className="p-0 text-danger" onClick={clearAll}>
+                  Xóa tất cả
+                </Button>
+              )}
+            </div>
+          )}
 
           {error && <div className="alert alert-warning small py-2">{error}</div>}
           {loading ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" />
-            </div>
+            <Row className="g-3">
+              <ProductGridSkeleton count={9} />
+            </Row>
           ) : products.length === 0 ? (
-            <div className="text-center py-5 text-muted">Không tìm thấy sản phẩm phù hợp</div>
+            <div className="empty-state">
+              <SearchIcon size={36} />
+              <div className="fw-semibold mt-2">Không tìm thấy sản phẩm phù hợp</div>
+              <div className="small text-muted mb-3">Thử bỏ bớt bộ lọc hoặc tìm với từ khóa khác</div>
+              {chips.length > 0 && (
+                <Button size="sm" variant="outline-primary" onClick={clearAll}>
+                  Xóa bộ lọc
+                </Button>
+              )}
+            </div>
           ) : (
             <Row className="g-3">
               {products.map((p) => (
@@ -335,6 +419,19 @@ export default function ProductListPage() {
           )}
         </Col>
       </Row>
+
+      {/* Bộ lọc trên điện thoại: bảng trượt từ dưới lên */}
+      <Offcanvas show={showFilters} onHide={() => setShowFilters(false)} placement="bottom" className="filter-sheet">
+        <Offcanvas.Header closeButton>
+          <Offcanvas.Title className="fs-6 fw-bold">Bộ lọc sản phẩm</Offcanvas.Title>
+        </Offcanvas.Header>
+        <Offcanvas.Body>{filterPanel}</Offcanvas.Body>
+        <div className="p-3 border-top">
+          <Button className="w-100 fw-semibold" onClick={() => setShowFilters(false)}>
+            Xem {total} sản phẩm
+          </Button>
+        </div>
+      </Offcanvas>
     </Container>
   );
 }
