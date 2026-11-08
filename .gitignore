@@ -1,2 +1,7 @@
 # File cấu hình thư mục do Windows / Google Drive tự tạo - không liên quan tới mã nguồn
 desktop.ini
+
+# Bí mật - không đưa lên git (dùng backend/.env.example làm mẫu)
+backend/.env
+hostinginformation/
+*.pem

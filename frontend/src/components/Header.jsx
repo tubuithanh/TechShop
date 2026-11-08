@@ -304,9 +304,6 @@ export default function Header() {
 
           <div className="d-flex align-items-center gap-1 gap-lg-3 text-nowrap">
 
-            
-    
-
             {cartLink}
             {user ? (
               <NavDropdown
