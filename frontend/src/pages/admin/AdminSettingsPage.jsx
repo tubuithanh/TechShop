@@ -22,6 +22,7 @@ const TABS = [
   { key: 'theme', label: 'Màu sắc giao diện', icon: PaletteFill },
   { key: 'footer', label: 'Chân trang (Footer)', icon: LayoutTextWindowReverse },
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
+  { key: 'vat', label: 'Thuế VAT', icon: CreditCard2FrontFill },
   { key: 'loyalty', label: 'Hạng thành viên', icon: AwardFill },
   { key: 'seo', label: 'SEO', icon: Search },
   { key: 'maintenance', label: 'Bảo trì', icon: Tools },
