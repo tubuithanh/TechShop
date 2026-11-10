@@ -4,6 +4,9 @@ import api from '../../services/api';
 import { orderLabel } from '../../utils/orderWorkflow';
 import AdminPagination from '../../components/admin/AdminPagination';
 import { useSettings } from '../../store/SettingsContext';
+import { useAuth } from '../../store/AuthContext';
+import DeliveryPlanModal from '../../components/admin/DeliveryPlanModal';
+import { SHIPMENT_LABELS } from '../../components/ShipmentTracking';
 
 // Quản lý chi nhánh (quyền deliveries.manage): phân công đơn giao tận nơi cho nhân viên giao hàng (UC37) và xác
 // nhận đã nhận tiền COD nhân viên giao hàng nộp về (UC40). Nhân viên gắn chi nhánh chỉ thấy đơn chi nhánh mình.
@@ -13,10 +16,14 @@ const ASSIGNABLE = ['confirmed', 'processing'];
 
 export default function AdminDeliveriesPage() {
   const { settings } = useSettings();
+  const { user } = useAuth();
+  const [stores, setStores] = useState([]), [storeId, setStoreId] = useState('');
+  const scoped = user?.role === 'staff' && (user?.storeScope?.current || user?.storeId);
   const pageSize = settings.productsPerPage || 20;
   const [view, setView] = useState('assign');
+  const [planning, setPlanning] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [orders, setOrders] = useState([]);
-  const [shippers, setShippers] = useState([]);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -33,10 +40,9 @@ export default function AdminDeliveriesPage() {
 
   const load = useCallback(async () => {
     const id = ++loadId.current;
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
-      const { data } = await api.get('/deliveries', { params: { view, q: query, page, limit: pageSize } });
+      const { data } = await api.get('/deliveries', { params: { view, q: query, page, limit: pageSize, storeId } });
       if (id !== loadId.current) return;
       if (page > 1 && page > data.totalPages) { setPage(Math.max(1, data.totalPages)); return; }
       setOrders(data.data);
@@ -46,17 +52,19 @@ export default function AdminDeliveriesPage() {
     } finally {
       if (id === loadId.current) setLoading(false);
     }
-  }, [view, query, page, pageSize]);
+  }, [view, query, page, pageSize, storeId]);
 
   useEffect(() => {
     load();
     return () => { loadId.current++; };
   }, [load]);
   useEffect(() => {
-    api.get('/deliveries/shippers').then(({ data }) => setShippers(data.data)).catch(() => setShippers([]));
+    if (!scoped) api.get('/stores').then(({ data }) => setStores(data.data)).catch(() => setStores([]));
   }, []);
 
   const run = async (action) => {
+    if (busy) return;
+    setBusy(true);
     setError('');
     try {
       await action();
@@ -64,26 +72,23 @@ export default function AdminDeliveriesPage() {
       setError(err.response?.data?.message || 'Thao tác không thành công');
     }
     load();
+    setBusy(false);
   };
-  const assign = (orderId, shipperId) => run(() => api.put(`/deliveries/${orderId}/assign`, { shipperId: shipperId || null }));
   const settle = (orderId) => run(() => api.post(`/deliveries/${orderId}/settle-cod`));
 
   return (
     <div>
       <h3 className="mb-3">Phân công giao hàng</h3>
+      {!scoped && <Form.Select className="mb-3" aria-label="Lọc chi nhánh giao hàng" value={storeId} onChange={e => { setStoreId(e.target.value); setPage(1); }}><option value="">Tất cả chi nhánh</option>{stores.map(s => <option value={s._id} key={s._id}>{s.name}</option>)}</Form.Select>}
       <Nav variant="tabs" activeKey={view} onSelect={(k) => { setView(k); setPage(1); }} className="mb-3">
         <Nav.Item><Nav.Link eventKey="assign">Đơn cần giao</Nav.Link></Nav.Item>
         <Nav.Item><Nav.Link eventKey="cod">Tiền COD chờ đối soát</Nav.Link></Nav.Item>
         <Nav.Item><Nav.Link eventKey="returns">Nhận hàng trả về</Nav.Link></Nav.Item>
+        <Nav.Item><Nav.Link eventKey="carrier">Vận đơn / COD GHN</Nav.Link></Nav.Item>
       </Nav>
       <div className="d-flex gap-2 mb-2"><Form.Control type="search" aria-label="Tìm đơn giao hàng" placeholder="Tìm mã đơn, tên người nhận, SĐT, sản phẩm…" value={search} onChange={e => setSearch(e.target.value)} /><Button variant="outline-secondary" disabled={!search} onClick={() => { setSearch(''); setQuery(''); setPage(1); }}>Xóa tìm kiếm</Button></div>
       <p className="small text-muted">{loading ? 'Đang tải…' : `${total} đơn phù hợp`}</p>
       {error && <Alert variant="danger">{error}</Alert>}
-      {view === 'assign' && shippers.length === 0 && (
-        <Alert variant="warning">
-          Chưa có nhân viên giao hàng: tạo nhóm quyền có quyền "Giao hàng (nhân viên giao hàng)" rồi gán cho nhân viên.
-        </Alert>
-      )}
 
       {view !== 'cod' ? (
         <Table responsive hover size="sm" className="align-middle">
@@ -95,7 +100,7 @@ export default function AdminDeliveriesPage() {
               <th>Chi nhánh</th>
               <th>Tổng tiền</th>
               <th>Trạng thái</th>
-              <th style={{ minWidth: 200 }}>Nhân viên giao hàng</th>
+              <th style={{ minWidth: 160 }}>Giao hàng</th>
             </tr>
           </thead>
           <tbody>
@@ -114,28 +119,15 @@ export default function AdminDeliveriesPage() {
                 </td>
                 <td>
                   {STATUS[o.status] || orderLabel(o)}
+                  {o.shipment?.code && <div className="small">{SHIPMENT_LABELS[o.shipment.status] || o.shipment.status}</div>}
+                  {o.activeTransferId && <div className="small text-warning">Chờ điều phối chi nhánh</div>}
                   {o.deliveryAttempts?.some((a) => a.result === 'failed') && (
                     <div className="small text-danger">Giao lỗi {o.deliveryAttempts.filter((a) => a.result === 'failed').length} lần</div>
                   )}
                 </td>
                 <td>
-                  {/* Đơn đang giao chỉ đổi được người khi người giữ hàng không còn giao được (bị khóa / mất quyền) */}
-                  {o.status === 'shipping' && !shippers.some((s) => s._id === o.shipperId?._id) && (
-                    <div className="small text-danger mb-1">Người giao hiện tại không còn hoạt động - chọn người giao thay</div>
-                  )}
-                  {o.status === 'returning' ? <Button size="sm" onClick={() => { if (window.confirm('Đã nhận lại và kiểm đếm đủ hàng? Hệ thống sẽ hoàn kho.')) run(() => api.post(`/deliveries/${o._id}/receive-return`, { received: true })); }}>Đã nhận hàng trả</Button> : ASSIGNABLE.includes(o.status) || !shippers.some((s) => s._id === o.shipperId?._id) ? (
-                    <Form.Select size="sm" value={o.shipperId?._id || ''} onChange={(e) => assign(o._id, e.target.value)}>
-                      <option value="">-- Chưa phân công --</option>
-                      {shippers.map((s) => (
-                        <option key={s._id} value={s._id}>
-                          {s.name}
-                          {s.store ? ` (${s.store})` : ''}
-                        </option>
-                      ))}
-                    </Form.Select>
-                  ) : (
-                    o.shipperId?.name || '—'
-                  )}
+                  {o.shipperId?.name && <div className="small mb-2">{o.shipperId.name}</div>}
+                  {o.status === 'returning' ? <><Button size="sm" variant="outline-primary" onClick={() => setPlanning(o)}>Theo dõi</Button><Button className="mt-2" size="sm" disabled={busy} onClick={() => { if (window.confirm('Xác nhận đã nhận đủ hàng trả về?')) run(() => api.post(`/deliveries/${o._id}/receive-return`, { received: true })); }}>Nhận hàng trả</Button></> : <Button size="sm" disabled={!!o.activeTransferId} variant={ASSIGNABLE.includes(o.status) && !['creating','unknown','active'].includes(o.shipment?.phase) ? 'primary' : 'outline-primary'} onClick={() => setPlanning(o)}>{ASSIGNABLE.includes(o.status) && !['creating','unknown','active'].includes(o.shipment?.phase) ? (o.shipperId ? 'Đổi phân công' : 'Phân công') : 'Theo dõi'}</Button>}
                 </td>
               </tr>
             ))}
@@ -183,6 +175,7 @@ export default function AdminDeliveriesPage() {
         </>
       )}
       <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
+      {planning && <DeliveryPlanModal key={planning._id} order={planning} onHide={() => setPlanning(null)} onChanged={load} />}
     </div>
   );
 }

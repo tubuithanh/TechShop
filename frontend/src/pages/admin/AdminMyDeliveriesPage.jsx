@@ -63,6 +63,7 @@ export default function AdminMyDeliveriesPage() {
   return (
     <div>
       <h3 className="mb-3">Đơn tôi cần giao</h3>
+      <p className="text-muted">Chi nhánh đang giao: <strong>{data.branch?.name || 'Chưa được gán chi nhánh'}</strong></p>
       <Nav variant="tabs" activeKey={view} onSelect={setView} className="mb-3"><Nav.Item><Nav.Link eventKey="active">Cần xử lý</Nav.Link></Nav.Item><Nav.Item><Nav.Link eventKey="history">Lịch sử (50 đơn gần nhất)</Nav.Link></Nav.Item></Nav>
       {error && <Alert variant="danger">{error}</Alert>}
       {data.codTotal > 0 && (
@@ -78,6 +79,7 @@ export default function AdminMyDeliveriesPage() {
             <Card.Body>
               <div className="d-flex justify-content-between flex-wrap gap-2">
                 <strong>{o.orderCode}</strong>
+                {o.deliveryPlan?.mode === 'express' && <Badge bg="danger" className="ms-2">Hỏa tốc</Badge>}
                 <Badge bg={o.status === 'shipping' ? 'primary' : 'secondary'}>{STATUS[o.status] || orderLabel(o)}</Badge>
               </div>
               <div className="mt-2">

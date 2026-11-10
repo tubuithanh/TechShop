@@ -48,6 +48,7 @@ async function setup() {
       deliveryAddress: { fullName: 'Khách', phone: '0900000000', addressLine1: '1 Lê Lợi', city: 'TP. Hồ Chí Minh' }
     })).body.data;
     for (const s of ['confirmed', 'processing']) await auth(request(app).put(`/api/orders/${order._id}/status`), t.manager).send({ status: s });
+    await Order.updateOne({ _id: order._id }, { deliveryPlan: { storeId: store1._id, addressKey: require('../utils/deliveryRouting').addressKey(order), mode: 'internal', sameProvince: true, distanceMeters: 1000, verifiedAt: new Date() } });
     return order;
   };
   return { t, customer, shipper, otherShipper, seller, placeOrder, stock: async () => (await StoreInventory.findOne({ productId: product._id })).stock };

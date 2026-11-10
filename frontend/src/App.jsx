@@ -25,6 +25,7 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ZaloFinishPage from './pages/ZaloFinishPage';
 import OrderDetailPage from './pages/OrderDetailPage';
+import ShipmentTrackingPage from './pages/ShipmentTrackingPage';
 import ComparePage from './pages/ComparePage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
@@ -111,6 +112,7 @@ export default function App() {
             <MaintenanceGate>
               <TitleManager />
               <Routes>
+                <Route path="/van-chuyen/:code" element={<ShipmentTrackingPage />} />
                 {/* ===== Trang khách hàng (public) ===== */}
                 <Route path="/" element={<StorefrontLayout><HomePage /></StorefrontLayout>} />
                 <Route path="/products" element={<StorefrontLayout><ProductListPage /></StorefrontLayout>} />

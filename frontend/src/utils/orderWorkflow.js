@@ -7,6 +7,7 @@ export const orderLabel = o => o.status === 'delivered' && o.deliveryMethod === 
 export const orderMethod = o => o.source === 'pos' ? 'Mua tại quầy' : o.deliveryMethod === 'store_pickup' ? 'Nhận tại cửa hàng' : 'Giao tận nơi';
 export const money = v => (v ?? 0).toLocaleString('vi-VN') + 'đ';
 export function orderActions(o) {
+  if (['creating', 'unknown', 'active'].includes(o.shipment?.phase)) return o.status === 'confirmed' && o.shipment.environment === 'simulation' && o.shipment.phase === 'active' && o.shipment.status === 'ready_to_pick' ? ['processing'] : [];
   const next = { pending: ['confirmed', 'cancelled'], confirmed: ['processing', 'cancelled'], processing: o.deliveryMethod === 'store_pickup' ? ['ready_for_pickup', 'cancelled'] : ['cancelled'], ready_for_pickup: ['cancelled'], delivered: ['returning'] };
   return next[o.status] || [];
 }

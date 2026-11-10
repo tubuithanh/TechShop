@@ -8,7 +8,7 @@ import { getAccessToken } from '../services/api';
 import { connectSocket } from '../services/socket';
 import { ORDER_LABELS, orderMethod } from '../utils/orderWorkflow';
 import VatBreakdown from '../components/VatBreakdown';
-import OrderHistory from '../components/OrderHistory';
+import ShipmentTracking from '../components/ShipmentTracking';
 
 const homeSteps = ['pending', 'confirmed', 'processing', 'shipping', 'delivered'];
 const statusLabel = {
@@ -241,7 +241,7 @@ export default function OrderDetailPage() {
             <span>Tổng cộng</span>
             <span className="text-primary">{formatVND(order.grandTotal)}</span>
           </div>
-          <VatBreakdown vat={order.vat} />
+          <VatBreakdown vat={order.vat} shippingVat={order.shippingVat} shippingFee={order.shippingFee} />
         </Card.Body>
       </Card>
 
@@ -267,7 +267,8 @@ export default function OrderDetailPage() {
       )}
 
       {order.activeTransferId && <Alert variant="info">Đơn đang được điều phối sang chi nhánh khác. Bạn có thể tiếp tục thao tác sau khi điều phối hoàn tất.</Alert>}
-      {!order.activeTransferId && ['pending', 'confirmed'].includes(order.status) && (
+      <ShipmentTracking order={order} onChanged={() => orderService.getOrderById(id).then(setOrder)} />
+      {!order.activeTransferId && !['creating', 'unknown', 'active'].includes(order.shipment?.phase) && ['pending', 'confirmed'].includes(order.status) && (
         <Button variant="outline-danger" size="sm" onClick={handleCancel} className="mb-5">
           Hủy đơn hàng
         </Button>
@@ -314,7 +315,6 @@ export default function OrderDetailPage() {
           {warrantyMsg && <div className={`small mt-2 ${warrantyMsg.ok ? 'text-success' : 'text-danger'}`}>{warrantyMsg.text}</div>}
         </div>
       )}
-      <OrderHistory order={order} />
     </Container>
   );
 }

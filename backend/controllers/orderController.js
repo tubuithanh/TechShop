@@ -1,4 +1,5 @@
 const { historyEntry, enrichHistory } = require('../utils/orderHistory');
+const { activeShipment, shipmentGuard } = require('../utils/deliveryRouting');
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
@@ -452,6 +453,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Bạn không có quyền hủy đơn hàng này' });
   }
   if (order.activeTransferId) return res.status(409).json({ message: 'Đơn đang chờ điều phối, vui lòng chờ hoặc liên hệ cửa hàng hủy yêu cầu điều phối' });
+  if (activeShipment(order)) return res.status(409).json({ message: 'Cần cửa hàng hủy/xác minh vận đơn GHN trước khi hủy đơn hàng' });
   if (!ORDER_STATUS_TRANSITIONS[order.status]?.includes('cancelled')) {
     return res.status(400).json({ message: 'Đơn hàng đã được xử lý, không thể hủy' });
   }
@@ -466,7 +468,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
   // Đổi trạng thái + hoàn kho + trả lượt mã chạy chung 1 transaction: không bao giờ hủy rồi mà chưa hoàn kho.
   const updated = await withTransaction(async (session) => {
     const changed = await Order.findOneAndUpdate(
-      { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, paymentStatus: order.paymentStatus },
+      { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, paymentStatus: order.paymentStatus, ...shipmentGuard(order) },
       {
         $set: {
           status: 'cancelled',
@@ -557,8 +559,14 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 // extraSet / extraPush: trường ghi thêm cùng lệnh (VD lần giao hàng, thời điểm thu COD). Trả { updated } hoặc { error }.
 async function transitionOrder(req, order, status, { note, extraSet = {}, extraPush = {}, action } = {}) {
   if (order.activeTransferId) return { error: { status: 409, message: 'Đơn đang chờ điều phối; hãy hoàn tất hoặc hủy yêu cầu điều phối' } };
+  const carrier = ['carrierPickup', 'carrierSuccess', 'carrierReturn'].includes(action);
+  if (carrier && order.shipment?.phase !== 'active') return { error: { status: 409, message: 'Không có vận đơn hoạt động' } };
+  const preparingAssigned = order.status === 'confirmed' && status === 'processing' && order.shipment?.environment === 'simulation' && order.shipment?.phase === 'active' && order.shipment?.status === 'ready_to_pick';
+  if (activeShipment(order) && !carrier && action !== 'receiveReturn' && !preparingAssigned) return { error: { status: 409, message: 'Đơn có vận đơn GHN; hãy đồng bộ hoặc hủy vận đơn trước' } };
+  if (action === 'receiveReturn' && activeShipment(order) && order.shipment.status !== 'returned') return { error: { status: 409, message: 'GHN chưa xác nhận trả hàng về chi nhánh' } };
   const actorStore = await Store.findById(order.storeId).select('name').lean();
-  if (extraSet.handover?.evidenceIds?.length && !(await require('../utils/transaction').transactionsSupported())) return { error: { status: 503, message: 'Cần MongoDB replica set để lưu bằng chứng và bàn giao an toàn' } };
+  const proofIds = [...(extraSet.handover?.evidenceIds || []), ...(extraSet.carrierPickupProof?.evidenceIds || []), ...(extraSet.carrierDeliveryProof?.evidenceIds || [])];
+  if (proofIds.length && !(await require('../utils/transaction').transactionsSupported())) return { error: { status: 503, message: 'Cần MongoDB replica set để lưu bằng chứng và bàn giao an toàn' } };
   if (status === 'shipping' && order.paymentMode !== 'cod' && order.paymentStatus !== 'paid') return { error: { status: 400, message: 'Cửa hàng cần xác nhận thanh toán trước khi giao' } };
   // Đơn thanh toán online (VNPay/MoMo) phải thanh toán xong mới được xác nhận/giao - nếu không có thể giao hàng
   // khi chưa nhận được tiền. Đơn chưa thanh toán chỉ có thể hủy (khách/admin) hoặc chờ khách thanh toán lại.
@@ -567,9 +575,9 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
     return { error: { status: 400, message: `Đơn thanh toán qua ${label} chưa được thanh toán, chưa thể xử lý tiếp` } };
   }
 
-  if (status === 'shipping' && (action !== 'shipperPickup' || order.deliveryMethod !== 'home_delivery')) return { error: { status: 400, message: 'Chỉ shipper được phân công mới xác nhận lấy hàng' } };
+  if (status === 'shipping' && (!['shipperPickup', 'carrierPickup'].includes(action) || order.deliveryMethod !== 'home_delivery')) return { error: { status: 400, message: 'Cần shipper hoặc GHN xác nhận lấy hàng' } };
   if (status === 'ready_for_pickup' && order.deliveryMethod !== 'store_pickup') return { error: { status: 400, message: 'Chỉ áp dụng cho đơn nhận tại cửa hàng' } };
-  if (status === 'delivered' && !['deliverySuccess', 'storeHandover'].includes(action)) return { error: { status: 400, message: 'Cần xác nhận bàn giao và thanh toán' } };
+  if (status === 'delivered' && !['deliverySuccess', 'storeHandover', 'carrierSuccess'].includes(action)) return { error: { status: 400, message: 'Cần xác nhận bàn giao và thanh toán' } };
   if (status === 'returned' && action !== 'receiveReturn') return { error: { status: 400, message: 'Kho phải xác nhận nhận hàng trả' } };
   if (status === 'returning' && !text(note)) return { error: { status: 400, message: 'Cần lý do trả hàng' } };
   const legacyPickup = action === 'storeHandover' && order.deliveryMethod === 'store_pickup' && order.status === 'shipping';
@@ -587,7 +595,7 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
   const loyaltyConfig = status === 'delivered' ? await getLoyaltyConfig() : null;
   const updated = await withTransaction(async (session) => {
     const changed = await Order.findOneAndUpdate(
-      { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, paymentStatus: order.paymentStatus, ...(['deliverySuccess', 'deliveryReturn', 'shipperPickup'].includes(action) ? { shipperId: order.shipperId } : {}), ...(action === 'deliveryReturn' ? { $expr: { $eq: [{ $size: { $ifNull: ['$deliveryAttempts', []] } }, order.deliveryAttempts.length] } } : {}) },
+      { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, paymentStatus: order.paymentStatus, ...shipmentGuard(order), ...(carrier ? { 'shipment.lease': order.shipment.lease } : {}), ...(['deliverySuccess', 'deliveryReturn', 'shipperPickup'].includes(action) ? { shipperId: order.shipperId } : {}), ...(action === 'deliveryReturn' ? { $expr: { $eq: [{ $size: { $ifNull: ['$deliveryAttempts', []] } }, order.deliveryAttempts.length] } } : {}) },
       {
         $set: {
           status,
@@ -608,9 +616,9 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
       { new: true, session }
     );
     if (!changed) return null;
-    if (extraSet.handover?.evidenceIds?.length) {
-      const promoted = await require('../models/DeliveryEvidence').updateMany({ _id: { $in: extraSet.handover.evidenceIds }, orderId: order._id, uploadedBy: req.account._id, expiresAt: { $gt: new Date() } }, { $unset: { expiresAt: '' } }, { session });
-      if (promoted.modifiedCount !== extraSet.handover.evidenceIds.length) throw new BusinessError(409, 'Ảnh đã hết hạn hoặc được sử dụng, vui lòng tải lại');
+    if (proofIds.length) {
+      const promoted = await require('../models/DeliveryEvidence').updateMany({ _id: { $in: proofIds }, orderId: order._id, uploadedBy: req.account._id, expiresAt: { $gt: new Date() } }, { $unset: { expiresAt: '' } }, { session });
+      if (promoted.modifiedCount !== proofIds.length) throw new BusinessError(409, 'Ảnh đã hết hạn hoặc được sử dụng, vui lòng tải lại');
     }
     if (RESTOCK_STATUSES.includes(status)) {
       await restoreStock(order.storeId, order.items, session);

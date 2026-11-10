@@ -128,6 +128,26 @@ const orderSchema = new mongoose.Schema(
     // Nhân viên giao hàng được phân công (tài khoản quản trị có quyền deliveries.perform)
     shipperId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
     assignedAt: Date,
+    deliveryPlan: {
+      storeId: mongoose.Schema.Types.ObjectId, addressKey: String,
+      provinceId: Number, districtId: Number, wardCode: String,
+      provinceName: String, districtName: String, wardName: String,
+      sameProvince: Boolean, lat: Number, lng: Number,
+      distanceMeters: Number, durationSeconds: Number, routingProvider: String, calculatedAt: Date,
+      mode: { type: String, enum: ['internal', 'express', 'ghn'] },
+      assignmentMode: { type: String, enum: ['manager_choice'] },
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }, verifiedAt: Date
+    },
+    shipment: {
+      provider: String, environment: String, shopId: Number,
+      phase: { type: String, enum: ['creating', 'unknown', 'active', 'cancelled', 'failed'] },
+      clientCode: String, code: String, status: String,
+      totalFee: Number, codAmount: Number, expectedDeliveryTime: Date,
+      createdAt: Date, updatedAt: Date, busyUntil: Date, lease: String,
+      request: { type: mongoose.Schema.Types.Mixed, select: false },
+      error: String, codSettledAt: Date, codSettlementReference: String,
+      events: [{ status: String, at: Date }]
+    },
     // Mỗi lần giao: thành công / thất bại kèm lý do
     deliveryAttempts: [
       {
@@ -147,6 +167,8 @@ const orderSchema = new mongoose.Schema(
       evidenceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryEvidence' }],
       at: Date, by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }
     },
+    carrierPickupProof: { evidenceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryEvidence' }], at: Date, by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' } },
+    carrierDeliveryProof: { evidenceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryEvidence' }], at: Date, by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' } },
     receipt: { amount: Number, at: Date, by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }, channel: String },
     returnRequestedAt: Date,
     returnWasDelivered: Boolean,
@@ -164,6 +186,7 @@ orderSchema.index({ userId: 1 });
 orderSchema.index({ userId: 1, status: 1, createdAt: -1, _id: -1 });
 orderSchema.index({ userId: 1, createdAt: -1, _id: -1 });
 orderSchema.index({ shipperId: 1, status: 1 });
+orderSchema.index({ 'shipment.code': 1 }, { unique: true, partialFilterExpression: { 'shipment.environment': 'simulation', 'shipment.code': { $type: 'string' } } });
 orderSchema.index({ createdBy: 1, clientRequestId: 1 }, { unique: true, partialFilterExpression: { clientRequestId: { $type: 'string' } } });
 
 // Tìm kiếm không dấu: mã đơn (cả phần số, VD "000123"), người nhận, SĐT, sản phẩm, mã giảm giá

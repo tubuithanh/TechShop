@@ -8,9 +8,10 @@ const { withTransaction, transactionsSupported, BusinessError } = require('../ut
 const { getScopedStoreId, isStoreAllowed } = require('../middlewares/authMiddleware');
 const { inScope } = require('./orderController');
 const { historyEntry } = require('../utils/orderHistory');
+const { activeShipment, shipmentGuard } = require('../utils/deliveryRouting');
 const fail = (status, message) => { throw new BusinessError(status, message); };
 // Online payments must settle first, so payment expiry cannot race a branch transfer.
-const eligible = o => o.source !== 'pos' && ['pending', 'confirmed', 'processing'].includes(o.status)
+const eligible = o => o.source !== 'pos' && !activeShipment(o) && ['pending', 'confirmed', 'processing'].includes(o.status)
   && (!Order.ONLINE_PAYMENT_MODES.includes(o.paymentMode) || o.paymentStatus === 'paid');
 async function notifyOrderChanged(req, orderId) {
   const order = await Order.findById(orderId).select('userId status').lean();
@@ -31,7 +32,7 @@ const request = asyncHandler(async (req, res) => {
     const source = await Store.findById(order.storeId).session(session).select('name');
     if (order.deliveryMethod === 'store_pickup' && req.body.customerConsent !== true) return fail(400, 'Cần xác nhận khách đồng ý đổi nơi nhận hàng');
     const [transfer] = await Transfer.create([{ orderId: order._id, fromStoreId: order.storeId, toStoreId: target._id, fromStoreName: source?.name, toStoreName: target.name, reason, customerConsent: req.body.customerConsent === true, requestedBy: req.account._id, requestedByName: req.account.name }], { session });
-    const updated = await Order.updateOne({ _id: order._id, activeTransferId: null, status: order.status, storeId: order.storeId }, {
+    const updated = await Order.updateOne({ _id: order._id, activeTransferId: null, status: order.status, storeId: order.storeId, ...shipmentGuard(order) }, {
       $set: { activeTransferId: transfer._id }, $inc: { __v: 1 },
       $push: { statusHistory: historyEntry(req, order.status, `Yêu cầu điều phối đến ${target.name}: ${reason}`, undefined, source?.name) }
     }, { session });
@@ -73,7 +74,7 @@ const decide = asyncHandler(async (req, res) => {
         const restored = await Inventory.updateOne({ ...key, storeId: transfer.fromStoreId }, { $inc: { stock: item.quantity }, $set: { lastUpdated: new Date() } }, { session });
         if (!restored.modifiedCount) return fail(409, 'Không tìm thấy tồn kho chi nhánh nguồn');
       }
-      Object.assign(set, { storeId: transfer.toStoreId, status: 'pending', shipperId: null, assignedAt: null, confirmedBy: null, confirmedByName: '', confirmedAt: null, confirmedStoreName: '' });
+      Object.assign(set, { storeId: transfer.toStoreId, deliveryPlan: null, status: 'pending', shipperId: null, assignedAt: null, confirmedBy: null, confirmedByName: '', confirmedAt: null, confirmedStoreName: '' });
       changes.storeId = { from: transfer.fromStoreName || String(transfer.fromStoreId), to: transfer.toStoreName || String(transfer.toStoreId) };
       changes.status = { from: order.status, to: 'pending' };
     }

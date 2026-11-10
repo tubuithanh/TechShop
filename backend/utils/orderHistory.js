@@ -1,7 +1,7 @@
 function historyEntry(req, status, note, changes, storeName, eventType = 'activity', storeId) {
   return {
     status, note, eventType, storeId, changedAt: new Date(), changedBy: req.account?._id,
-    actorName: req.account?.name || req.account?.displayName || 'Khách hàng',
+    actorName: req.account?.name || req.account?.displayName || (req.accountRole === 'system' ? 'Hệ thống GHN' : 'Khách hàng'),
     actorRole: req.accountRole, storeName: storeName || req.storeScope?.currentStore?.name || req.account?.storeId?.name, changes
   };
 }

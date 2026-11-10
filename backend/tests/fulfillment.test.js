@@ -37,7 +37,9 @@ async function fixture() {
   const place = async (method = 'home_delivery', paymentMode = 'cod') => {
     await auth(request(app).post('/api/cart/items'), customer).send({ productId: product._id, variantId, quantity: 1 });
     const r = await auth(request(app).post('/api/orders'), customer).send({ storeId: store._id, deliveryMethod: method, paymentMode, deliveryAddress: { fullName: 'Customer', phone: '0900000000', addressLine1: '1 Street', city: 'City' } });
-    expect(r.status).toBe(201); return r.body.data;
+    expect(r.status).toBe(201);
+    if (method === 'home_delivery') await Order.updateOne({ _id: r.body.data._id }, { deliveryPlan: { storeId: store._id, addressKey: require('../utils/deliveryRouting').addressKey(r.body.data), mode: 'internal', sameProvince: true, distanceMeters: 1000, verifiedAt: new Date() } });
+    return r.body.data;
   };
   const start = async () => {
     const o = await place();

@@ -504,7 +504,7 @@ export default function CheckoutPage() {
                 <span>Tổng cộng</span>
                 <span className="text-primary">{formatVND(grandTotal)}</span>
               </div>
-              <VatBreakdown vat={quote?.vat || orderVat(cart?.items || [], shippingFee, discount, settings.shippingVatRate ?? 10).vat} />
+              <VatBreakdown vat={quote?.vat || orderVat(cart?.items || [], shippingFee, discount, settings.shippingVatRate ?? 10).vat} shippingVat={quote?.shippingVat || orderVat(cart?.items || [], shippingFee, discount, settings.shippingVatRate ?? 10).shippingVat} shippingFee={shippingFee} />
             </Card.Body>
           </Card>
 

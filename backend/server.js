@@ -66,6 +66,11 @@ const runExpireJob = () =>
 setInterval(runExpireJob, 5 * 60 * 1000).unref();
 setTimeout(runExpireJob, 30 * 1000).unref();
 
+// Polling works on local and Render without exposing an unauthenticated webhook.
+// Stop polling terminal carrier states; users can still refresh them explicitly.
+const { pollShipments } = require('./controllers/shipmentController');
+setInterval(() => pollShipments(app).catch(err => console.warn('[GHN]', err.message)), 60000).unref();
+
 // Dọn nhật ký thao tác quá số ngày lưu cấu hình trong Cấu hình hệ thống (mỗi giờ)
 const { purgeOldAuditLogs } = require('./utils/auditRetention');
 const runAuditPurge = () =>

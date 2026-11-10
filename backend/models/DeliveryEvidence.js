@@ -3,6 +3,8 @@ const schema = new mongoose.Schema({
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true, index: true },
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
   mimeType: String,
+  carrierCode: String,
+  carrierStage: String,
   data: { type: Buffer, select: false },
   expiresAt: Date
 }, { timestamps: true });
