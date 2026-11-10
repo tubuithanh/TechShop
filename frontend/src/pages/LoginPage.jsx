@@ -10,6 +10,43 @@ const ZALO_ERROR_MESSAGES = {
   zalo_complete_failed: 'Máy chủ không hoàn tất được đăng nhập bằng Zalo'
 };
 
+// Tài khoản kiểm thử hiển thị ở trang đăng nhập (bấm để điền sẵn).
+// Nhân viên @techshop.vn (tạo bằng seed/generateStaff.js): khi chạy trên máy dùng mật khẩu chung "nhanvien123";
+// trên máy chủ thật mỗi tài khoản có mật khẩu riêng do admin cấp - KHÔNG ghi mật khẩu thật vào mã nguồn (repo công khai).
+const STAFF_DEMO_PASSWORD = import.meta.env.DEV ? 'nhanvien123' : '';
+const DEMO_GROUPS = [
+  {
+    title: 'Khách hàng & quản trị',
+    accounts: [
+      ['Khách hàng', 'customer@example.com', 'customer123'],
+      ['Quản trị', 'admin@example.com', 'admin123'],
+      ['Nhân viên CSKH', 'staff@example.com', 'staff123'],
+      ['Quản lý chi nhánh', 'manager@example.com', 'manager123'],
+      ['Giao hàng', 'shipper@example.com', 'shipper123']
+    ]
+  },
+  {
+    title: 'Quản lý',
+    accounts: [
+      ['Quản lý vùng (mọi chi nhánh)', 'quang.nh.vung@techshop.vn'],
+      ['Quản lý TechShop Quận 1', 'khoa.nm1@techshop.vn'],
+      ['Quản lý TechShop Cầu Giấy', 'tai.nv9@techshop.vn'],
+      ['Quản lý TechShop Hải Châu', 'son.tc17@techshop.vn'],
+      ['Quản lý TechShop Cà Mau (chỉ có trên máy chủ thật)', 'vinh.tt25@techshop.vn']
+    ]
+  },
+  {
+    title: 'Nhân viên',
+    accounts: [
+      ['Bán hàng (Quận 1)', 'ha.ttt2@techshop.vn'],
+      ['Bán hàng 2 chi nhánh', 'linh.tm.parttime@techshop.vn'],
+      ['Kho (Quận 1)', 'dat.vt5@techshop.vn'],
+      ['Giao hàng (Quận 1)', 'mai.dt6@techshop.vn'],
+      ['Kỹ thuật bảo hành (Quận 1)', 'lan.ht8@techshop.vn']
+    ]
+  }
+];
+
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -119,12 +156,31 @@ export default function LoginPage() {
         </Link>
       </p>
       <div className="mt-4 small text-muted bg-light rounded p-3">
-        <p className="fw-medium mb-1">Tài khoản demo:</p>
-        <p className="mb-0">Khách hàng: customer@example.com / customer123</p>
-        <p className="mb-0">Quản trị: admin@example.com / admin123</p>
-        <p className="mb-0">Nhân viên CSKH: staff@example.com / staff123</p>
-        <p className="mb-0">Quản lý chi nhánh: manager@example.com / manager123</p>
-        <p className="mb-0">Giao hàng: shipper@example.com / shipper123</p>
+        <p className="fw-medium mb-1">Tài khoản demo <span className="fw-normal">(bấm để điền sẵn)</span>:</p>
+        {DEMO_GROUPS.map((g) => (
+          <div key={g.title} className="mb-2">
+            <div className="fw-semibold text-body mt-2">{g.title}</div>
+            {g.accounts.map(([label, email, password]) => {
+              const pw = password ?? STAFF_DEMO_PASSWORD;
+              return (
+                <button
+                  key={email}
+                  type="button"
+                  className="btn btn-link btn-sm p-0 d-block text-start text-muted text-decoration-none w-100"
+                  title="Điền vào ô đăng nhập"
+                  onClick={() => { setForm({ email, password: pw }); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                >
+                  <span className="text-body">{label}:</span> {email}{pw && <> / <code>{pw}</code></>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        {!STAFF_DEMO_PASSWORD && (
+          <p className="mb-0 mt-2" style={{ fontSize: '0.75rem' }}>
+            Mật khẩu tài khoản nhân viên <code>@techshop.vn</code> trên máy chủ thật: xem danh sách quản trị viên đã cấp.
+          </p>
+        )}
       </div>
     </Container>
   );
