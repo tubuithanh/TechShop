@@ -10,10 +10,10 @@ const ZALO_ERROR_MESSAGES = {
   zalo_complete_failed: 'Máy chủ không hoàn tất được đăng nhập bằng Zalo'
 };
 
-// Tài khoản kiểm thử hiển thị ở trang đăng nhập (bấm để điền sẵn).
-// Nhân viên @techshop.vn (tạo bằng seed/generateStaff.js): khi chạy trên máy dùng mật khẩu chung "nhanvien123";
-// trên máy chủ thật mỗi tài khoản có mật khẩu riêng do admin cấp - KHÔNG ghi mật khẩu thật vào mã nguồn (repo công khai).
-const STAFF_DEMO_PASSWORD = import.meta.env.DEV ? 'nhanvien123' : '';
+// Tài khoản kiểm thử hiển thị ở trang đăng nhập (bấm để điền sẵn). 10 tài khoản nhân viên @techshop.vn dưới đây là
+// tài khoản DEMO CÔNG KHAI, dùng chung mật khẩu "nhanvien123" (cả trên máy lẫn máy chủ thật); các tài khoản nhân viên
+// khác giữ mật khẩu riêng.
+const STAFF_DEMO_PASSWORD = 'nhanvien123';
 const DEMO_GROUPS = [
   {
     title: 'Khách hàng & quản trị',
@@ -32,7 +32,7 @@ const DEMO_GROUPS = [
       ['Quản lý TechShop Quận 1', 'khoa.nm1@techshop.vn'],
       ['Quản lý TechShop Cầu Giấy', 'tai.nv9@techshop.vn'],
       ['Quản lý TechShop Hải Châu', 'son.tc17@techshop.vn'],
-      ['Quản lý TechShop Cà Mau (chỉ có trên máy chủ thật)', 'vinh.tt25@techshop.vn']
+      ['Quản lý TechShop Cà Mau', 'vinh.tt25@techshop.vn']
     ]
   },
   {
@@ -176,11 +176,6 @@ export default function LoginPage() {
             })}
           </div>
         ))}
-        {!STAFF_DEMO_PASSWORD && (
-          <p className="mb-0 mt-2" style={{ fontSize: '0.75rem' }}>
-            Mật khẩu tài khoản nhân viên <code>@techshop.vn</code> trên máy chủ thật: xem danh sách quản trị viên đã cấp.
-          </p>
-        )}
       </div>
     </Container>
   );
