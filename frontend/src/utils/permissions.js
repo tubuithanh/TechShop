@@ -4,13 +4,16 @@
 // với những gì backend thực sự cho phép, thay vì chỉ dựa vào vai trò chung (admin/staff).
 export const PAGE_PERMISSIONS = {
   '/admin': 'dashboard.view',
+  '/admin/analytics': 'dashboard.view',
   '/admin/products': 'products.manage',
   '/admin/inventory': 'inventory.manage',
   '/admin/orders': 'orders.manage',
   '/admin/pos': 'orders.pos',
   '/admin/warranties': 'warranties.manage',
+  '/admin/warranty-cards': 'warranties.manage',
   '/admin/customers': 'customers.view',
   '/admin/vouchers': 'vouchers.view',
+  '/admin/promotions': 'vouchers.view',
   '/admin/reviews': 'reviews.manage',
   '/admin/articles': 'articles.manage',
   '/admin/chat': 'chat.support',

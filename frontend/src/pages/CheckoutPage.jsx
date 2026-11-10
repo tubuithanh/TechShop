@@ -75,7 +75,9 @@ export default function CheckoutPage() {
       .catch(() => setMethods((m) => ({ ...m, vnpay: false, momo: false })));
   }, []);
   const [voucherCode, setVoucherCode] = useState('');
-  const [discount, setDiscount] = useState(0);
+  // Mã đã áp dụng thành công + bản xem trước tổng tiền do backend tính (khuyến mãi tự động, mã, VAT)
+  const [appliedCode, setAppliedCode] = useState('');
+  const [quote, setQuote] = useState(null);
   const [voucherMsg, setVoucherMsg] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -100,8 +102,35 @@ export default function CheckoutPage() {
   const shippingFeeConfig = settings.defaultShippingFee ?? 30000;
   const freeShippingThreshold = settings.freeShippingThreshold ?? 0;
   const qualifiesFreeShipping = freeShippingThreshold > 0 && totalAmount >= freeShippingThreshold;
-  const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
-  const grandTotal = Math.round(Math.max(totalAmount + shippingFee - discount, 0));
+  const localShippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
+
+  // Tính lại tổng tiền ở backend mỗi khi giỏ / chi nhánh / hình thức nhận hàng / mã thay đổi - khuyến mãi
+  // có thể phụ thuộc chi nhánh và hạng thành viên nên không tự tính ở trình duyệt được.
+  const quoteRequest = (code) => orderService.quote({ storeId: selectedStoreId || undefined, deliveryMethod, voucherCode: code || undefined });
+  useEffect(() => {
+    if (!cartKey) return undefined;
+    let alive = true;
+    quoteRequest(appliedCode)
+      .then((q) => { if (alive) setQuote(q); })
+      .catch((err) => {
+        if (!alive) return;
+        // Mã không còn hợp lệ với lựa chọn mới (VD: đổi sang chi nhánh khác) -> bỏ mã, tính lại không có mã
+        if (appliedCode) {
+          setVoucherMsg(err.response?.data?.message || 'Mã giảm giá không còn áp dụng được');
+          setAppliedCode('');
+        } else {
+          setQuote(null);
+        }
+      });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartKey, selectedStoreId, deliveryMethod, appliedCode]);
+
+  const shippingFee = quote ? quote.shippingFee : localShippingFee;
+  const promotionDiscount = quote?.promotionDiscount || 0;
+  const voucherDiscount = quote?.voucherDiscount || 0;
+  const discount = promotionDiscount + voucherDiscount;
+  const grandTotal = quote ? quote.grandTotal : Math.round(Math.max(totalAmount + shippingFee, 0));
   // MoMo giới hạn số tiền mỗi giao dịch (1.000đ - 50.000.000đ)
   const momoAllowed = grandTotal >= methods.momoLimits.min && grandTotal <= methods.momoLimits.max;
   // Cổng đang chọn không còn dùng được (chưa cấu hình / vượt giới hạn) -> quay về COD
@@ -113,25 +142,25 @@ export default function CheckoutPage() {
 
   const handleVoucherCodeChange = (value) => {
     setVoucherCode(value);
-    // Xoá mã / sửa lại mã đang có hiệu lực trước đó thì phải bỏ luôn số tiền giảm giá đã áp dụng -
-    // trước đây discount/voucherMsg chỉ được set khi "Áp dụng" thành công, không bao giờ được reset,
-    // nên khách xoá/đổi mã vẫn thấy số tiền giảm giá CŨ áp dụng trên tổng tiền dù mã đã đổi/mất.
-    if (discount > 0) setDiscount(0);
+    // Sửa / xóa mã đang áp dụng thì bỏ luôn phần giảm của mã cũ
+    if (appliedCode && value.trim().toUpperCase() !== appliedCode) setAppliedCode('');
     if (voucherMsg) setVoucherMsg('');
   };
 
   const applyVoucher = async () => {
-    if (!voucherCode.trim()) {
-      setDiscount(0);
+    const code = voucherCode.trim().toUpperCase();
+    if (!code) {
+      setAppliedCode('');
       setVoucherMsg('');
       return;
     }
     try {
-      const { data } = await api.post('/vouchers/validate', { code: voucherCode, orderValue: totalAmount });
-      setDiscount(data.data.discountAmount);
-      setVoucherMsg('Áp dụng mã giảm giá thành công!');
+      const q = await quoteRequest(code);
+      setQuote(q);
+      setAppliedCode(code);
+      setVoucherMsg(`Áp dụng mã thành công: giảm ${formatVND(q.voucherDiscount)}`);
     } catch (err) {
-      setDiscount(0);
+      setAppliedCode('');
       setVoucherMsg(err.response?.data?.message || 'Mã không hợp lệ');
     }
   };
@@ -167,7 +196,9 @@ export default function CheckoutPage() {
         deliveryAddress: address,
         deliveryMethod,
         paymentMode,
-        voucherCode: discount > 0 ? voucherCode : undefined,
+        voucherCode: appliedCode || undefined,
+        // Tổng tiền khách đang nhìn thấy - backend từ chối nếu số thật khác (khuyến mãi vừa đổi)
+        expectedTotal: quote ? quote.grandTotal : undefined,
         invoiceInfo: wantInvoice ? invoice : undefined
       });
       await refreshCart();
@@ -186,6 +217,8 @@ export default function CheckoutPage() {
       navigate(`/account/orders/${order._id}`, { state: { justPlaced: true } });
     } catch (err) {
       setError(err.response?.data?.message || 'Đặt hàng thất bại, vui lòng thử lại');
+      // Tổng tiền vừa thay đổi -> tải lại bản xem trước để khách thấy số mới rồi bấm đặt lại
+      if (err.response?.status === 409) quoteRequest(appliedCode).then(setQuote).catch(() => {});
     } finally {
       setSubmitting(false);
     }
@@ -452,17 +485,26 @@ export default function CheckoutPage() {
                 <span>Phí vận chuyển</span>
                 <span>{formatVND(shippingFee)}</span>
               </div>
-              {discount > 0 && (
-                <div className="d-flex justify-content-between text-success">
-                  <span>Giảm giá</span>
-                  <span>-{formatVND(discount)}</span>
+              {(quote?.promotions || []).map((p) => (
+                <div key={p.promotionId} className="d-flex justify-content-between text-success">
+                  <span>Khuyến mãi: {p.name}</span>
+                  <span>-{formatVND(p.amount)}</span>
                 </div>
+              ))}
+              {voucherDiscount > 0 && (
+                <div className="d-flex justify-content-between text-success">
+                  <span>Mã giảm giá {appliedCode}</span>
+                  <span>-{formatVND(voucherDiscount)}</span>
+                </div>
+              )}
+              {quote?.tier && promotionDiscount > 0 && (
+                <div className="text-muted" style={{ fontSize: '0.75rem' }}>Hạng thành viên của bạn: {quote.tier.name}</div>
               )}
               <div className="d-flex justify-content-between fw-bold fs-6 border-top pt-2">
                 <span>Tổng cộng</span>
                 <span className="text-primary">{formatVND(grandTotal)}</span>
               </div>
-              <VatBreakdown vat={orderVat(cart?.items || [], shippingFee, discount, settings.shippingVatRate ?? 10).vat} />
+              <VatBreakdown vat={quote?.vat || orderVat(cart?.items || [], shippingFee, discount, settings.shippingVatRate ?? 10).vat} />
             </Card.Body>
           </Card>
 

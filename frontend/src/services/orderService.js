@@ -18,6 +18,11 @@ export const orderService = {
     const { data } = await api.put(`/orders/${id}/cancel`, { reason });
     return data.data;
   },
+  // Xem trước tổng tiền giỏ hàng (khuyến mãi tự động + mã giảm giá + VAT) - không tạo đơn
+  async quote(payload) {
+    const { data } = await api.post('/orders/quote', payload);
+    return data.data;
+  },
   async getAllOrdersAdmin(params = {}) {
     const { data } = await api.get('/orders/admin/all', { params });
     return data;

@@ -95,10 +95,54 @@ const getOrderStatusStats = asyncHandler(async (req, res) => {
   res.json({ data: stats });
 });
 
-// Thống kê doanh thu THEO TỪNG CỬA HÀNG (mô hình multi-store)
+// Khoảng thời gian theo GIỜ VIỆT NAM (+07:00): cả năm (month trống) hoặc 1 tháng của năm đó
+function vnRange(year, month) {
+  const pad = (n) => String(n).padStart(2, '0');
+  if (!month) {
+    return { $gte: new Date(`${year}-01-01T00:00:00+07:00`), $lt: new Date(`${year + 1}-01-01T00:00:00+07:00`) };
+  }
+  const nextY = month === 12 ? year + 1 : year;
+  const nextM = month === 12 ? 1 : month + 1;
+  return {
+    $gte: new Date(`${year}-${pad(month)}-01T00:00:00+07:00`),
+    $lt: new Date(`${nextY}-${pad(nextM)}-01T00:00:00+07:00`)
+  };
+}
+
+// Doanh thu 12 tháng của 1 năm (mặc định năm nay). Doanh thu chỉ tính đơn ĐÃ GIAO (giống getSummary);
+// số đơn tính mọi đơn trừ đơn hủy / trả hàng. Trả đủ 12 phần tử (tháng không có đơn = 0) để biểu đồ liền mạch.
+const getRevenueByMonth = asyncHandler(async (req, res) => {
+  const year = clampInt(req.query.year, new Date().getFullYear(), 2000, 2100);
+  const rows = await Order.aggregate([
+    { $match: { createdAt: vnRange(year), status: { $nin: ['cancelled', 'returned'] }, ...storeMatch(req) } },
+    {
+      $group: {
+        _id: { $month: { date: '$createdAt', timezone: 'Asia/Ho_Chi_Minh' } },
+        revenue: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, '$grandTotal', 0] } },
+        orderCount: { $sum: 1 }
+      }
+    }
+  ]);
+  const byMonth = new Map(rows.map((r) => [r._id, r]));
+  const data = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    revenue: byMonth.get(i + 1)?.revenue || 0,
+    orderCount: byMonth.get(i + 1)?.orderCount || 0
+  }));
+  res.json({ data, year });
+});
+
+// Thống kê doanh thu THEO TỪNG CỬA HÀNG (mô hình multi-store). Lọc tùy chọn: ?year=2026 (cả năm)
+// hoặc ?year=2026&month=3 (1 tháng); không truyền year = cộng dồn toàn thời gian như trước.
 const getRevenueByStore = asyncHandler(async (req, res) => {
+  const match = { status: 'delivered', ...storeMatch(req) };
+  if (req.query.year) {
+    const year = clampInt(req.query.year, new Date().getFullYear(), 2000, 2100);
+    const month = req.query.month ? clampInt(req.query.month, 1, 1, 12) : null;
+    match.createdAt = vnRange(year, month);
+  }
   const data = await Order.aggregate([
-    { $match: { status: 'delivered', ...storeMatch(req) } },
+    { $match: match },
     { $group: { _id: '$storeId', revenue: { $sum: '$grandTotal' }, orderCount: { $sum: 1 } } },
     { $lookup: { from: 'stores', localField: '_id', foreignField: '_id', as: 'store' } },
     // preserveNullAndEmptyArrays: true - nếu cửa hàng đã bị xoá hẳn khỏi database (không phải chỉ
@@ -110,4 +154,4 @@ const getRevenueByStore = asyncHandler(async (req, res) => {
   res.json({ data });
 });
 
-module.exports = { getSummary, getRevenueByDay, getBestSellingProducts, getOrderStatusStats, getRevenueByStore };
+module.exports = { getSummary, getRevenueByDay, getRevenueByMonth,getBestSellingProducts, getOrderStatusStats, getRevenueByStore };

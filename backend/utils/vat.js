@@ -14,16 +14,21 @@ function allocateAmount(total, weights) {
   for (let remaining = total-result.reduce((a,b)=>a+b,0), i=0; i<remaining; i++) result[order[i % order.length].i]++;
   return result;
 }
-function orderVat(items, shippingFee = 0, discountAmount = 0, shippingRate = 10) {
+// lineDiscounts (tùy chọn): số tiền giảm ĐÃ XÁC ĐỊNH cho từng dòng (khuyến mãi theo sản phẩm, mã chỉ áp dụng
+// cho 1 số sản phẩm). Không truyền thì chia đều tổng giảm giá theo tỷ lệ tiền hàng như trước.
+function orderVat(items, shippingFee = 0, discountAmount = 0, shippingRate = 10, lineDiscounts = null) {
   const rawItemsTotal = items.reduce((s,i)=>s+i.unitPrice*i.quantity,0);
   const itemGross = allocateAmount(Math.round(rawItemsTotal), items.map(i=>i.unitPrice*i.quantity));
   const itemsTotal = itemGross.reduce((a,b)=>a+b,0);
   const grossTotal = Math.round(rawItemsTotal+shippingFee);
   const discountTotal = grossTotal-Math.round(Math.max(0,rawItemsTotal+shippingFee-discountAmount));
   const itemDiscount = Math.min(itemsTotal, discountTotal);
-  const discounts = allocateAmount(itemDiscount, itemGross);
+  const discounts = lineDiscounts
+    ? lineDiscounts.map((d,i)=>Math.max(0,Math.min(Math.round(d)||0,itemGross[i])))
+    : allocateAmount(itemDiscount, itemGross);
+  const usedItemDiscount = discounts.reduce((a,b)=>a+b,0);
   const lines = items.map((item,i)=>({ discountAmount:discounts[i], vat:includedVat(itemGross[i]-discounts[i],item.vatRate ?? 10) }));
-  const shippingVat = includedVat(Math.max(0,grossTotal-itemsTotal-(discountTotal-itemDiscount)),shippingRate);
+  const shippingVat = includedVat(Math.max(0,grossTotal-itemsTotal-(discountTotal-usedItemDiscount)),shippingRate);
   const groups = new Map();
   for (const tax of [...lines.map(l=>l.vat), ...(shippingVat.taxableTotal ? [shippingVat] : [])]) {
     const group = groups.get(tax.rate) || { rate:tax.rate,taxableTotal:0,netAmount:0,amount:0 };

@@ -15,10 +15,22 @@ export const setAccessToken = (token) => {
 };
 export const getAccessToken = () => accessToken;
 
+// Chi nhánh đang làm việc của nhân viên quản lý nhiều chi nhánh (chọn ở thanh trên cùng trang quản trị).
+// Backend chỉ chấp nhận nếu chi nhánh thuộc phạm vi của nhân viên (utils/staffScope.js), không thì bỏ qua.
+export const STORE_KEY = 'techshop.workingStore';
+export const getWorkingStore = () => {
+  try { return localStorage.getItem(STORE_KEY) || ''; } catch { return ''; }
+};
+export const setWorkingStore = (id) => {
+  try { if (id) localStorage.setItem(STORE_KEY, id); else localStorage.removeItem(STORE_KEY); } catch { /* trình duyệt chặn lưu trữ */ }
+};
+
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
+  const store = getWorkingStore();
+  if (store) config.headers['X-Store-Id'] = store;
   return config;
 });
 

@@ -2,6 +2,10 @@ const Voucher = require('../models/Voucher');
 const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
 const { searchFilter } = require('../utils/search');
+const Cart = require('../models/Cart');
+const Product = require('../models/Product');
+const { customerTier, voucherScope, parseScopeLists, activePromotions, applyPromotions } = require('../utils/promotions');
+const { getLoyaltyConfig } = require('../utils/loyalty');
 
 // @route GET /api/vouchers/active - danh sách voucher công khai đang áp dụng (mục 1.1.9)
 const getActiveVouchers = asyncHandler(async (req, res) => {
@@ -12,7 +16,10 @@ const getActiveVouchers = asyncHandler(async (req, res) => {
     startDate: { $lte: now },
     endDate: { $gte: now },
     $or: [{ usageLimit: 0 }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }]
-  }).select('code description discountType discountValue maxDiscountAmount minOrderValue endDate');
+  }).select('code description discountType discountValue maxDiscountAmount minOrderValue endDate categoryIds productIds storeIds tierKeys').populate('categoryIds storeIds', 'name').populate('productIds', 'title slug').lean();
+  const config = await getLoyaltyConfig();
+  const tierName = Object.fromEntries(config.tiers.map((t) => [t.key, t.name]));
+  vouchers.forEach((v) => { v.tierNames = (v.tierKeys || []).map((k) => tierName[k] || k); });
   res.json({ data: vouchers });
 });
 
@@ -26,13 +33,37 @@ const validateVoucher = asyncHandler(async (req, res) => {
   if (!voucher || !voucher.isValidNow()) {
     return res.status(400).json({ message: 'Mã giảm giá không hợp lệ hoặc đã hết hạn' });
   }
-  if (orderValue < voucher.minOrderValue) {
+  // Tính giống hệt lúc đặt hàng: lấy giỏ hàng thật, trừ khuyến mãi tự động trước, rồi mới xét đơn tối thiểu và
+  // phạm vi của mã. Giỏ trống (gọi API trực tiếp) thì dùng orderValue gửi lên như trước.
+  const cart = await Cart.findOne({ userId: req.account._id }).lean();
+  const cartItems = cart?.items || [];
+  let base = orderValue;
+  let afterPromo = orderValue;
+  if (cartItems.length) {
+    const products = await Product.find({ _id: { $in: cartItems.map((i) => i.productId) } }).lean();
+    const productMap = new Map(products.map((p) => [String(p._id), p]));
+    const items = cartItems.map((c) => {
+      const product = productMap.get(String(c.productId));
+      const variant = product?.variants?.find((v) => String(v._id) === String(c.variantId));
+      return { productId: c.productId, quantity: c.quantity, unitPrice: variant?.effectivePrice ?? 0 };
+    });
+    const tier = await customerTier(req.account._id);
+    const storeId = req.body.storeId;
+    const ctx = { storeId, tierKey: tier?.key || null };
+    const promo = applyPromotions(items, productMap, await activePromotions(), ctx);
+    const lineTotals = items.map((i, k) => i.unitPrice * i.quantity - promo.lineDiscounts[k]);
+    afterPromo = lineTotals.reduce((a, b) => a + b, 0);
+    base = afterPromo;
+    // Chưa chọn chi nhánh thì chưa kiểm tra chi nhánh (kiểm tra lại khi đặt hàng)
+    const check = voucherScope(storeId ? voucher : { ...voucher.toObject(), storeIds: [] }, items, productMap, lineTotals, ctx);
+    if (check.error) return res.status(400).json({ message: check.error });
+    if (check.limited) base = check.eligibleTotal;
+  } else if (['storeIds', 'tierKeys', 'categoryIds', 'productIds'].some((f) => voucher[f]?.length)) {
+    return res.status(400).json({ message: 'Giỏ hàng không có sản phẩm thuộc phạm vi áp dụng của mã này' });
+  }
+  if (afterPromo < voucher.minOrderValue) {
     return res.status(400).json({ message: `Đơn hàng tối thiểu ${voucher.minOrderValue.toLocaleString()}đ để áp dụng mã này` });
   }
-  // Kiểm tra luôn giới hạn lượt dùng/khách ngay tại bước "Áp dụng" (giống hệt kiểm tra thật ở
-  // orderController.js/createOrder) - nếu không, khách bấm "Áp dụng" luôn thấy thành công, chỉ tới
-  // khi bấm "Đặt hàng" mới biết mã đã hết lượt, gây khó hiểu và giữ nguyên số tiền giảm giá sai trên
-  // màn hình xem trước.
   if (voucher.perCustomerLimit > 0) {
     const usedByCustomer = await Order.countDocuments({
       userId: req.account._id,
@@ -46,8 +77,8 @@ const validateVoucher = asyncHandler(async (req, res) => {
   const maxDiscount = typeof voucher.maxDiscountAmount === 'number' ? voucher.maxDiscountAmount : Infinity;
   const discountAmount =
     voucher.discountType === 'percent'
-      ? Math.round(Math.min((orderValue * voucher.discountValue) / 100, maxDiscount))
-      : Math.min(voucher.discountValue, orderValue); // không giảm quá tiền hàng
+      ? Math.round(Math.min((base * voucher.discountValue) / 100, maxDiscount))
+      : Math.min(voucher.discountValue, base); // không giảm quá tiền hàng
 
   res.json({ data: { voucher, discountAmount } });
 });
@@ -62,14 +93,16 @@ const getVouchers = asyncHandler(async (req, res) => {
   if (state === 'upcoming') Object.assign(filter, { isActive: true, startDate: { $gt: now } });
   if (state === 'expired') filter.endDate = { $lt: now };
   if (state === 'disabled') filter.isActive = false;
-  const vouchers = await Voucher.find(filter).sort({ createdAt: -1 });
+  const vouchers = await Voucher.find(filter).sort({ createdAt: -1 })
+    .populate('categoryIds storeIds', 'name')
+    .populate('productIds', 'title');
   res.json({ data: vouchers });
 });
 
 // Kiểm tra dữ liệu mã giảm giá. Trước đây tạo / sửa nhận nguyên req.body: sửa được cả số lượt đã dùng
 // (usedCount), giảm > 100%, giá trị âm, ngày kết thúc trước ngày bắt đầu, lỗi trùng mã thành lỗi 500.
 // current = mã đang sửa (gửi trường nào đổi trường đó). Trả về { data } hoặc { error }.
-function parseVoucher(body, current = null) {
+async function parseVoucher(body, current = null) {
   const merged = { ...(current ? current.toObject() : {}), ...body };
   const num = (v) => (v === '' || v === null || v === undefined ? undefined : Number(v));
   const data = {};
@@ -106,6 +139,14 @@ function parseVoucher(body, current = null) {
   data.endDate = end;
   if (merged.isActive !== undefined && typeof merged.isActive !== 'boolean') return { error: 'Trạng thái không hợp lệ' };
   data.isActive = merged.isActive !== false;
+  const lists = parseScopeLists(merged, ['categoryIds', 'productIds', 'storeIds']);
+  if (lists.error) return { error: lists.error };
+  Object.assign(data, lists.data);
+  if (data.tierKeys.length) {
+    const config = await getLoyaltyConfig();
+    const known = new Set(config.tiers.map((t) => t.key));
+    if (data.tierKeys.some((k) => !known.has(k))) return { error: 'Hạng thành viên không tồn tại' };
+  }
   return { data };
 }
 
@@ -114,7 +155,7 @@ async function codeTaken(code, exceptId) {
 }
 
 const createVoucher = asyncHandler(async (req, res) => {
-  const { data, error } = parseVoucher(req.body);
+  const { data, error } = await parseVoucher(req.body);
   if (error) return res.status(400).json({ message: error });
   if (await codeTaken(data.code)) return res.status(409).json({ message: `Mã ${data.code} đã tồn tại` });
   const voucher = await Voucher.create(data);
@@ -124,7 +165,7 @@ const createVoucher = asyncHandler(async (req, res) => {
 const updateVoucher = asyncHandler(async (req, res) => {
   const voucher = await Voucher.findById(req.params.id);
   if (!voucher) return res.status(404).json({ message: 'Không tìm thấy voucher' });
-  const { data, error } = parseVoucher(req.body, voucher);
+  const { data, error } = await parseVoucher(req.body, voucher);
   if (error) return res.status(400).json({ message: error });
   // Đổi mã khi đã có đơn dùng mã cũ sẽ làm sai giới hạn lượt / khách (đếm theo voucherCode trên đơn)
   if (data.code !== voucher.code && voucher.usedCount > 0) return res.status(400).json({ message: 'Mã đã có đơn sử dụng, không đổi được tên mã' });

@@ -11,11 +11,13 @@ const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const { emailOrderPlaced, emailOrderStatus } = require('../utils/notifyEmail');
 const { searchFilter } = require('../utils/search');
-const { hasPermission, getScopedStoreId } = require('../middlewares/authMiddleware');
+const { hasPermission, getScopedStoreId, isStoreAllowed } = require('../middlewares/authMiddleware');
 const { releaseVoucher } = require('../utils/voucherUsage');
 const { withTransaction, BusinessError } = require('../utils/transaction');
 const { validatePhone } = require('../utils/customerValidation');
-const { orderVat } = require('../utils/vat');
+const { orderVat, allocateAmount } = require('../utils/vat');
+const { createCardsForOrder, voidCardsForOrder } = require('../utils/warrantyCards');
+const { customerTier, activePromotions, applyPromotions, voucherScope, claimPromotions } = require('../utils/promotions');
 const { pointsForOrder, getLoyaltyConfig } = require('../utils/loyalty');
 
 const SHIPPING_FEE_DEFAULT = 30000;
@@ -41,9 +43,9 @@ const RESTOCK_STATUSES = ['cancelled', 'returned'];
 const { dateRange } = require('../utils/dateRange');
 
 // Đơn có thuộc phạm vi chi nhánh của tài khoản đang thao tác không (admin/staff không gắn chi nhánh: luôn đúng)
+// Đơn thuộc phạm vi nhân viên: chi nhánh đang làm việc hoặc chi nhánh quản lý thêm (utils/staffScope.js)
 function inScope(req, order) {
-  const scopedStoreId = getScopedStoreId(req);
-  return !scopedStoreId || String(order.storeId?._id || order.storeId) === scopedStoreId;
+  return isStoreAllowed(req, order.storeId);
 }
 
 function generateOrderCode() {
@@ -207,15 +209,26 @@ async function placeOrder(userId, input, session) {
     const qualifiesFreeShipping = freeShippingThreshold > 0 && itemsTotal >= freeShippingThreshold;
     const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
 
+    // ----- Khuyến mãi tự động (theo danh mục / thương hiệu / sản phẩm / chiến dịch / chi nhánh / hạng khách)
+    const tier = await customerTier(userId, session);
+    const ctx = { storeId, tierKey: tier?.key || null };
+    const promo = applyPromotions(orderItems, productMap, await activePromotions(session), ctx);
+    const lineAfterPromo = orderItems.map((it, i) => it.unitPrice * it.quantity - promo.lineDiscounts[i]);
+    const afterPromoTotal = itemsTotal - promo.total;
+
+    // ----- Mã giảm giá: tính trên tiền hàng SAU khuyến mãi, chỉ trên các sản phẩm thuộc phạm vi của mã
     let voucher = null;
-    let discountAmount = 0;
+    let voucherDiscount = 0;
+    const voucherLines = orderItems.map(() => 0);
     if (voucherCode) {
       voucher = await Voucher.findOne({ code: String(voucherCode).toUpperCase() }, null, { session });
       if (!voucher || !voucher.isValidNow()) return await fail(400, 'Mã giảm giá không hợp lệ hoặc đã hết hạn');
-      if (itemsTotal < voucher.minOrderValue) {
+      if (afterPromoTotal < voucher.minOrderValue) {
         return await fail(400, `Đơn hàng tối thiểu ${voucher.minOrderValue.toLocaleString()}đ để áp dụng mã`);
       }
-      if (voucher.perCustomerLimit > 0) {
+      const scope = voucherScope(voucher, orderItems, productMap, lineAfterPromo, ctx);
+      if (scope.error) return await fail(400, scope.error);
+      if (voucher.perCustomerLimit > 0 && userId) {
         // Đơn đã hủy / trả hàng không tính lượt (khách không thật sự hưởng giảm giá)
         const usedByCustomer = await Order.countDocuments(
           { userId, voucherCode: voucher.code, status: { $nin: ['cancelled', 'returned'] } },
@@ -225,18 +238,29 @@ async function placeOrder(userId, input, session) {
       }
       // maxDiscountAmount = 0 là cố ý đặt trần 0đ, khác "chưa đặt" (không giới hạn)
       const maxDiscount = typeof voucher.maxDiscountAmount === 'number' ? voucher.maxDiscountAmount : Infinity;
-      discountAmount =
+      voucherDiscount =
         voucher.discountType === 'percent'
-          ? Math.round(Math.min((itemsTotal * voucher.discountValue) / 100, maxDiscount))
-          : Math.round(Math.min(voucher.discountValue, itemsTotal + shippingFee));
+          ? Math.round(Math.min((scope.eligibleTotal * voucher.discountValue) / 100, maxDiscount))
+          // Mã giới hạn sản phẩm: không giảm quá tiền các sản phẩm đó; mã chung: được trừ cả phí ship như trước
+          : Math.round(Math.min(voucher.discountValue, scope.limited ? scope.eligibleTotal : afterPromoTotal + shippingFee));
+      const itemPart = Math.min(voucherDiscount, scope.eligibleTotal);
+      const shares = allocateAmount(itemPart, scope.eligibleIndexes.map((i) => lineAfterPromo[i]));
+      scope.eligibleIndexes.forEach((idx, k) => { voucherLines[idx] = shares[k]; });
     }
+    const discountAmount = promo.total + voucherDiscount;
+    const lineDiscounts = orderItems.map((_, i) => promo.lineDiscounts[i] + voucherLines[i]);
     const grandTotal = Math.round(Math.max(itemsTotal + shippingFee - discountAmount, 0));
-    const { vat, lines, shippingVat } = orderVat(orderItems, shippingFee, discountAmount, settings?.shippingVatRate ?? 10);
+    const { vat, lines, shippingVat } = orderVat(orderItems, shippingFee, discountAmount, settings?.shippingVatRate ?? 10, lineDiscounts);
     orderItems.forEach((item,i)=>{ item.vat=lines[i].vat; item.discountAmount=lines[i].discountAmount; delete item.vatRate; });
     const vatFingerprint = require('crypto').createHash('sha256').update(JSON.stringify({ lines:orderItems.map(i=>({ productId:String(i.productId),variantId:String(i.variantId),vat:i.vat,discountAmount:i.discountAmount })),shippingVat })).digest('hex');
-    if (input.quote) return { items: orderItems, itemsTotal, shippingFee, discountAmount, grandTotal, vat, shippingVat, vatFingerprint };
+    if (input.quote) return { items: orderItems, itemsTotal, shippingFee, discountAmount, promotionDiscount: promo.total, voucherDiscount, promotions: promo.applied, tier, grandTotal, vat, shippingVat, vatFingerprint };
     if (input.posItems && (input.expectedVatFingerprint ? input.expectedVatFingerprint !== vatFingerprint : input.expectedVatRate !== vat.rate)) return await fail(400, 'Thuế suất đã thay đổi, vui lòng tính lại tổng tiền trước khi hoàn tất');
     if (input.posItems && input.expectedTotal !== grandTotal) return await fail(400, 'Giá hoặc khuyến mãi đã thay đổi, vui lòng tính lại tổng tiền');
+    // Đặt hàng online: trang thanh toán gửi kèm tổng tiền khách đã nhìn thấy. Nếu trong lúc đó khuyến mãi vừa
+    // bắt đầu / kết thúc hoặc giá đổi thì từ chối, không để khách bị tính số tiền khác với số đã xem.
+    if (!input.posItems && input.expectedTotal !== undefined && input.expectedTotal !== grandTotal) {
+      return await fail(409, `Tổng tiền đã thay đổi thành ${grandTotal.toLocaleString('vi-VN')}đ (giá hoặc khuyến mãi vừa cập nhật). Vui lòng kiểm tra lại trước khi đặt hàng.`);
+    }
 
     // Trừ kho đúng chi nhánh bằng lệnh có điều kiện (stock >= số lượng): 2 đơn tranh món cuối chỉ 1 đơn được
     for (const item of orderItems) {
@@ -248,6 +272,10 @@ async function placeOrder(userId, input, session) {
       if (!updated) return await fail(400, `Sản phẩm "${item.name} (${item.variantLabel})" không đủ tồn kho tại cửa hàng đã chọn`);
       undo.push(() => restoreStock(storeId, [item]));
     }
+
+    // Giữ suất / ngân sách chương trình khuyến mãi
+    const exhausted = await claimPromotions(promo.applied, session, session ? null : undo);
+    if (exhausted) return await fail(409, `Chương trình "${exhausted}" vừa hết suất, vui lòng tải lại trang để xem giá mới`);
 
     // Giữ 1 lượt mã bằng lệnh có điều kiện "còn lượt": 2 đơn tranh lượt cuối chỉ 1 đơn được
     if (voucher) {
@@ -279,6 +307,9 @@ async function placeOrder(userId, input, session) {
           shippingFee,
           discountAmount,
           voucherCode: voucher ? voucher.code : null,
+          voucherDiscount,
+          promotionDiscount: promo.total,
+          promotions: promo.applied,
           grandTotal,
           vat,
           shippingVat,
@@ -296,11 +327,35 @@ async function placeOrder(userId, input, session) {
   }
 }
 
+// @route POST /api/orders/quote
+// @desc  Xem trước tổng tiền của giỏ hàng hiện tại (khuyến mãi tự động + mã giảm giá + VAT) - KHÔNG tạo đơn,
+//        không trừ kho, không làm rỗng giỏ. Trang thanh toán dùng để hiển thị đúng số tiền backend sẽ tính.
+const quoteOrder = asyncHandler(async (req, res) => {
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ tài khoản khách hàng' });
+  const { storeId, deliveryMethod = 'home_delivery', voucherCode } = req.body;
+  if (storeId && !mongoose.isValidObjectId(storeId)) return res.status(400).json({ message: 'Cửa hàng không hợp lệ' });
+  if (!DELIVERY_METHODS.includes(deliveryMethod)) return res.status(400).json({ message: 'Hình thức nhận hàng không hợp lệ' });
+  const cart = await Cart.findOne({ userId: req.account._id }).lean();
+  if (!cart?.items?.length) return res.status(400).json({ message: 'Giỏ hàng đang trống' });
+  try {
+    const quote = await placeOrder(req.account._id, {
+      storeId: storeId || null, deliveryMethod, voucherCode: typeof voucherCode === 'string' && voucherCode.trim() ? voucherCode.trim() : undefined,
+      posItems: cart.items, quote: true
+    }, null);
+    res.json({ data: quote });
+  } catch (err) {
+    if (err instanceof BusinessError) return res.status(err.status).json({ message: err.message });
+    throw err;
+  }
+});
+
 // @route POST /api/orders
 // @desc  Tạo đơn hàng từ giỏ hàng hiện tại - BẮT BUỘC chọn storeId (mô hình multi-store)
 const createOrder = asyncHandler(async (req, res) => {
   const { storeId, deliveryAddress, deliveryMethod = 'home_delivery', paymentMode = 'cod', voucherCode, note } =
     req.body;
+  const expectedTotal = req.body.expectedTotal === undefined || req.body.expectedTotal === null ? undefined : Number(req.body.expectedTotal);
+  if (expectedTotal !== undefined && !Number.isFinite(expectedTotal)) return res.status(400).json({ message: 'Tổng tiền không hợp lệ' });
   const { error: invoiceError, value: invoiceInfo } = validateInvoiceInfo(req.body.invoiceInfo);
   if (invoiceError) return res.status(400).json({ message: invoiceError });
 
@@ -327,7 +382,7 @@ const createOrder = asyncHandler(async (req, res) => {
   let order;
   try {
     order = await withTransaction((session) =>
-      placeOrder(req.account._id, { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo }, session)
+      placeOrder(req.account._id, { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo, expectedTotal }, session)
     );
   } catch (err) {
     if (err instanceof BusinessError) return res.status(err.status).json({ message: err.message });
@@ -526,8 +581,10 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
           ...(status === 'delivered' && order.paymentMode === 'cod' ? { paymentStatus: 'paid' } : {}),
           // Đơn bán tại quầy không gắn tài khoản khách -> không tích điểm
           ...(status === 'delivered' ? { loyaltyPoints: order.userId ? pointsForOrder(order, loyaltyConfig) : 0 } : {}),
-          ...(RESTOCK_STATUSES.includes(status) && order.paymentStatus === 'paid' && order.paymentMode !== 'cod'
-            ? { paymentStatus: 'refunded' }
+          // Đơn đã thu tiền bị hủy / trả hàng: chờ nhân viên xác nhận đã hoàn tiền thật (confirm-refund),
+          // không tự đánh dấu "đã hoàn tiền" khi tiền chưa thực sự trả lại khách.
+          ...(RESTOCK_STATUSES.includes(status) && order.paymentStatus === 'paid'
+            ? { refundStatus: 'pending' }
             : {})
         },
         $push: { statusHistory: { status, note, changedBy: req.account._id }, ...extraPush }
@@ -549,11 +606,14 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
     const wasDelivered = order.status === 'delivered' || (order.status === 'returning' && order.returnWasDelivered === true);
     if (status === 'delivered') {
       await adjustSoldCount(order.items, 1, session);
+      // Sổ bảo hành điện tử cho từng máy, ngày mua = hôm nay (ngày giao thành công)
+      await createCardsForOrder(changed, session, new Date());
       if (changed.userId && changed.loyaltyPoints > 0) {
         await User.updateOne({ _id: changed.userId }, { $inc: { loyaltyPoints: changed.loyaltyPoints } }, { session });
       }
     } else if (status === 'returned' && wasDelivered) {
       await adjustSoldCount(order.items, -1, session);
+      await voidCardsForOrder(order._id, `Đơn ${order.orderCode} đã trả hàng`, session);
       if (changed.userId && changed.loyaltyPoints > 0) {
         // Không để âm (dữ liệu cũ có thể đã bị trừ trước đó)
         await User.updateOne({ _id: changed.userId }, [
@@ -584,6 +644,7 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
 
 module.exports = {
   restoreStock,
+  quoteOrder,
   validateInvoiceInfo,
   createOrder,
   getMyOrders,

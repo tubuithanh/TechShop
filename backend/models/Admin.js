@@ -20,6 +20,11 @@ const adminSchema = new mongoose.Schema(
     // storeInventoryController.js). null = không giới hạn theo chi nhánh, thao tác trên mọi cửa hàng
     // như quyền vốn có. Admin và staff không gán storeId không bị ảnh hưởng bởi field này.
     storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', default: null },
+    // Các chi nhánh khác mà nhân viên này QUẢN LÝ THÊM (1 quản lý phụ trách nhiều chi nhánh). Phạm vi thao tác
+    // = chi nhánh đang làm việc (storeId hoặc chi nhánh điều chuyển tạm thời) + các chi nhánh này; quản lý chọn
+    // "chi nhánh đang làm việc" trên thanh trên cùng của trang quản trị (xem utils/staffScope.js).
+    managedStoreIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Store' }],
+    title: { type: String, trim: true, default: '' }, // chức danh: "Nhân viên bán hàng", "Quản lý chi nhánh"...
     isActive: { type: Boolean, default: true },
     // Tăng lên khi đổi/đặt lại mật khẩu -> mọi token cấp trước đó (trên các thiết bị khác) hết hiệu lực
     tokenVersion: { type: Number, default: 0 },

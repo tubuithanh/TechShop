@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { orderService } from '../services/orderService';
 import { Link, useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Card, Button, Badge } from 'react-bootstrap';
 import { Cart3, Trash, ShieldCheck, Truck, BoxArrowInRight, Dash, Plus } from 'react-bootstrap-icons';
@@ -27,6 +28,20 @@ export default function CartPage() {
   useEffect(() => {
     if (user) refreshCart();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Khuyến mãi tự động của giỏ hiện tại (backend tính; chưa chọn chi nhánh nên chỉ gồm khuyến mãi không
+  // giới hạn chi nhánh - ưu đãi theo chi nhánh / mã giảm giá được tính thêm ở bước thanh toán)
+  const [promo, setPromo] = useState(null);
+  const cartKey = (cart.items || []).map((i) => `${i.variantId}x${i.quantity}`).join(',');
+  useEffect(() => {
+    if (!user || user.role !== 'customer' || !cartKey) { setPromo(null); return undefined; }
+    let alive = true;
+    orderService.quote({ deliveryMethod: 'store_pickup' })
+      .then((q) => { if (alive) setPromo(q); })
+      .catch(() => { if (alive) setPromo(null); });
+    return () => { alive = false; };
+  }, [user, cartKey]);
+  const promotionDiscount = promo?.promotionDiscount || 0;
 
   if (!user) {
     return (
@@ -128,6 +143,12 @@ export default function CartPage() {
                 <span className="text-muted">Tạm tính ({totalItems} sản phẩm)</span>
                 <span>{formatVND(totalAmount)}</span>
               </div>
+              {(promo?.promotions || []).map((p) => (
+                <div key={p.promotionId} className="d-flex justify-content-between mb-2 small text-success">
+                  <span>Khuyến mãi: {p.name}</span>
+                  <span>-{formatVND(p.amount)}</span>
+                </div>
+              ))}
               <div className="d-flex justify-content-between mb-2 small">
                 <span className="text-muted">Phí vận chuyển</span>
                 <span>Tính ở bước sau</span>
@@ -135,7 +156,7 @@ export default function CartPage() {
               <hr />
               <div className="d-flex justify-content-between align-items-baseline mb-3">
                 <span className="fw-semibold">Tổng tạm tính</span>
-                <span className="fs-5 fw-bold text-primary">{formatVND(totalAmount)}</span>
+                <span className="fs-5 fw-bold text-primary">{formatVND(totalAmount - promotionDiscount)}</span>
               </div>
               {cart.hasUnavailable && (
                 <p className="small text-danger mb-2">Giỏ hàng có sản phẩm ngừng bán hoặc không đủ hàng, hãy điều chỉnh trước khi thanh toán.</p>

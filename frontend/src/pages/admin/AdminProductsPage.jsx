@@ -23,6 +23,9 @@ function formatVND(value) {
 
 const emptyForm = {
   vatRate: 10,
+  warrantyMonths: 12,
+  warrantyStartFrom: 'purchase',
+  warrantyProvider: 'store',
   title: '',
   brandId: '',
   categoryId: '',
@@ -124,6 +127,9 @@ export default function AdminProductsPage() {
     }
     const payload = {
       vatRate: Number(form.vatRate),
+      warrantyMonths: Number(form.warrantyMonths),
+      warrantyStartFrom: form.warrantyStartFrom,
+      warrantyProvider: form.warrantyProvider,
       title: form.title,
       brandId: form.brandId,
       categoryId: form.categoryId,
@@ -154,6 +160,9 @@ export default function AdminProductsPage() {
     setForm({
       title: p.title,
       vatRate:p.vatRate ?? 10,
+      warrantyMonths: p.warrantyMonths ?? 12,
+      warrantyStartFrom: p.warrantyStartFrom || 'purchase',
+      warrantyProvider: p.warrantyProvider || 'store',
       brandId: p.brandId?._id || p.brandId || '',
       categoryId: p.categoryId?._id || p.categoryId || '',
       variants: (p.variants || []).map((v) => ({
@@ -338,6 +347,26 @@ export default function AdminProductsPage() {
                   <Form.Label>Thuế VAT (%) *</Form.Label>
                   <Form.Control type="number" required min={0} max={100} step={0.01} value={form.vatRate} onChange={e=>setForm({ ...form,vatRate:e.target.value==='' ? '' : Number(e.target.value) })} />
                   <Form.Text>Áp dụng cho mọi phiên bản của sản phẩm. Giá bán đã gồm VAT; nhập 0 nếu thuế suất là 0%.</Form.Text>
+                </Col>
+                <Col md={6}>
+                  <Form.Label>Bảo hành (tháng)</Form.Label>
+                  <Form.Control type="number" min={0} max={120} required value={form.warrantyMonths} onChange={(e) => setForm({ ...form, warrantyMonths: e.target.value === '' ? '' : Number(e.target.value) })} />
+                  <Form.Text>Mặc định 12 tháng; 0 = không bảo hành.</Form.Text>
+                </Col>
+                <Col md={6}>
+                  <Form.Label>Tính bảo hành từ</Form.Label>
+                  <Form.Select value={form.warrantyStartFrom} onChange={(e) => setForm({ ...form, warrantyStartFrom: e.target.value })}>
+                    <option value="purchase">Ngày mua (giao hàng thành công)</option>
+                    <option value="activation">Ngày khách kích hoạt (trong 30 ngày)</option>
+                  </Form.Select>
+                </Col>
+                <Col md={6}>
+                  <Form.Label>Đơn vị bảo hành</Form.Label>
+                  <Form.Select value={form.warrantyProvider} onChange={(e) => setForm({ ...form, warrantyProvider: e.target.value })}>
+                    <option value="store">Cửa hàng bảo hành</option>
+                    <option value="manufacturer">Hãng quản lý bảo hành</option>
+                  </Form.Select>
+                  <Form.Text>Thông tin trung tâm hãng nhập ở Sổ bảo hành → Trung tâm bảo hành hãng.</Form.Text>
                 </Col>
                 <Col xs={12}>
                   <Form.Label className="small fw-medium mb-2">

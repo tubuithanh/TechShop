@@ -44,6 +44,12 @@ import NotificationsPage from './pages/account/NotificationsPage';
 
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
+import AdminPromotionsPage from './pages/admin/AdminPromotionsPage';
+import AdminWarrantyCardsPage from './pages/admin/AdminWarrantyCardsPage';
+import AdminStaffDetailPage from './pages/admin/AdminStaffDetailPage';
+import AdminStoresPage from './pages/admin/AdminStoresPage';
+import AdminStaffPerformancePage from './pages/admin/AdminStaffPerformancePage';
 import AdminProductsPage from './pages/admin/AdminProductsPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminWarrantiesPage from './pages/admin/AdminWarrantiesPage';
@@ -188,12 +194,15 @@ export default function App() {
                       thiếu quyền tương ứng bị điều hướng ra khỏi trang thay vì thấy trang trống/lỗi.
                       audit-logs và settings KHÔNG có permissionPath - admin-only tuyệt đối. */}
                   <Route index element={<PrivateRoute permissionPath="/admin"><AdminDashboardPage /></PrivateRoute>} />
+                  <Route path="analytics" element={<PrivateRoute permissionPath="/admin/analytics"><AdminAnalyticsPage /></PrivateRoute>} />
                   <Route path="products" element={<PrivateRoute permissionPath="/admin/products"><AdminProductsPage /></PrivateRoute>} />
                   <Route path="orders" element={<PrivateRoute permissionPath="/admin/orders"><AdminOrdersPage /></PrivateRoute>} />
                   <Route path="pos" element={<PrivateRoute permissionPath="/admin/pos"><AdminPosPage /></PrivateRoute>} />
                   <Route path="warranties" element={<PrivateRoute permissionPath="/admin/warranties"><AdminWarrantiesPage /></PrivateRoute>} />
+                  <Route path="warranty-cards" element={<PrivateRoute permissionPath="/admin/warranty-cards"><AdminWarrantyCardsPage /></PrivateRoute>} />
                   <Route path="customers" element={<PrivateRoute permissionPath="/admin/customers"><AdminCustomersPage /></PrivateRoute>} />
                   <Route path="vouchers" element={<PrivateRoute permissionPath="/admin/vouchers"><AdminVouchersPage /></PrivateRoute>} />
+                  <Route path="promotions" element={<PrivateRoute permissionPath="/admin/promotions"><AdminPromotionsPage /></PrivateRoute>} />
                   <Route path="reviews" element={<PrivateRoute permissionPath="/admin/reviews"><AdminReviewsPage /></PrivateRoute>} />
                   <Route path="inventory" element={<PrivateRoute permissionPath="/admin/inventory"><AdminInventoryPage /></PrivateRoute>} />
                   <Route path="articles" element={<PrivateRoute permissionPath="/admin/articles"><AdminArticlesPage /></PrivateRoute>} />
@@ -214,6 +223,9 @@ export default function App() {
                       </PrivateRoute>
                     }
                   />
+                  <Route path="stores" element={<PrivateRoute roles={['admin']}><AdminStoresPage /></PrivateRoute>} />
+                  <Route path="staff/:id" element={<PrivateRoute roles={['admin']}><AdminStaffDetailPage /></PrivateRoute>} />
+                  <Route path="staff-performance" element={<PrivateRoute roles={['admin']}><AdminStaffPerformancePage /></PrivateRoute>} />
                   <Route
                     path="permission-groups"
                     element={

@@ -73,7 +73,12 @@ export default function AdminPosPage() {
         <Form.Label className="mt-2">Thanh toán</Form.Label><Form.Select value={paymentMode} onChange={e => { setPayment(e.target.value); setConfirmed(false); }}><option value="cash">Tiền mặt</option><option value="bank_transfer">Chuyển khoản đã nhận</option></Form.Select>
         <Form.Label className="mt-2">Ghi chú</Form.Label><Form.Control as="textarea" maxLength={1000} value={note} onChange={e => setNote(e.target.value)} />
         <Button type="button" className="my-2" variant="outline-primary" disabled={!items.length} onClick={calculate}>Tính tổng thanh toán</Button>
-        {quote && <Alert variant="info">Tiền hàng {money(quote.itemsTotal)} − giảm {money(quote.discountAmount)} = <strong>Khách cần trả {money(quote.grandTotal)}</strong></Alert>}
+        {quote && <Alert variant="info">
+          Tiền hàng {money(quote.itemsTotal)} − giảm {money(quote.discountAmount)} = <strong>Khách cần trả {money(quote.grandTotal)}</strong>
+          {(quote.promotions || []).map((p) => <div key={p.promotionId} className="small">Khuyến mãi "{p.name}": −{money(p.amount)}</div>)}
+          {quote.voucherDiscount > 0 && <div className="small">Mã {voucherCode.toUpperCase()}: −{money(quote.voucherDiscount)}</div>}
+          {quote.tier && <div className="small text-muted">Hạng khách: {quote.tier.name}</div>}
+        </Alert>}
         {quote && <VatBreakdown vat={quote.vat} />}
         <Form.Check className="my-3" required disabled={!quote} checked={confirmed} onChange={e => setConfirmed(e.target.checked)} label={`Đã nhận đủ ${money(quote?.grandTotal)} và đã bàn giao hàng cho khách`} />
       </fieldset>

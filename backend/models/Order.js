@@ -58,7 +58,23 @@ const orderSchema = new mongoose.Schema(
     shippingFee: { type: Number, default: 0 },
     discountAmount: { type: Number, default: 0 },
     voucherCode: { type: String, default: null },
+    // discountAmount = promotionDiscount (khuyến mãi tự động) + voucherDiscount (mã giảm giá)
+    voucherDiscount: { type: Number, default: 0 },
+    promotionDiscount: { type: Number, default: 0 },
+    promotions: [
+      {
+        _id: false,
+        promotionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Promotion' },
+        name: String,
+        campaign: String,
+        amount: Number
+      }
+    ],
     grandTotal: { type: Number, required: true },
+    // Tổng VAT của cả đơn và VAT riêng của phí giao hàng (tính lúc đặt, giữ cố định dù sau này đổi thuế suất).
+    // Thiếu 2 trường này trong schema thì Mongoose (strict) âm thầm bỏ đi khi lưu -> hóa đơn không có VAT.
+    vat: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    shippingVat: { type: mongoose.Schema.Types.Mixed, default: undefined },
     // Số điểm thành viên đã cộng cho đơn này khi giao thành công (để trừ lại đúng số đó nếu trả hàng)
     loyaltyPoints: { type: Number, default: 0 },
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },

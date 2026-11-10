@@ -8,6 +8,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const { emailWarranty } = require('../utils/notifyEmail');
 const { searchFilter } = require('../utils/search');
 const { normalizePhone } = require('../utils/customerValidation');
+const WarrantyCard = require('../models/WarrantyCard');
+const { ensureCardsForOrders } = require('../utils/warrantyCards');
 const { hasPermission } = require('../middlewares/authMiddleware');
 const { inScope } = require('./orderController');
 
@@ -49,55 +51,97 @@ async function validateWarrantyUpdate(warranty, { status, cost, assignedTo }) {
 }
 
 const createWarrantyRequest = asyncHandler(async (req, res) => {
-  const { orderId, productId, issueDescription, returnReason, images, method } = req.body;
+  const { orderId, issueDescription, returnReason, images, method } = req.body;
 
   if (images && images.length > MAX_WARRANTY_IMAGES) {
     return res.status(400).json({ message: `Chỉ được đính kèm tối đa ${MAX_WARRANTY_IMAGES} ảnh` });
   }
 
   const staff = hasPermission(req, 'warranties.manage');
-  const order = await Order.findOne({ _id: orderId, ...(!staff ? { userId: req.account._id } : {}), status: 'delivered' });
+  // Nhân viên tiếp nhận tại quầy có thể chọn thẳng 1 sổ bảo hành (tìm bằng IMEI / SĐT / mã bảo hành) thay vì đơn hàng
+  let card = null;
+  let productId = req.body.productId;
+  let order;
+  if (staff && req.body.cardId) {
+    card = mongoose.isValidObjectId(req.body.cardId) ? await WarrantyCard.findById(req.body.cardId) : null;
+    if (!card) return res.status(404).json({ message: 'Không tìm thấy sổ bảo hành' });
+    if (card.status === 'void') return res.status(400).json({ message: `Sổ bảo hành không còn hiệu lực (${card.voidReason || 'đơn đã trả hàng'})` });
+    order = await Order.findOne({ _id: card.orderId, status: 'delivered' });
+    productId = String(card.productId);
+  } else {
+    order = await Order.findOne({ _id: orderId, ...(!staff ? { userId: req.account._id } : {}), status: 'delivered' });
+  }
   if (!order) {
     return res.status(400).json({ message: 'Không tìm thấy đơn hàng đã giao thành công để yêu cầu bảo hành' });
   }
   if (staff && !inScope(req, order)) return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác' });
-  const item = order.items.find((i) => i.productId.toString() === productId);
+  const item = order.items.find((i) => i.productId.toString() === String(productId));
   if (!item) {
     return res.status(400).json({ message: 'Sản phẩm này không có trong đơn hàng đã chọn' });
   }
 
-  // Kiểm tra sản phẩm còn trong thời hạn bảo hành (warrantyMonths tính từ ngày đơn hàng chuyển sang
-  // "delivered") - trước đây chỉ kiểm tra đơn hàng ĐÃ giao mà không kiểm tra ĐÃ GIAO BAO LÂU, nên
-  // đơn giao từ nhiều năm trước vẫn tạo được yêu cầu bảo hành hợp lệ.
   const product = await Product.findById(productId);
   if (!product) return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
-  // 1 sản phẩm của 1 đơn chỉ có 1 phiếu đang xử lý: trước đây gửi lại nhiều lần tạo nhiều phiếu trùng
-  const open = await Warranty.findOne({ orderId, productId, status: { $nin: FINISHED } });
+  // 1 máy chỉ có 1 phiếu đang xử lý: trước đây gửi lại nhiều lần tạo nhiều phiếu trùng. Chọn theo sổ thì xét
+  // đúng máy đó (mua 2 máy cùng loại vẫn gửi sửa được cả 2).
+  const open = await Warranty.findOne({
+    ...(card ? { warrantyCardId: card._id } : { orderId: order._id, productId }),
+    status: { $nin: FINISHED }
+  });
   if (open) return res.status(409).json({ message: `Sản phẩm này đang có phiếu bảo hành ${open.ticketCode} chưa xử lý xong` });
-  const deliveredEntry = [...order.statusHistory].reverse().find((h) => h.status === 'delivered');
-  const deliveredAt = deliveredEntry?.changedAt || order.createdAt;
-  const warrantyMonths = product.warrantyMonths ?? 12;
-  const expiryDate = new Date(deliveredAt);
-  expiryDate.setMonth(expiryDate.getMonth() + warrantyMonths);
-  if (warrantyMonths > 0 && new Date() > expiryDate) {
-    return res.status(400).json({
-      message: `Sản phẩm đã hết hạn bảo hành (${warrantyMonths} tháng kể từ ngày giao hàng ${deliveredAt.toLocaleDateString('vi-VN')})`
-    });
+
+  // Hạn bảo hành lấy từ sổ bảo hành điện tử (đã gồm ngày kích hoạt + các gói gia hạn đã mua). Đơn giao trước khi
+  // có sổ thì tạo bù. Không chọn sổ cụ thể mà mua nhiều máy cùng loại: lấy sổ còn hạn lâu nhất.
+  if (!card) {
+    await ensureCardsForOrders([order]);
+    const cards = await WarrantyCard.find({ orderId: order._id, productId, status: 'active' });
+    card = cards.sort((x, y) => y.summary().endDate - x.summary().endDate)[0] || null;
   }
+  const s = card?.summary();
+  const inWarranty = Boolean(s?.inWarranty);
+  if (!inWarranty) {
+    const why = !card
+      ? 'Sản phẩm không còn sổ bảo hành hợp lệ (đơn đã trả hàng)'
+      : s.totalMonths <= 0
+        ? 'Sản phẩm không kèm bảo hành'
+        : `Sản phẩm đã hết hạn bảo hành (${s.totalMonths} tháng, hết hạn ngày ${s.endDate.toLocaleDateString('vi-VN')})`;
+    // Khách tự gửi: chặn. Nhân viên tại quầy: vẫn nhận sửa nếu xác nhận là SỬA DỊCH VỤ CÓ TÍNH PHÍ
+    if (!staff) return res.status(400).json({ message: why });
+    if (req.body.paidService !== true) {
+      return res.status(400).json({ code: 'OUT_OF_WARRANTY', message: `${why}. Chọn "Sửa dịch vụ có tính phí" để tiếp nhận.` });
+    }
+  }
+  const coverage = {
+    type: !inWarranty ? 'out_of_warranty' : card.provider === 'manufacturer' ? 'manufacturer' : 'in_warranty',
+    cardId: card?._id,
+    cardCode: card?.code,
+    serial: card?.serial || '',
+    endDate: s?.endDate,
+    totalMonths: s?.totalMonths,
+    providerName: card?.provider === 'manufacturer' ? card.providerInfo?.name : undefined,
+    providerPhone: card?.provider === 'manufacturer' ? card.providerInfo?.phone : undefined,
+    checkedAt: new Date()
+  };
 
   const warranty = await Warranty.create({
     ticketCode: generateTicketCode(),
     userId: order.userId,
     customerName: order.deliveryAddress?.fullName,
     customerPhone: order.deliveryAddress?.phone,
-    orderId,
+    orderId: order._id,
     productId,
     productName: item.name,
+    coverage,
+    warrantyCardId: card?._id || null,
     issueDescription,
     returnReason,
     images,
     method: method || 'bring_to_store',
-    statusHistory: [{ status: 'received', note: 'Tiếp nhận yêu cầu bảo hành', changedBy: req.account._id }]
+    statusHistory: [{
+      status: 'received',
+      note: coverage.type === 'out_of_warranty' ? 'Tiếp nhận sửa dịch vụ (ngoài bảo hành, có tính phí)' : 'Tiếp nhận yêu cầu bảo hành',
+      changedBy: req.account._id
+    }]
   });
 
   emailWarranty(warranty, { created: true }); // email xác nhận tiếp nhận kèm mã phiếu (chạy nền)
@@ -162,9 +206,10 @@ const submitWarrantyFeedback = asyncHandler(async (req, res) => {
 });
 
 const getAllWarranties = asyncHandler(async (req, res) => {
-  const { status, method, q, page = 1, limit = 20 } = req.query;
+  const { status, method, q, coverage, page = 1, limit = 20 } = req.query;
   const filter = status ? { status } : {};
   if (method) filter.method = method;
+  if (['in_warranty', 'manufacturer', 'out_of_warranty'].includes(coverage)) filter['coverage.type'] = coverage;
   Object.assign(filter, searchFilter(q)); // mã phiếu, mã đơn, SĐT, tên sản phẩm (không dấu)
   const warranties = await Warranty.find(filter)
     .populate('userId', 'displayName phoneNumber email')

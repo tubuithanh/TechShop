@@ -12,6 +12,12 @@ const voucherSchema = new mongoose.Schema(
     usageLimit: { type: Number, default: 0 }, // 0 = không giới hạn (tổng toàn hệ thống)
     usedCount: { type: Number, default: 0 },
     perCustomerLimit: { type: Number, default: 1 }, // 0 = không giới hạn số lần dùng của mỗi khách
+    // Phạm vi áp dụng (trống = không giới hạn). Mã chỉ giảm trên phần tiền của các sản phẩm khớp
+    // danh mục/sản phẩm; chỉ dùng được ở các chi nhánh / cho các hạng thành viên đã chọn.
+    categoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
+    productIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+    storeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Store' }],
+    tierKeys: [{ type: String }],
     startDate: { type: Date, default: Date.now },
     endDate: { type: Date, required: true },
     isActive: { type: Boolean, default: true }

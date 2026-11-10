@@ -20,11 +20,30 @@ import {
   MAX_WARRANTY_IMAGES
 } from '../../constants/warranty';
 
+// Tình trạng bảo hành ghi lại lúc tiếp nhận phiếu (phiếu cũ trước khi có tính năng: không có)
+const COVERAGE = {
+  in_warranty: { label: 'Trong bảo hành', bg: 'success' },
+  manufacturer: { label: 'Bảo hành hãng', bg: 'info' },
+  out_of_warranty: { label: 'Sửa dịch vụ (tính phí)', bg: 'warning' }
+};
+function CoverageCell({ w }) {
+  const c = COVERAGE[w.coverage?.type];
+  if (!c) return <span className="text-muted">—</span>;
+  return (
+    <>
+      <Badge bg={c.bg} text={c.bg === 'warning' || c.bg === 'info' ? 'dark' : undefined} className="fw-normal">{c.label}</Badge>
+      {w.coverage.endDate && <div className="text-muted mt-1">HSD {new Date(w.coverage.endDate).toLocaleDateString('vi-VN')}</div>}
+      {w.coverage.serial && <div className="text-muted">IMEI {w.coverage.serial}</div>}
+      {w.coverage.type === 'manufacturer' && w.coverage.providerName && <div className="text-muted">{w.coverage.providerName}{w.coverage.providerPhone ? ` · ${w.coverage.providerPhone}` : ''}</div>}
+    </>
+  );
+}
+
 export default function AdminWarrantiesPage() {
   const [creating, setCreating] = useState(false);
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
-  const query = useListQuery(['status', 'method']);
+  const query = useListQuery(['status', 'method', 'coverage']);
   const { data: warranties, total, totalPages, loading, reload: loadWarranties } = useAdminList(
     (params) => api.get('/warranties/admin/all', { params }).then((res) => res.data),
     { ...query.apiParams, limit: pageSize }
@@ -33,7 +52,8 @@ export default function AdminWarrantiesPage() {
   const setPage = query.setPage;
   const filters = [
     { key: 'status', label: 'Trạng thái', options: WARRANTY_STATUS_OPTIONS.map((s) => ({ value: s, label: WARRANTY_STATUS_LABEL[s] })) },
-    { key: 'method', label: 'Hình thức', options: Object.entries(WARRANTY_METHOD_LABEL).map(([value, label]) => ({ value, label })) }
+    { key: 'method', label: 'Hình thức', options: Object.entries(WARRANTY_METHOD_LABEL).map(([value, label]) => ({ value, label })) },
+    { key: 'coverage', label: 'Tình trạng bảo hành', options: Object.entries(COVERAGE).map(([value, c]) => ({ value, label: c.label })) }
   ];
 
   const [editing, setEditing] = useState(null); // phiếu bảo hành đang sửa
@@ -128,6 +148,7 @@ export default function AdminWarrantiesPage() {
               <th className="p-3">Mã phiếu</th>
               <th className="p-3">Khách hàng</th>
               <th className="p-3">Sản phẩm</th>
+              <th className="p-3">Bảo hành</th>
               <th className="p-3">Ảnh</th>
               <th className="p-3">Mô tả lỗi</th>
               <th className="p-3">Trạng thái</th>
@@ -143,6 +164,7 @@ export default function AdminWarrantiesPage() {
                   <div className="small text-muted">{w.userId?.phoneNumber || w.customerPhone}</div>
                 </td>
                 <td className="p-3">{w.productId?.title}</td>
+                <td className="p-3 small"><CoverageCell w={w} /></td>
                 <td className="p-3">
                   {w.images?.length > 0 ? (
                     <img src={w.images[0]} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
@@ -177,7 +199,7 @@ export default function AdminWarrantiesPage() {
             ))}
             {!loading && warranties.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-muted p-4">
+                <td colSpan={8} className="text-center text-muted p-4">
                   Không tìm thấy kết quả phù hợp
                 </td>
               </tr>

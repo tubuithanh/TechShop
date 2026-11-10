@@ -5,6 +5,7 @@ import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import { useAuth } from '../../store/AuthContext';
+import { useScopeOptions, MultiPicker, ScopeSummary, searchProducts, idsOf, labelsOf } from '../../components/admin/ScopePicker';
 
 // Ô ngày (yyyy-mm-dd, giờ Việt Nam): bắt đầu = 00:00, hết hạn = 23:59:59 của ngày đã chọn. Trước đây gửi thẳng
 // "yyyy-mm-dd" (= 00:00) làm mã hết hạn từ ĐẦU ngày hết hạn, sớm hơn 1 ngày so với ý người tạo.
@@ -26,7 +27,11 @@ const emptyForm = {
   usageLimit: 0,
   perCustomerLimit: 1,
   startDate: '',
-  endDate: ''
+  endDate: '',
+  categoryIds: [],
+  productIds: [],
+  storeIds: [],
+  tierKeys: []
 };
 
 export default function AdminVouchersPage() {
@@ -37,6 +42,8 @@ export default function AdminVouchersPage() {
   // Nhân viên có quyền "xem khuyến mãi" chỉ xem; tạo / sửa / tắt chỉ admin (backend cũng chặn)
   const { user } = useAuth();
   const canEdit = user?.role === 'admin';
+  const scopeOptions = useScopeOptions();
+  const [productLabels, setProductLabels] = useState({});
   const query = useListQuery(['state']);
   const { q, state } = query.apiParams;
   const { data: vouchers, total, loading, reload: load } = useAdminList(voucherService.getAll, { q, state });
@@ -58,9 +65,11 @@ export default function AdminVouchersPage() {
     setFormError('');
     setForm(
       v
-        ? { ...emptyForm, ...v, maxDiscountAmount: v.maxDiscountAmount ?? '', startDate: toInputDate(v.startDate), endDate: toInputDate(v.endDate) }
+        ? { ...emptyForm, ...v, maxDiscountAmount: v.maxDiscountAmount ?? '', startDate: toInputDate(v.startDate), endDate: toInputDate(v.endDate),
+            categoryIds: idsOf(v.categoryIds), productIds: idsOf(v.productIds), storeIds: idsOf(v.storeIds), tierKeys: v.tierKeys || [] }
         : emptyForm
     );
+    setProductLabels(labelsOf(v?.productIds, 'title'));
     setShowForm(true);
   };
 
@@ -77,7 +86,11 @@ export default function AdminVouchersPage() {
       usageLimit: Number(form.usageLimit) || 0,
       perCustomerLimit: Number(form.perCustomerLimit) || 0,
       startDate: toDayStart(form.startDate),
-      endDate: toDayEnd(form.endDate)
+      endDate: toDayEnd(form.endDate),
+      categoryIds: form.categoryIds,
+      productIds: form.productIds,
+      storeIds: form.storeIds,
+      tierKeys: form.tierKeys
     };
     try {
       if (editingId) await voucherService.update(editingId, payload);
@@ -112,7 +125,7 @@ export default function AdminVouchersPage() {
   return (
     <Container fluid>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="fs-4 fw-bold mb-0">Quản lý khuyến mãi / Voucher</h1>
+        <h1 className="fs-4 fw-bold mb-0">Mã giảm giá (voucher)</h1>
         {canEdit && (
           <Button variant="primary" onClick={() => openForm()}>
             + Tạo voucher
@@ -120,7 +133,7 @@ export default function AdminVouchersPage() {
         )}
       </div>
 
-      <Modal show={showForm} onHide={() => setShowForm(false)} centered>
+      <Modal show={showForm} onHide={() => setShowForm(false)} centered size="lg">
         <Modal.Header closeButton>
           <Modal.Title>{editingId ? `Sửa voucher ${form.code}` : 'Tạo voucher'}</Modal.Title>
         </Modal.Header>
@@ -229,6 +242,32 @@ export default function AdminVouchersPage() {
                 </Form.Group>
               </Col>
               <Col md={12}>
+                <div className="border rounded-3 p-3">
+                  <div className="fw-medium mb-1">Phạm vi áp dụng</div>
+                  <div className="small text-muted mb-3">
+                    Để trống = không giới hạn. Nếu chọn danh mục / sản phẩm, mã chỉ giảm trên tiền của các sản phẩm đó.
+                  </div>
+                  <Row className="g-3">
+                    <Col md={6}>
+                      <Form.Label className="small fw-medium">Danh mục sản phẩm</Form.Label>
+                      <MultiPicker value={form.categoryIds} onChange={(v) => setForm({ ...form, categoryIds: v })} options={scopeOptions.categories} placeholder="Tìm danh mục..." />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label className="small fw-medium">Sản phẩm cụ thể</Form.Label>
+                      <MultiPicker value={form.productIds} onChange={(v) => setForm({ ...form, productIds: v })} search={searchProducts} labels={productLabels} placeholder="Gõ tên sản phẩm..." emptyText="Không tìm thấy sản phẩm" />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label className="small fw-medium">Chi nhánh</Form.Label>
+                      <MultiPicker value={form.storeIds} onChange={(v) => setForm({ ...form, storeIds: v })} options={scopeOptions.stores} placeholder="Tìm chi nhánh..." />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label className="small fw-medium">Hạng thành viên</Form.Label>
+                      <MultiPicker value={form.tierKeys} onChange={(v) => setForm({ ...form, tierKeys: v })} options={scopeOptions.tiers} placeholder="Tìm hạng..." />
+                    </Col>
+                  </Row>
+                </div>
+              </Col>
+              <Col md={12}>
                 <Form.Group>
                   <Form.Label>Mô tả</Form.Label>
                   <Form.Control
@@ -259,6 +298,7 @@ export default function AdminVouchersPage() {
               <th>Mã</th>
               <th>Mô tả</th>
               <th>Giảm giá</th>
+              <th>Phạm vi</th>
               <th>Đã dùng</th>
               <th>Lượt/khách</th>
               <th>Thời gian</th>
@@ -274,6 +314,7 @@ export default function AdminVouchersPage() {
                 <td>
                   {v.discountType === 'percent' ? `${v.discountValue}%` : `${v.discountValue.toLocaleString()}đ`}
                 </td>
+                <td className="small" style={{ maxWidth: 220 }}><ScopeSummary v={v} tiers={scopeOptions.tiers} /></td>
                 <td>
                   {v.usedCount} / {v.usageLimit || '∞'}
                 </td>
@@ -306,7 +347,7 @@ export default function AdminVouchersPage() {
             ))}
             {!loading && vouchers.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-muted p-4">
+                <td colSpan={9} className="text-center text-muted p-4">
                   Không tìm thấy kết quả phù hợp
                 </td>
               </tr>

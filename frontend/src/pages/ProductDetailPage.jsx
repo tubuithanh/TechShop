@@ -1,3 +1,4 @@
+import { useActivePromotions, promotionPrice, describeExtra } from '../utils/promotionPrice';
 import { Fragment, useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal, ProgressBar } from 'react-bootstrap';
@@ -56,6 +57,7 @@ export default function ProductDetailPage() {
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
+  const promotions = useActivePromotions();
   const [loadError, setLoadError] = useState('');
 
   // Chọn 1 phiên bản: tự chuyển sang cửa hàng còn hàng của ĐÚNG phiên bản đó (tồn kho tính theo phiên
@@ -158,7 +160,9 @@ export default function ProductDetailPage() {
   const selectedVariant = activeVariants.find((v) => v._id === selectedVariantId) || activeVariants[0];
   const colorOptions = activeVariants.filter((v, i, arr) => arr.findIndex((x) => x.color === v.color) === i);
   const storageOptions = activeVariants.filter((v) => v.color === selectedVariant?.color && v.storage);
-  const displayPrice = selectedVariant?.effectivePrice ?? product.effectivePrice;
+  const variantPrice = selectedVariant?.effectivePrice ?? product.effectivePrice;
+  const promo = promotionPrice(product, variantPrice, promotions);
+  const displayPrice = promo.price;
   const originalPrice = selectedVariant?.price ?? product.price;
   const specGroups = groupSpecs(product.specifications, product.categoryId?.specTemplate);
   const images = galleryImages(product, selectedVariant);
@@ -319,6 +323,15 @@ export default function ProductDetailPage() {
                 </>
               )}
             </div>
+            {promo.promo && (
+              <div className="small text-danger fw-medium mt-1">
+                Đang khuyến mãi "{promo.promo.name}": giảm {formatVND(promo.amount)}
+                {' '}· đến {new Date(promo.promo.endDate).toLocaleDateString('vi-VN')}
+              </div>
+            )}
+            {promo.extra.map((p) => (
+              <div key={p._id} className="small text-success mt-1">🎁 {describeExtra(p)}</div>
+            ))}
             <div className="small text-muted">Giá đã bao gồm VAT</div>
           </div>
 
@@ -462,7 +475,9 @@ export default function ProductDetailPage() {
 
           <div className="detail-policies mt-3">
             <div>
-              <ShieldCheck className="text-primary" /> Bảo hành chính hãng {product.warrantyMonths} tháng
+              <ShieldCheck className="text-primary" /> {product.warrantyMonths > 0
+                ? `Bảo hành ${product.warrantyProvider === 'manufacturer' ? 'chính hãng (hãng quản lý)' : 'tại cửa hàng'} ${product.warrantyMonths} tháng, tính từ ${product.warrantyStartFrom === 'activation' ? 'ngày kích hoạt' : 'ngày mua'} · có gói mua thêm thời gian bảo hành`
+                : 'Sản phẩm không kèm bảo hành'}
             </div>
             <div>
               <ArrowRepeat className="text-primary" /> Đổi trả miễn phí 30 ngày nếu lỗi nhà sản xuất

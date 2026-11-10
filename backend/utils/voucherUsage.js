@@ -5,7 +5,14 @@ const Voucher = require('../models/Voucher');
 // lượt dùng hết sớm dù chưa ai thật sự dùng. Không để usedCount âm. Lần đổi trạng thái sang hủy / trả hàng
 // là cập nhật có điều kiện (chỉ thành công 1 lần), nên lượt cũng chỉ được trả 1 lần.
 // Trong transaction (có session) thì để lỗi nổi lên cho transaction hủy cả khối; ngoài transaction chỉ ghi log.
+// Trả luôn suất / ngân sách của chương trình khuyến mãi tự động mà đơn đã dùng (utils/promotions.js).
 async function releaseVoucher(order, session = null) {
+  try {
+    await require('./promotions').releasePromotions(order, session);
+  } catch (err) {
+    if (session) throw err;
+    console.error('[Promotion] Lỗi trả suất khuyến mãi:', err.message);
+  }
   if (!order?.voucherCode) return;
   const code = String(order.voucherCode).toUpperCase(); // đơn cũ có thể lưu mã đúng như khách gõ
   try {

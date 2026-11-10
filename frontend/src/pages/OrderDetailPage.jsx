@@ -223,10 +223,17 @@ export default function OrderDetailPage() {
             <span>Phí vận chuyển</span>
             <span>{formatVND(order.shippingFee)}</span>
           </div>
-          {order.discountAmount > 0 && (
+          {/* Đơn mới: tách khuyến mãi tự động và mã giảm giá; đơn cũ chỉ có tổng giảm giá */}
+          {(order.promotions || []).map((p) => (
+            <div key={p.promotionId || p.name} className="d-flex justify-content-between text-success">
+              <span>Khuyến mãi: {p.name}</span>
+              <span>-{formatVND(p.amount)}</span>
+            </div>
+          ))}
+          {order.discountAmount - (order.promotionDiscount || 0) > 0 && (
             <div className="d-flex justify-content-between text-success">
-              <span>Giảm giá</span>
-              <span>-{formatVND(order.discountAmount)}</span>
+              <span>{order.voucherCode ? `Mã giảm giá ${order.voucherCode}` : 'Giảm giá'}</span>
+              <span>-{formatVND(order.discountAmount - (order.promotionDiscount || 0))}</span>
             </div>
           )}
           <div className="d-flex justify-content-between fw-bold border-top pt-2 mt-2">

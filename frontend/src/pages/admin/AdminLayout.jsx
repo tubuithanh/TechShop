@@ -3,6 +3,10 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Dropdown, Offcanvas } from 'react-bootstrap';
 import {
   Speedometer2,
+  GraphUpArrow,
+  Megaphone,
+  JournalCheck,
+  Trophy,
   BoxSeam,
   Boxes,
   ReceiptCutoff,
@@ -29,6 +33,7 @@ import {
   ChevronRight
 } from 'react-bootstrap-icons';
 import { useAuth } from '../../store/AuthContext';
+import { getWorkingStore, setWorkingStore } from '../../services/api';
 import { useSettings } from '../../store/SettingsContext';
 import { hasPagePermission } from '../../utils/permissions';
 import { orderService } from '../../services/orderService';
@@ -45,6 +50,7 @@ const SECTIONS = [
     title: 'Bán hàng',
     items: [
       { path: '/admin', label: 'Tổng quan', icon: Speedometer2, perm: true },
+      { path: '/admin/analytics', label: 'Phân tích', icon: GraphUpArrow, perm: true },
       { path: '/admin/orders', label: 'Đơn hàng', icon: ReceiptCutoff, perm: true, badge: 'orders' },
       { path: '/admin/pos', label: 'Bán tại quầy (POS)', icon: Shop, perm: true },
       { path: '/admin/deliveries', label: 'Phân công giao hàng', icon: Truck, perm: true },
@@ -56,7 +62,8 @@ const SECTIONS = [
     items: [
       { path: '/admin/products', label: 'Sản phẩm', icon: BoxSeam, perm: true },
       { path: '/admin/inventory', label: 'Tồn kho chi nhánh', icon: Boxes, perm: true },
-      { path: '/admin/vouchers', label: 'Khuyến mãi', icon: TagsFill, perm: true },
+      { path: '/admin/vouchers', label: 'Mã giảm giá', icon: TagsFill, perm: true },
+      { path: '/admin/promotions', label: 'Chương trình khuyến mãi', icon: Megaphone, perm: true },
       { path: '/admin/reviews', label: 'Đánh giá', icon: Star, perm: true }
     ]
   },
@@ -64,7 +71,8 @@ const SECTIONS = [
     title: 'Khách hàng',
     items: [
       { path: '/admin/customers', label: 'Khách hàng', icon: People, perm: true },
-      { path: '/admin/warranties', label: 'Bảo hành', icon: ShieldCheck, perm: true },
+      { path: '/admin/warranties', label: 'Phiếu bảo hành', icon: ShieldCheck, perm: true },
+      { path: '/admin/warranty-cards', label: 'Sổ bảo hành', icon: JournalCheck, perm: true },
       { path: '/admin/chat', label: 'Chat hỗ trợ', icon: ChatDots, perm: true, badge: 'chat' }
     ]
   },
@@ -78,7 +86,9 @@ const SECTIONS = [
   {
     title: 'Hệ thống',
     items: [
+      { path: '/admin/stores', label: 'Chi nhánh', icon: Shop, admin: true },
       { path: '/admin/staff', label: 'Nhân viên', icon: PersonBadge, admin: true },
+      { path: '/admin/staff-performance', label: 'Hiệu suất & thưởng', icon: Trophy, admin: true },
       { path: '/admin/permission-groups', label: 'Nhóm quyền', icon: KeyFill, admin: true },
       { path: '/admin/locations', label: 'Tỉnh thành & phường xã', icon: GeoAltFill, admin: true },
       { path: '/admin/audit-logs', label: 'Nhật ký thao tác', icon: ClockHistory, admin: true },
@@ -95,6 +105,46 @@ const readCollapsed = () => {
     return false;
   }
 };
+
+// Chi nhánh đang làm việc: quản lý nhiều chi nhánh chọn chi nhánh để thao tác; nhân viên đang điều chuyển tạm
+// thời thấy nhãn chi nhánh được điều chuyển tới. Đổi chi nhánh -> tải lại trang để mọi dữ liệu theo chi nhánh mới.
+function WorkingStoreSwitcher({ user }) {
+  const scope = user?.storeScope;
+  if (!scope || user.role !== 'staff') return null;
+  const stores = scope.stores || [];
+  const transfer = scope.transfer;
+  const transferLabel = transfer && (
+    <span className="badge text-bg-warning fw-normal d-none d-md-inline" title={transfer.reason || ''}>
+      Điều chuyển đến {new Date(transfer.endDate).toLocaleDateString('vi-VN')}
+    </span>
+  );
+  if (stores.length <= 1) {
+    return stores.length === 1 ? (
+      <span className="d-none d-md-inline-flex align-items-center gap-2 small text-muted">
+        <Shop /> {stores[0].name} {transferLabel}
+      </span>
+    ) : null;
+  }
+  const change = (id) => {
+    setWorkingStore(id);
+    window.location.reload();
+  };
+  return (
+    <span className="d-inline-flex align-items-center gap-2">
+      <select
+        className="form-select form-select-sm"
+        style={{ width: 'auto', maxWidth: 200 }}
+        aria-label="Chi nhánh đang làm việc"
+        title="Chi nhánh đang làm việc"
+        value={scope.current || getWorkingStore()}
+        onChange={(e) => change(e.target.value)}
+      >
+        {stores.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+      </select>
+      {transferLabel}
+    </span>
+  );
+}
 
 function canSee(user, item) {
   const isAdmin = user?.role === 'admin';
@@ -358,6 +408,7 @@ export default function AdminLayout() {
           </div>
 
           <div className="ms-auto d-flex align-items-center gap-2">
+            <WorkingStoreSwitcher user={user} />
             <QuickSearch items={flatItems} />
             <Dropdown align="end">
               <Dropdown.Toggle as="button" type="button" className="admin-user-btn">

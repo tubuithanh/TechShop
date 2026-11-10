@@ -6,6 +6,7 @@ import { WARRANTY_METHOD_LABEL, WARRANTY_STATUS_LABEL, WARRANTY_STATUS_VARIANT, 
 import ProductImage from '../components/ProductImage';
 import { useSettings } from '../store/SettingsContext';
 import { pageTitle } from '../utils/siteHead';
+import WarrantyCoverageCheck from '../components/WarrantyCoverageCheck';
 
 const fmtDate = (d) => new Date(d).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -55,6 +56,14 @@ export default function WarrantyLookupPage() {
         tài khoản) và số điện thoại đã dùng khi đặt hàng.
       </p>
 
+      <h2 className="fs-5 fw-bold mb-2">Kiểm tra sản phẩm còn bảo hành</h2>
+      <p className="small text-muted mb-3">
+        Bảo hành tiêu chuẩn 12 tháng (tùy sản phẩm), tính từ ngày mua hoặc ngày kích hoạt. Bạn có thể xem toàn bộ sổ bảo
+        hành và mua thêm thời gian bảo hành trong mục <Link to="/account/warranties">Bảo hành</Link> của tài khoản.
+      </p>
+      <WarrantyCoverageCheck />
+
+      <h2 className="fs-5 fw-bold mb-2 mt-4">Theo dõi phiếu sửa chữa</h2>
       <Card className="border-0 shadow-sm mb-4">
         <Card.Body className="p-4">
           <Form onSubmit={handleSubmit}>

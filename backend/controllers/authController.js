@@ -21,8 +21,8 @@ const {
   normalizeAddresses
 } = require('../utils/customerValidation');
 
-const OTP_EXPIRES_MINUTES = 5;
-const MAX_OTP_ATTEMPTS = 5;
+const OTP_EXPIRES_MINUTES = 5; // mã OTP có hiệu lực 5 phút
+const MAX_OTP_ATTEMPTS = 5; // nhập sai tối đa 5 lần
 
 // Frontend/backend triển khai trên 2 domain khác nhau (VD: Render) là cross-site, nên cookie phải
 // dùng sameSite: 'none' + secure: true mới được trình duyệt gửi kèm ở request cross-origin. Lúc dev
@@ -212,7 +212,9 @@ const login = asyncHandler(async (req, res) => {
       // tới lần gọi /auth/me hoặc /auth/refresh kế tiếp mới có (tránh 1 khoảng hở hiển thị sai).
       await admin.populate('groupIds', 'name code permissions');
       await admin.populate('storeId', 'name city');
-      return res.json({ message: 'Đăng nhập thành công', user: admin.toSafeObject(), accessToken });
+      await admin.populate('managedStoreIds', 'name city isActive');
+      const scope = admin.role === 'staff' ? await require('../utils/staffScope').computeStoreScope(admin, req.headers['x-store-id']) : null;
+      return res.json({ message: 'Đăng nhập thành công', user: withStoreScope(admin.toSafeObject(), scope), accessToken });
     }
   }
 
@@ -379,8 +381,20 @@ const logout = asyncHandler(async (req, res) => {
   res.json({ message: 'Đăng xuất thành công' });
 });
 
+// Nhân viên: storeId trả về = chi nhánh ĐANG làm việc (điều chuyển tạm thời / chi nhánh đang chọn của quản lý
+// nhiều chi nhánh) kèm danh sách chi nhánh được thao tác - xem utils/staffScope.js
+function withStoreScope(obj, scope) {
+  if (!scope) return obj;
+  return {
+    ...obj,
+    homeStoreId: obj.storeId,
+    storeId: scope.currentStore || null,
+    storeScope: { current: scope.current, stores: scope.stores, transfer: scope.transfer }
+  };
+}
+
 const getMe = asyncHandler(async (req, res) => {
-  res.json({ user: req.account.toSafeObject() });
+  res.json({ user: withStoreScope(req.account.toSafeObject(), req.storeScope) });
 });
 
 const changePassword = asyncHandler(async (req, res) => {

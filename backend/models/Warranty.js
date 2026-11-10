@@ -24,6 +24,21 @@ const warrantySchema = new mongoose.Schema(
       ],
       default: 'loi_nha_san_xuat'
     },
+    // Tình trạng bảo hành TẠI THỜI ĐIỂM TIẾP NHẬN (chụp lại, không đổi về sau):
+    //   in_warranty: còn bảo hành tại cửa hàng (miễn phí) | manufacturer: còn bảo hành, do hãng quản lý
+    //   out_of_warranty: hết bảo hành -> sửa dịch vụ có tính phí (chỉ nhân viên tạo được)
+    coverage: {
+      type: { type: String, enum: ['in_warranty', 'manufacturer', 'out_of_warranty'] },
+      cardId: { type: mongoose.Schema.Types.ObjectId, ref: 'WarrantyCard' },
+      cardCode: String,
+      serial: String,
+      endDate: Date,
+      totalMonths: Number,
+      providerName: String,
+      providerPhone: String,
+      checkedAt: Date
+    },
+    warrantyCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'WarrantyCard', default: null },
     images: [String],
     method: { type: String, enum: ['bring_to_store', 'pickup_at_home', 'send_by_post'], default: 'bring_to_store' },
     status: {

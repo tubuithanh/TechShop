@@ -28,7 +28,8 @@ const protect = async (req, res, next) => {
       // thể vừa đổi (xem giải thích accountRole bên dưới) và trở thành staff ngay trong request này.
       account = await Admin.findById(decoded.id)
         .populate('groupIds', 'name code permissions')
-        .populate('storeId', 'name city');
+        .populate('storeId', 'name city isActive')
+        .populate('managedStoreIds', 'name city isActive');
       // LẤY role TỪ DATABASE (account.role), KHÔNG dùng decoded.role (giá trị cũ lưu trong access
       // token lúc đăng nhập/làm mới gần nhất). Nếu chỉ dùng decoded.role, một admin vừa bị hạ xuống
       // staff (hoặc ngược lại) vẫn giữ nguyên quyền CŨ cho tới khi access token hết hạn (tối đa 15
@@ -46,7 +47,12 @@ const protect = async (req, res, next) => {
     }
 
     req.account = account;
-    req.accountRole = accountRole; // 'customer' | 'staff' | 'admin' - LUÔN lấy tươi từ DB, không tin token
+    req.accountRole = accountRole;
+    // Phạm vi chi nhánh của nhân viên (điều chuyển tạm thời, quản lý nhiều chi nhánh) - xem utils/staffScope.js.
+    // getScopedStoreId / isStoreAllowed bên dưới đọc từ đây thay vì req.account.storeId.
+    if (accountRole === 'staff') {
+      req.storeScope = await require('../utils/staffScope').computeStoreScope(account, req.headers['x-store-id']);
+    } // 'customer' | 'staff' | 'admin' - LUÔN lấy tươi từ DB, không tin token
     next();
   } catch (err) {
     return res.status(401).json({ message: 'Token không hợp lệ hoặc đã hết hạn' });
@@ -95,6 +101,7 @@ const can = (permission) => {
 // quyền inventory.manage vẫn có, nhưng chỉ áp dụng được cho đúng 1 cửa hàng - xem storeInventoryController.js).
 function getScopedStoreId(req) {
   if (req.accountRole !== 'staff') return null;
+  if (req.storeScope) return req.storeScope.current;
   const storeId = req.account?.storeId;
   if (!storeId) return null;
   // req.account.storeId có thể là ObjectId thô HOẶC document đã populate ({_id, name, city}) tùy nơi
@@ -102,4 +109,16 @@ function getScopedStoreId(req) {
   return (storeId._id || storeId).toString();
 }
 
-module.exports = { protect, authorize, can, hasPermission, getScopedStoreId };
+// Nhân viên được thao tác trên chi nhánh này không (chi nhánh đang làm việc HOẶC chi nhánh quản lý thêm).
+// Dùng khi xem 1 bản ghi cụ thể (VD: mở đơn hàng của chi nhánh khác mình cũng quản lý từ thông báo).
+function isStoreAllowed(req, storeId) {
+  if (req.accountRole !== 'staff') return true;
+  const allowed = req.storeScope?.allowed;
+  if (!allowed) {
+    const own = getScopedStoreId(req);
+    return !own || String(storeId?._id || storeId) === own;
+  }
+  return allowed.length === 0 || allowed.includes(String(storeId?._id || storeId));
+}
+
+module.exports = { protect, authorize, can, hasPermission, getScopedStoreId, isStoreAllowed };

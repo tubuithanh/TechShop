@@ -120,6 +120,72 @@ describe('Tuần 9: đánh giá, hỏi đáp, bảo hành, dashboard, nhân viê
     expect(mine[0]).toMatchObject({ title: product.title, soldCount: 2 }); // chỉ chi nhánh 1
   });
 
+  test('TC-152b: Dashboard: doanh thu theo tháng (đủ 12 tháng) và theo chi nhánh có lọc năm/tháng', async () => {
+    const { store1, store2, t, deliveredOrder } = await setup();
+    await deliveredOrder(store1._id, 2, 2000000);
+    await deliveredOrder(store2._id, 5, 5000000);
+    // Đơn đã giao từ 3 năm trước - không được tính vào năm nay
+    await Order.create({ orderCode: 'T9OLD', storeId: store1._id, paymentMode: 'cod', status: 'delivered', items: [], itemsTotal: 1000000, grandTotal: 1000000, createdAt: new Date('2023-05-10T12:00:00+07:00') });
+
+    const year = new Date().getFullYear();
+    const months = (await auth(request(app).get(`/api/dashboard/revenue-by-month?year=${year}`), t.admin)).body.data;
+    expect(months).toHaveLength(12);
+    expect(months.reduce((s, m) => s + m.revenue, 0)).toBe(7000000);
+    const old = (await auth(request(app).get('/api/dashboard/revenue-by-month?year=2023'), t.admin)).body.data;
+    expect(old[4]).toMatchObject({ month: 5, revenue: 1000000, orderCount: 1 });
+
+    const all = (await auth(request(app).get('/api/dashboard/revenue-by-store'), t.admin)).body.data;
+    expect(all.reduce((s, x) => s + x.revenue, 0)).toBe(8000000); // toàn thời gian
+    const thisYear = (await auth(request(app).get(`/api/dashboard/revenue-by-store?year=${year}`), t.admin)).body.data;
+    expect(thisYear.reduce((s, x) => s + x.revenue, 0)).toBe(7000000);
+    const may2023 = (await auth(request(app).get('/api/dashboard/revenue-by-store?year=2023&month=5'), t.admin)).body.data;
+    expect(may2023).toHaveLength(1);
+    expect(may2023[0].revenue).toBe(1000000);
+
+    // Quản lý chi nhánh 1 chỉ thấy doanh thu chi nhánh mình
+    const mine = (await auth(request(app).get(`/api/dashboard/revenue-by-month?year=${year}`), t.ql1)).body.data;
+    expect(mine.reduce((s, m) => s + m.revenue, 0)).toBe(2000000);
+    // Khách hàng không xem được
+    expect((await auth(request(app).get('/api/dashboard/revenue-by-month'), t.customer)).statusCode).toBe(403);
+  });
+
+  test('TC-152c: Trang Phân tích: so sánh cùng kỳ, khoảng giá, top khách, nhân viên, phạm vi chi nhánh', async () => {
+    const { store1, store2, t, deliveredOrder, userId, product } = await setup();
+    await deliveredOrder(store1._id, 2, 2000000); // đơn giá 1tr
+    await deliveredOrder(store2._id, 1, 25000000); // đơn giá 25tr
+    // Đơn POS do admin tạo, đã giao
+    const adminId = (await auth(request(app).get('/api/auth/me'), t.admin)).body.user._id;
+    await Order.create({ orderCode: 'T9POS', source: 'pos', createdBy: adminId, createdByName: 'Admin', storeId: store1._id, paymentMode: 'cash', status: 'delivered', paymentStatus: 'paid',
+      items: [{ productId: product._id, quantity: 1, unitPrice: 7000000 }], itemsTotal: 7000000, grandTotal: 7000000 });
+    await Order.create({ orderCode: 'T9CAN', userId, storeId: store1._id, paymentMode: 'cod', status: 'cancelled', items: [], itemsTotal: 1, grandTotal: 1 });
+
+    const res = await auth(request(app).get('/api/dashboard/analytics'), t.admin);
+    expect(res.statusCode).toBe(200);
+    const d = res.body.data;
+    expect(d.compare.current.revenue).toBe(34000000);
+    expect(d.compare.current.orders).toBe(3);
+    expect(d.compare.previous.revenue).toBe(0);
+    expect(d.priceBuckets.find((b) => b.label === 'Dưới 5 triệu').quantity).toBe(2);
+    expect(d.priceBuckets.find((b) => b.label === '5 - 10 triệu').quantity).toBe(1);
+    expect(d.priceBuckets.find((b) => b.label === '20 - 40 triệu').quantity).toBe(1);
+    expect(d.topCustomers[0]).toMatchObject({ spent: 27000000, orders: 2 });
+    expect(d.staff[0]).toMatchObject({ revenue: 7000000, orders: 1 });
+    expect(d.monthly.reduce((s, m) => s + m.pos, 0)).toBe(7000000);
+    expect(d.customers.reduce((s, m) => s + m.newCustomers, 0)).toBe(1);
+    expect(d.heatmap.reduce((s, h) => s + h.count, 0)).toBe(3);
+
+    // Quản lý chi nhánh 1: không xem được chi nhánh 2 dù gửi storeId
+    const mine = (await auth(request(app).get(`/api/dashboard/analytics?storeId=${store2._id}`), t.ql1)).body.data;
+    expect(mine.compare.current.revenue).toBe(9000000);
+    // Admin lọc theo chi nhánh 2
+    const s2 = (await auth(request(app).get(`/api/dashboard/analytics?storeId=${store2._id}`), t.admin)).body.data;
+    expect(s2.compare.current.revenue).toBe(25000000);
+    // Khoảng ngày trong quá khứ -> không có doanh thu
+    const old = (await auth(request(app).get('/api/dashboard/analytics?from=2020-01-01&to=2020-12-31'), t.admin)).body.data;
+    expect(old.compare.current.revenue).toBe(0);
+    expect((await auth(request(app).get('/api/dashboard/analytics'), t.customer)).statusCode).toBe(403);
+  });
+
   test('TC-153: Email nhân viên không được trùng email khách hàng', async () => {
     const { t } = await setup();
     await registerUser({ email: 'trung@example.com' });

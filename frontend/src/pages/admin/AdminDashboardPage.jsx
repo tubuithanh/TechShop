@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Card, Row, Col, Table, ProgressBar, Badge } from 'react-bootstrap';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Card, Row, Col, Table, ProgressBar, Badge, Form } from 'react-bootstrap';
 import { CashStack, ReceiptCutoff, People, BoxSeam, ShopWindow } from 'react-bootstrap-icons';
 import { dashboardService } from '../../services/dashboardService';
 import { placeholderImage } from '../../utils/placeholderImage';
@@ -54,13 +54,34 @@ export default function AdminDashboardPage() {
   const [revenueByStore, setRevenueByStore] = useState([]);
   const [orderStatusStats, setOrderStatusStats] = useState([]);
 
+  // Doanh thu theo tháng: chọn năm
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
+  const [monthYear, setMonthYear] = useState(currentYear);
+  const [revenueByMonth, setRevenueByMonth] = useState([]);
+  // Doanh thu theo chi nhánh: '' = toàn thời gian; chọn năm, rồi có thể chọn thêm tháng
+  const [storeYear, setStoreYear] = useState('');
+  const [storeMonth, setStoreMonth] = useState('');
+
   useEffect(() => {
     dashboardService.getSummary().then(setSummary);
     dashboardService.getRevenueByDay(7).then(setRevenueData);
     dashboardService.getBestSelling(5).then(setBestSelling);
-    dashboardService.getRevenueByStore().then(setRevenueByStore);
     dashboardService.getOrderStatusStats().then(setOrderStatusStats);
   }, []);
+
+  useEffect(() => {
+    dashboardService.getRevenueByMonth(monthYear).then(setRevenueByMonth);
+  }, [monthYear]);
+
+  useEffect(() => {
+    const params = storeYear ? { year: storeYear, ...(storeMonth ? { month: storeMonth } : {}) } : {};
+    dashboardService.getRevenueByStore(params).then(setRevenueByStore);
+  }, [storeYear, storeMonth]);
+
+  const yearRevenueTotal = revenueByMonth.reduce((sum, m) => sum + m.revenue, 0);
+  const yearOrderTotal = revenueByMonth.reduce((sum, m) => sum + m.orderCount, 0);
+  const storeRevenueTotal = revenueByStore.reduce((sum, s) => sum + s.revenue, 0);
 
   const maxStoreRevenue = Math.max(1, ...revenueByStore.map((s) => s.revenue));
   const maxSold = Math.max(1, ...bestSelling.map((p) => p.soldCount));
@@ -160,6 +181,41 @@ export default function AdminDashboardPage() {
         </Col>
       </Row>
 
+      <Row className="g-3 mb-4">
+        <Col>
+          <Card className="shadow-sm border-0 rounded-4">
+            <Card.Body>
+              <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                <SectionTitle>Doanh thu theo tháng</SectionTitle>
+                <div className="d-flex align-items-center gap-3 small">
+                  <span>
+                    <span className="text-muted">Cả năm </span>
+                    <span className="fw-bold text-primary">{formatVND(yearRevenueTotal)}</span>
+                    <span className="text-muted"> · {yearOrderTotal} đơn</span>
+                  </span>
+                  <Form.Select size="sm" style={{ width: 100 }} value={monthYear} onChange={(e) => setMonthYear(Number(e.target.value))} aria-label="Chọn năm">
+                    {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </Form.Select>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={revenueByMonth}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" fontSize={12} tickLine={false} tickFormatter={(m) => `T${m}`} />
+                  <YAxis fontSize={12} tickLine={false} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}tr`} />
+                  <Tooltip
+                    labelFormatter={(m) => `Tháng ${m}/${monthYear}`}
+                    formatter={(value, name, item) => [`${formatVND(value)} (${item.payload.orderCount} đơn)`, 'Doanh thu']}
+                    contentStyle={{ borderRadius: 10, border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                  />
+                  <Bar dataKey="revenue" fill="#dc2626" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
       <Row className="g-3">
         <Col md={6}>
           <Card className="shadow-sm h-100 border-0 rounded-4">
@@ -197,7 +253,26 @@ export default function AdminDashboardPage() {
         <Col md={6}>
           <Card className="shadow-sm h-100 border-0 rounded-4">
             <Card.Body>
-              <SectionTitle>Doanh thu theo cửa hàng (multi-store)</SectionTitle>
+              <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <SectionTitle>Doanh thu theo chi nhánh</SectionTitle>
+                <div className="d-flex gap-2 mb-3">
+                  <Form.Select size="sm" value={storeYear} aria-label="Năm"
+                    onChange={(e) => { setStoreYear(e.target.value); setStoreMonth(''); }}>
+                    <option value="">Toàn thời gian</option>
+                    {yearOptions.map((y) => <option key={y} value={y}>Năm {y}</option>)}
+                  </Form.Select>
+                  <Form.Select size="sm" value={storeMonth} disabled={!storeYear} aria-label="Tháng"
+                    onChange={(e) => setStoreMonth(e.target.value)}>
+                    <option value="">Cả năm</option>
+                    {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>Tháng {i + 1}</option>)}
+                  </Form.Select>
+                </div>
+              </div>
+              <div className="small mb-3">
+                <span className="text-muted">Tổng </span>
+                <span className="fw-bold text-primary">{formatVND(storeRevenueTotal)}</span>
+              </div>
+              {revenueByStore.length === 0 && <div className="text-muted small">Chưa có doanh thu trong khoảng thời gian này</div>}
               <div className="d-flex flex-column gap-3">
                 {revenueByStore.map((s) => (
                   <div key={s._id}>

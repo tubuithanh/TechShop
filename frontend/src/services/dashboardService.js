@@ -13,8 +13,18 @@ export const dashboardService = {
     const { data } = await api.get('/dashboard/best-selling-products', { params: { limit } });
     return data.data;
   },
-  async getRevenueByStore() {
-    const { data } = await api.get('/dashboard/revenue-by-store');
+  async getRevenueByMonth(year) {
+    const { data } = await api.get('/dashboard/revenue-by-month', { params: { year } });
+    return data.data;
+  },
+  // params: {} = toàn thời gian; { year } = cả năm; { year, month } = 1 tháng
+  async getRevenueByStore(params = {}) {
+    const { data } = await api.get('/dashboard/revenue-by-store', { params });
+    return data.data;
+  },
+  // params: { from, to } dạng YYYY-MM-DD, { storeId } (admin)
+  async getAnalytics(params = {}) {
+    const { data } = await api.get('/dashboard/analytics', { params });
     return data.data;
   },
   async getOrderStatusStats() {

@@ -574,3 +574,30 @@
 .admin-main .table-responsive {
   -webkit-overflow-scrolling: touch;
 }
+
+/* ===== Hồ sơ nhân viên: dòng thời gian quá trình làm việc ===== */
+.staff-timeline { position: relative; padding-left: 1.75rem; }
+.staff-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.6rem;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 2px;
+  background: var(--bs-border-color);
+}
+.staff-timeline-item { position: relative; padding-bottom: 1.1rem; }
+.staff-timeline-item:last-child { padding-bottom: 0; }
+.staff-timeline-item.ended, .staff-timeline-item.cancelled { opacity: 0.65; }
+.staff-timeline-dot {
+  position: absolute;
+  left: -1.75rem;
+  top: 0.15rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 3px var(--bs-body-bg);
+}

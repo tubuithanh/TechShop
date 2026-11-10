@@ -58,7 +58,7 @@ describe('Bật/tắt chống lạm dụng & tấn công dồn dập', () => {
     const token = await adminToken();
     const get = async () => (await auth(request(app).get('/api/settings/security'), token)).body.data;
     const values = Object.fromEntries((await get()).limits.map((l) => [l.key, l.value]));
-    expect(values).toEqual({ api: 1000, login: 20, registerOtp: 10, reset: 10, order: 20, review: 20, upload: 30 });
+    expect(values).toEqual({ api: 1000, login: 20, registerOtp: 10, reset: 10, order: 20, quote: 300, review: 20, upload: 30 });
 
     // Giá trị không hợp lệ
     const put = (limits) => auth(request(app).put('/api/settings/security'), token).send({ limits });

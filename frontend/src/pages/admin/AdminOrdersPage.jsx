@@ -14,6 +14,7 @@ import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import EInvoiceExportModal from '../../components/admin/EInvoiceExportModal';
 import { FileEarmarkSpreadsheet } from 'react-bootstrap-icons';
+import { downloadCsv } from '../../utils/csvExport';
 
 const statusOptions = Object.keys(ORDER_LABELS);
 // Màu badge theo trạng thái (admin.css đổi sang dạng pill nền nhạt)
@@ -48,6 +49,34 @@ export default function AdminOrdersPage() {
   });
   const page = query.values.page;
   const setPage = query.setPage;
+
+  // Xuất danh sách đơn ra file CSV (mở được bằng Excel) theo đúng bộ lọc đang chọn
+  const [exporting, setExporting] = useState(false);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      // Tối đa 200 đơn - giới hạn mỗi trang của backend (paginationGuard)
+      const res = await orderService.getAllOrdersAdmin({ ...query.apiParams, page: 1, limit: 200 });
+      const list = res.data || [];
+      if (list.length === 0) {
+        alert('Không có đơn nào để xuất');
+        return;
+      }
+      const header = ['Mã đơn', 'Ngày tạo', 'Khách hàng', 'Trạng thái', 'Tổng tiền'];
+      const rows = list.map((o) => [
+        o.orderCode,
+        new Date(o.createdAt).toLocaleString('vi-VN'),
+        o.deliveryAddress?.fullName,
+        ORDER_LABELS[o.status] || o.status,
+        o.grandTotal
+      ]);
+      downloadCsv(`don-hang-${new Date().toISOString().slice(0, 10)}.csv`, header, rows);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Xuất file thất bại');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Quản lý chi nhánh chỉ thấy đơn chi nhánh mình (backend tự lọc) -> không cần bộ lọc chi nhánh
   const [stores, setStores] = useState([]);
@@ -112,9 +141,14 @@ export default function AdminOrdersPage() {
     <div>
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
         <h1 className="fs-4 fw-bold mb-0">Quản lý đơn hàng</h1>
-        <Button variant="success" className="d-flex align-items-center gap-2" onClick={() => setShowInvoiceExport(true)}>
-          <FileEarmarkSpreadsheet /> Xuất hóa đơn điện tử
-        </Button>
+        <div className="d-flex gap-2">
+          <Button variant="outline-secondary" disabled={exporting} onClick={exportCsv}>
+            {exporting ? 'Đang xuất...' : 'Xuất CSV'}
+          </Button>
+          <Button variant="success" className="d-flex align-items-center gap-2" onClick={() => setShowInvoiceExport(true)}>
+            <FileEarmarkSpreadsheet /> Xuất hóa đơn điện tử
+          </Button>
+        </div>
       </div>
       {showInvoiceExport && (
         <EInvoiceExportModal

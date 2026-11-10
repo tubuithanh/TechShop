@@ -1,3 +1,4 @@
+import { useActivePromotions, promotionPrice } from '../utils/promotionPrice';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge } from 'react-bootstrap';
@@ -25,16 +26,17 @@ export default function ProductCard({ product }) {
 
   // effectivePrice (tính sẵn ở backend) xử lý đúng cả trường hợp salePrice=0 (hàng khuyến mãi miễn
   // phí) - `salePrice || price` coi 0 là falsy nên sẽ hiển thị nhầm về giá gốc.
-  const displayPrice = product.effectivePrice ?? (product.salePrice || product.price);
+  const basePrice = product.effectivePrice ?? (product.salePrice || product.price);
+  // Khuyến mãi tự động áp dụng cho mọi khách -> trừ thẳng vào giá hiển thị
+  const promotions = useActivePromotions();
+  const promo = promotionPrice(product, basePrice, promotions);
+  const displayPrice = promo.price;
   // Các màu đang bán (không trùng) + sản phẩm có nhiều mức giá theo phiên bản hay không (hiện "Từ ...")
   const activeVariants = (product.variants || []).filter((v) => v.isActive);
   const colors = activeVariants.filter((v, i, arr) => arr.findIndex((x) => x.color === v.color) === i);
   const hasPriceRange = new Set(activeVariants.map((v) => v.effectivePrice)).size > 1;
   const secondImage = (product.imageURLs || []).find((u) => u && u !== product.featuredImage);
-  const discountPercent =
-    product.salePrice != null && product.salePrice < product.price
-      ? Math.round(100 - (product.salePrice / product.price) * 100)
-      : 0;
+  const discountPercent = displayPrice < product.price ? Math.round(100 - (displayPrice / product.price) * 100) : 0;
   const tags = (product.tags || []).slice(0, 2);
 
   const flash = (text) => {
@@ -103,7 +105,13 @@ export default function ProductCard({ product }) {
       <div className="product-card-body">
         {/* Hàng nhãn luôn chiếm chỗ (kể cả khi trống) để tên sản phẩm các card thẳng hàng nhau */}
         <div className="product-card-tags">
-          {tags.map((t) => (
+          {promo.promo && (
+            <span className="product-card-tag" style={{ background: 'var(--bs-danger-bg-subtle)', color: 'var(--bs-danger-text-emphasis)' }} title={promo.promo.name}>
+              {promo.promo.name.length > 18 ? 'Khuyến mãi' : promo.promo.name}
+            </span>
+          )}
+          {!promo.promo && promo.extra.length > 0 && <span className="product-card-tag">Ưu đãi thành viên</span>}
+          {tags.slice(0, promo.promo || promo.extra.length ? 1 : 2).map((t) => (
             <span key={t} className="product-card-tag">
               {t}
             </span>

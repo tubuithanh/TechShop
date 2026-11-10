@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import { Container, Card, Badge, Spinner, Alert, Stack, Button, Modal, Form, Row, Col } from 'react-bootstrap';
-import { PlusLg, Image as ImageIcon } from 'react-bootstrap-icons';
+import { PlusLg, Image as ImageIcon, JournalCheck, Tools, Search } from 'react-bootstrap-icons';
 import { warrantyService } from '../services/warrantyService';
+import MyWarrantyCards from '../components/MyWarrantyCards';
 import { orderService } from '../services/orderService';
 import { resizeImageToDataUrl } from '../utils/imageUpload';
 import {
@@ -9,6 +11,7 @@ import {
   WARRANTY_METHOD_LABEL,
   WARRANTY_STATUS_LABEL,
   WARRANTY_STATUS_VARIANT,
+  WARRANTY_STATUS_OPTIONS,
   MAX_WARRANTY_IMAGES
 } from '../constants/warranty';
 
@@ -21,7 +24,30 @@ const emptyForm = {
   images: []
 };
 
+// Các bước xử lý phiếu sửa chữa (bước "Chờ linh kiện" có thể không xảy ra)
+const STEPS = WARRANTY_STATUS_OPTIONS.filter((s) => s !== 'waiting_parts');
+const OPEN_STATUSES = ['received', 'checking', 'repairing', 'waiting_parts'];
+
+function RepairSteps({ status }) {
+  const current = status === 'waiting_parts' ? STEPS.indexOf('repairing') : STEPS.indexOf(status);
+  return (
+    <div className="repair-steps" aria-label="Tiến độ xử lý">
+      {STEPS.map((s, i) => (
+        <div key={s} className={`repair-step${i <= current ? ' done' : ''}${i === current ? ' current' : ''}`}>
+          <span className="repair-step-dot" />
+          <span className="repair-step-label">{s === 'repairing' && status === 'waiting_parts' ? 'Chờ linh kiện' : WARRANTY_STATUS_LABEL[s]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function MyWarrantiesPage() {
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'repairs' ? 'repairs' : 'cards';
+  const setTab = (t) => setParams(t === 'cards' ? {} : { tab: t }, { replace: true });
+  const [cardCount, setCardCount] = useState(null);
+  const [ticketFilter, setTicketFilter] = useState('open');
   const [warranties, setWarranties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
@@ -37,9 +63,10 @@ export default function MyWarrantiesPage() {
     load();
   }, []);
 
-  const openForm = () => {
+  // prefill: { orderId, productId } khi bấm "Yêu cầu sửa chữa" từ 1 sổ bảo hành
+  const openForm = (prefill = null) => {
     setError('');
-    setForm(emptyForm);
+    setForm(prefill?.orderId ? { ...emptyForm, orderId: String(prefill.orderId), productId: String(prefill.productId) } : emptyForm);
     orderService.getMyOrders().then((data) => setOrders(data.filter((o) => o.status === 'delivered')));
     setShowForm(true);
   };
@@ -92,6 +119,8 @@ export default function MyWarrantiesPage() {
       await warrantyService.createRequest(form);
       setShowForm(false);
       load();
+      setTicketFilter('open');
+      setTab('repairs'); // xem ngay phiếu vừa gửi
     } catch (err) {
       setError(err.response?.data?.message || 'Gửi yêu cầu bảo hành thất bại');
     } finally {
@@ -107,55 +136,105 @@ export default function MyWarrantiesPage() {
     );
 
   return (
-    <Container className="py-4" style={{ maxWidth: '48rem' }}>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="fs-4 fw-bold mb-0">Yêu cầu bảo hành của tôi</h1>
-        <Button variant="primary" size="sm" onClick={openForm}>
-          <PlusLg className="me-1" /> Gửi yêu cầu mới
+    <Container className="py-4" style={{ maxWidth: '52rem' }}>
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+          <h1 className="fs-4 fw-bold mb-1">Bảo hành</h1>
+          <p className="small text-muted mb-0">
+            Theo dõi hạn bảo hành từng sản phẩm, mua thêm thời gian bảo hành và gửi yêu cầu sửa chữa.{' '}
+            <Link to="/chinh-sach-bao-hanh">Chính sách bảo hành</Link>
+          </p>
+        </div>
+        <Button variant="primary" size="sm" onClick={() => openForm()}>
+          <PlusLg className="me-1" /> Yêu cầu sửa chữa
         </Button>
       </div>
 
-      {warranties.length === 0 ? (
-        <Alert variant="light" className="border text-muted mb-0">
-          Bạn chưa có yêu cầu bảo hành nào.
-        </Alert>
-      ) : (
-        <Stack gap={3}>
-          {warranties.map((w) => (
-            <Card key={w._id} className="shadow-sm">
-              <Card.Body>
-                <div className="d-flex justify-content-between mb-1">
-                  <span className="fw-medium">Phiếu #{w.ticketCode}</span>
-                  <Badge bg={WARRANTY_STATUS_VARIANT[w.status] || 'secondary'}>{WARRANTY_STATUS_LABEL[w.status]}</Badge>
+      <div className="account-tabs mb-3" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'cards'} className={`account-tab${tab === 'cards' ? ' active' : ''}`} onClick={() => setTab('cards')}>
+          <JournalCheck /> Sổ bảo hành {cardCount != null && <span className="account-tab-count">{cardCount}</span>}
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'repairs'} className={`account-tab${tab === 'repairs' ? ' active' : ''}`} onClick={() => setTab('repairs')}>
+          <Tools /> Yêu cầu sửa chữa
+          {warranties.length > 0 && (
+            <span className={`account-tab-count${warranties.some((w) => OPEN_STATUSES.includes(w.status)) ? ' highlight' : ''}`}>
+              {warranties.filter((w) => OPEN_STATUSES.includes(w.status)).length || warranties.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Giữ tab sổ bảo hành luôn được tải (để có số đếm), chỉ ẩn khi xem tab khác */}
+      <div hidden={tab !== 'cards'}>
+        <MyWarrantyCards
+          onLoaded={(list) => setCardCount(list.length)}
+          onRequestRepair={(card) => openForm({ orderId: card.orderId, productId: card.productId })}
+        />
+      </div>
+
+      {tab === 'repairs' && (
+        <>
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            {[
+              ['open', 'Đang xử lý', warranties.filter((w) => OPEN_STATUSES.includes(w.status)).length],
+              ['closed', 'Đã hoàn tất', warranties.filter((w) => !OPEN_STATUSES.includes(w.status)).length],
+              ['all', 'Tất cả', warranties.length]
+            ].map(([k, label, n]) => (
+              <button key={k} type="button" className={`btn btn-sm rounded-pill ${ticketFilter === k ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setTicketFilter(k)}>
+                {label} <span className="opacity-75">({n})</span>
+              </button>
+            ))}
+            <Link to="/tra-cuu-bao-hanh" className="btn btn-sm btn-link ms-auto"><Search className="me-1" />Tra cứu bằng mã phiếu</Link>
+          </div>
+          {(() => {
+            const list = warranties.filter((w) => ticketFilter === 'all' || (ticketFilter === 'open') === OPEN_STATUSES.includes(w.status));
+            if (!list.length) {
+              return (
+                <div className="text-center text-muted py-5 border rounded-3 bg-body">
+                  <div className="fs-1 mb-2">🔧</div>
+                  {warranties.length ? 'Không có yêu cầu nào ở mục này.' : 'Bạn chưa gửi yêu cầu sửa chữa nào.'}
+                  <div className="mt-3"><Button size="sm" variant="outline-primary" onClick={() => openForm()}>Gửi yêu cầu sửa chữa</Button></div>
                 </div>
-                <div className="small text-muted">{w.productName}</div>
-                {w.returnReason && (
-                  <div className="small text-muted mt-1">
-                    Lý do: {RETURN_REASON_OPTIONS.find((r) => r.value === w.returnReason)?.label || w.returnReason}
-                  </div>
-                )}
-                <div className="small text-muted mt-1">Mô tả lỗi: {w.issueDescription}</div>
-                <div className="small text-muted mt-1">Hình thức: {WARRANTY_METHOD_LABEL[w.method]}</div>
-                {w.images?.length > 0 && (
-                  <div className="d-flex gap-2 mt-2 flex-wrap">
-                    {w.images.map((img, i) => (
-                      <img
-                        key={i}
-                        src={img}
-                        alt={`Ảnh minh chứng ${i + 1}`}
-                        style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8 }}
-                        className="border"
-                      />
-                    ))}
-                  </div>
-                )}
-                <div className="text-muted mt-2" style={{ fontSize: '0.75rem' }}>
-                  Gửi lúc {new Date(w.createdAt).toLocaleString('vi-VN')}
-                </div>
-              </Card.Body>
-            </Card>
-          ))}
-        </Stack>
+              );
+            }
+            return (
+              <Stack gap={3}>
+                {list.map((w) => (
+                  <Card key={w._id} className="shadow-sm border-0">
+                    <Card.Body>
+                      <div className="d-flex justify-content-between align-items-start gap-2 mb-1">
+                        <div>
+                          <div className="fw-semibold">{w.productName}</div>
+                          <div className="small text-muted">Phiếu <code>{w.ticketCode}</code> · gửi {new Date(w.createdAt).toLocaleDateString('vi-VN')} · {WARRANTY_METHOD_LABEL[w.method]}</div>
+                        </div>
+                        <div className="d-flex flex-column align-items-end gap-1">
+                          <Badge bg={WARRANTY_STATUS_VARIANT[w.status] || 'secondary'}>{WARRANTY_STATUS_LABEL[w.status]}</Badge>
+                          {w.coverage?.type === 'out_of_warranty' && <Badge bg="warning" text="dark" className="fw-normal">Sửa dịch vụ (tính phí)</Badge>}
+                          {w.coverage?.type === 'manufacturer' && <Badge bg="info" text="dark" className="fw-normal">Bảo hành hãng</Badge>}
+                        </div>
+                      </div>
+                      <RepairSteps status={w.status} />
+                      <div className="small mt-2">
+                        <span className="text-muted">Lỗi: </span>{w.issueDescription}
+                        {w.returnReason && w.returnReason !== 'loi_nha_san_xuat' && (
+                          <span className="text-muted"> · {RETURN_REASON_OPTIONS.find((r) => r.value === w.returnReason)?.label || w.returnReason}</span>
+                        )}
+                      </div>
+                      {w.cost > 0 && <div className="small mt-1"><span className="text-muted">Chi phí: </span><strong>{w.cost.toLocaleString('vi-VN')}đ</strong></div>}
+                      {w.images?.length > 0 && (
+                        <div className="d-flex gap-2 mt-2 flex-wrap">
+                          {w.images.map((img, i) => (
+                            <img key={i} src={img} alt={`Ảnh minh chứng ${i + 1}`} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} className="border" />
+                          ))}
+                        </div>
+                      )}
+                    </Card.Body>
+                  </Card>
+                ))}
+              </Stack>
+            );
+          })()}
+        </>
       )}
 
       <Modal show={showForm} onHide={() => setShowForm(false)} centered size="lg">

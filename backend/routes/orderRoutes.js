@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createOrder,
+  quoteOrder,
   getMyOrders,
   getOrderById,
   cancelOrder,
@@ -9,7 +10,7 @@ const {
   updateOrderStatus
 } = require('../controllers/orderController');
 const { protect, can } = require('../middlewares/authMiddleware');
-const { orderLimiter } = require('../middlewares/rateLimits');
+const { orderLimiter, quoteLimiter } = require('../middlewares/rateLimits');
 
 router.use(protect);
 const fulfillment = require('../controllers/fulfillmentController');
@@ -24,6 +25,7 @@ router.post('/:id/receive-return', can('orders.manage'), fulfillment.receiveRetu
 router.post('/:id/confirm-payment', can('orders.manage'), fulfillment.confirmPayment);
 router.post('/:id/confirm-refund', can('orders.manage'), fulfillment.confirmRefund);
 router.get('/:orderId/evidence/:evidenceId', evidence.load, evidence.download);
+router.post('/quote', quoteLimiter, quoteOrder);
 router.post('/', orderLimiter, createOrder);
 router.get('/', getMyOrders);
 router.get('/admin/all', can('orders.manage'), getAllOrders);

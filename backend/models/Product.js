@@ -51,7 +51,11 @@ const productSchema = new mongoose.Schema(
     // Giá trị SỐ tách ra từ specifications (VD: "8GB" -> 8) cho các trường dạng số - tự tính lại ở
     // hook pre('validate'), không ghi trực tiếp. Dùng cho bộ lọc theo thông số và so sánh "tốt hơn".
     specNumbers: { type: Map, of: Number, default: {} },
-    warrantyMonths: { type: Number, default: 12 },
+    warrantyMonths: { type: Number, default: 12, min: 0, max: 120 },
+    // Bảo hành tính từ ngày mua (giao thành công) hay từ ngày khách kích hoạt (trong 30 ngày kể từ ngày mua)
+    warrantyStartFrom: { type: String, enum: ['purchase', 'activation'], default: 'purchase' },
+    // Ai quản lý bảo hành: cửa hàng hay hãng (khi đó dùng thông tin trung tâm bảo hành của thương hiệu)
+    warrantyProvider: { type: String, enum: ['store', 'manufacturer'], default: 'store' },
     tags: [String], // "Hàng mới", "Trả góp 0%"...
     ratingAverage: { type: Number, default: 0 },
     ratingCount: { type: Number, default: 0 },

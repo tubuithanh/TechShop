@@ -17,6 +17,7 @@ const LIMIT_RULES = {
   registerOtp: { label: 'Xin mã OTP đăng ký', default: 10, min: 1 },
   reset: { label: 'Quên mật khẩu (xin mã / đặt lại)', default: 10, min: 1 },
   order: { label: 'Đặt hàng', default: 20, min: 1 },
+  quote: { label: 'Xem trước tổng tiền (giỏ hàng / thanh toán)', default: 300, min: 30 },
   review: { label: 'Viết / sửa đánh giá', default: 20, min: 1 },
   upload: { label: 'Tải ảnh lên', default: 30, min: 1 }
 };
@@ -91,6 +92,9 @@ const registerOtpLimiter = limiter('registerOtp', 'Bạn đã yêu cầu mã qu�
 const resetLimiter = limiter('reset', 'Bạn đã yêu cầu quá nhiều lần, vui lòng thử lại sau ít phút');
 // Tạo đơn hàng, viết/sửa đánh giá - chống spam
 const orderLimiter = limiter('order', 'Bạn đặt hàng quá nhiều lần trong thời gian ngắn, vui lòng thử lại sau ít phút');
+// Xem trước tổng tiền: trang thanh toán gọi lại mỗi khi đổi chi nhánh / mã nên rộng hơn đặt hàng, nhưng
+// vẫn chặn việc gọi dồn dập (mỗi lần tính khuyến mãi tốn vài truy vấn) hoặc dò mã giảm giá hàng loạt.
+const quoteLimiter = limiter('quote', 'Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút');
 const reviewLimiter = limiter('review', 'Bạn gửi đánh giá quá nhiều lần, vui lòng thử lại sau ít phút');
 // Tải ảnh - tránh bị lợi dụng làm đầy ổ đĩa/Cloudinary
 const uploadLimiter = limiter('upload', 'Bạn tải ảnh quá nhiều lần, vui lòng thử lại sau ít phút');
@@ -101,6 +105,7 @@ module.exports = {
   registerOtpLimiter,
   resetLimiter,
   orderLimiter,
+  quoteLimiter,
   reviewLimiter,
   uploadLimiter,
   isRateLimitEnabled,

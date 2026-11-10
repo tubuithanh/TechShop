@@ -91,6 +91,7 @@ const create = asyncHandler(async (req, res) => {
         saved.statusHistory = [{ status: 'delivered', note: 'Bán tại quầy: đã thu tiền và bàn giao', changedBy: req.account._id, changedAt: at }];
         await saved.save({ session });
         await adjustSoldCount(saved.items, 1, session);
+        await require('../utils/warrantyCards').createCardsForOrder(saved, session, at); // sổ bảo hành điện tử
         const data = saved.toObject(); delete data.requestFingerprint; return data;
       });
       return { order, replay: false };
