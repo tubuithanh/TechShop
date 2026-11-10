@@ -183,8 +183,8 @@ async function metricsFor(staffIds, year) {
     Order.aggregate([
       { $match: { 'statusHistory.changedBy': { $in: ids }, createdAt: { $gte: from, $lt: to } } },
       { $unwind: '$statusHistory' },
-      { $match: { 'statusHistory.changedBy': { $in: ids } } },
-      { $group: { _id: { s: '$statusHistory.changedBy', o: '$_id' }, at: { $first: '$statusHistory.changedAt' }, store: { $first: '$storeId' } } },
+      { $match: { 'statusHistory.changedBy': { $in: ids }, 'statusHistory.eventType': { $ne: 'activity' } } },
+      { $group: { _id: { s: '$statusHistory.changedBy', o: '$_id' }, at: { $first: '$statusHistory.changedAt' }, store: { $first: { $ifNull: ['$statusHistory.storeId', '$storeId'] } } } },
       { $group: { _id: { s: '$_id.s', m: monthOf('$at'), store: '$store' }, orders: { $sum: 1 } } }
     ]),
     // Giao hàng: đơn được phân công, giao thành công, số lần giao thất bại

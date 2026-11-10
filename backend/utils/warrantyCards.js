@@ -10,7 +10,7 @@ const MAX_UNITS_PER_LINE = 50; // chặn dữ liệu bất thường tạo hàng
 const newCode = () => `SBH${Date.now().toString(36).toUpperCase().slice(-5)}${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
 function deliveredDate(order) {
-  const entry = [...(order.statusHistory || [])].reverse().find((h) => h.status === 'delivered');
+  const entry = [...(order.statusHistory || [])].reverse().find((h) => h.status === 'delivered' && h.eventType !== 'activity');
   return entry?.changedAt || order.handover?.at || order.createdAt || new Date();
 }
 

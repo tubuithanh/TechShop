@@ -7,8 +7,20 @@ export const orderService = {
     return data.data;
   },
   async getMyOrders() {
-    const { data } = await api.get('/orders');
-    return data.data;
+    // Existing warranty screens need the complete list, not just the first page.
+    const orders = [];
+    let page = 1, totalPages = 1;
+    do {
+      const { data } = await api.get('/orders', { params: { page, limit: 100 } });
+      orders.push(...data.data);
+      totalPages = data.totalPages;
+      page++;
+    } while (page <= totalPages);
+    return orders;
+  },
+  async getMyOrdersPage(params) {
+    const { data } = await api.get('/orders', { params });
+    return data;
   },
   async getOrderById(id) {
     const { data } = await api.get(`/orders/${id}`);

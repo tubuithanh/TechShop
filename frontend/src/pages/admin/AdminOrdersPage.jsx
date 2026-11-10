@@ -3,6 +3,8 @@ import { Badge, Button, Card, Form, Table } from 'react-bootstrap';
 import api from '../../services/api';
 import HandoverModal from '../../components/admin/HandoverModal';
 import OrderReceipt from '../../components/admin/OrderReceipt';
+import OrderTransfers from '../../components/admin/OrderTransfers';
+import OrderEditModal from '../../components/admin/OrderEditModal';
 import { ORDER_LABELS, orderActions, orderMethod, orderLabel } from '../../utils/orderWorkflow';
 import { orderService } from '../../services/orderService';
 import { storeService } from '../../services/storeService';
@@ -37,6 +39,8 @@ function formatVND(value) {
 export default function AdminOrdersPage() {
   const [handover, setHandover] = useState(null);
   const [details, setDetails] = useState(null);
+  const [transfer, setTransfer] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showInvoiceExport, setShowInvoiceExport] = useState(false);
   const { settings } = useSettings();
@@ -158,6 +162,7 @@ export default function AdminOrdersPage() {
         />
       )}
 
+      <OrderTransfers order={transfer} onClose={() => setTransfer(null)} onChanged={loadOrders} />
       <AdminSearchBar
         query={query}
         placeholder="Mã đơn, tên người nhận, SĐT, tên sản phẩm..."
@@ -220,6 +225,8 @@ export default function AdminOrdersPage() {
                 <td className="p-3">{formatVND(o.grandTotal)}</td>
                 <td className="p-3">
                   <Badge bg={STATUS_VARIANT[o.status] || 'secondary'}>{orderLabel(o)}</Badge>
+                  {o.activeTransferId && <div className="small text-warning">Đang chờ điều phối</div>}
+                  {o.confirmedAt && <div className="small text-muted">Xác nhận: {o.confirmedByName || 'Nhân viên'}<br />{new Date(o.confirmedAt).toLocaleString('vi-VN')}</div>}
                   {o.paymentStatus === 'paid' && <div className="small text-success mt-1">Đã thanh toán</div>}
                   {o.refundStatus === 'pending' && <div className="small text-warning mt-1">Chờ hoàn tiền</div>}
                 </td>
@@ -227,7 +234,7 @@ export default function AdminOrdersPage() {
                   <Form.Select
                     size="sm"
                     value={o.status}
-                    disabled={busy || orderActions(o).length === 0}
+                    disabled={busy || !!o.activeTransferId || orderActions(o).length === 0}
                     onChange={(e) => handleChangeStatus(o._id, e.target.value)}
                   >
                     <option value={o.status}>{orderLabel(o)}</option>
@@ -237,6 +244,8 @@ export default function AdminOrdersPage() {
                       </option>
                     ))}
                   </Form.Select>
+                  {!o.activeTransferId && ['pending', 'confirmed'].includes(o.status) && <Button variant="outline-secondary" className="mt-1 me-1" size="sm" disabled={busy} onClick={() => setEditing(o)}>Sửa thông tin</Button>}
+                  {!o.activeTransferId && o.source !== 'pos' && ['pending', 'confirmed', 'processing'].includes(o.status) && (!['vnpay', 'momo'].includes(o.paymentMode) || o.paymentStatus === 'paid') && <Button variant="outline-primary" className="mt-1" size="sm" disabled={busy} onClick={() => setTransfer(o)}>Điều phối chi nhánh</Button>}
                   {o.deliveryMethod === 'store_pickup' && ['ready_for_pickup', 'shipping'].includes(o.status) && <Button className="mt-1" size="sm" disabled={busy} onClick={() => setHandover(o)}>Bàn giao cho khách</Button>}
                   {o.status === 'returning' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'receive-return', { received: true }, 'Xác nhận đã nhận và kiểm đếm đầy đủ hàng trả? Hệ thống sẽ hoàn kho.')}>Đã nhận hàng trả</Button>}
                   {o.paymentMode === 'bank_transfer' && ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'].includes(o.status) && o.paymentStatus !== 'paid' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'confirm-payment', { confirmed: true }, 'Xác nhận đã nhận đủ tiền chuyển khoản?')}>Đã nhận chuyển khoản</Button>}
@@ -252,6 +261,7 @@ export default function AdminOrdersPage() {
       </Card>
       {handover && <HandoverModal key={handover._id} order={handover} onHide={() => setHandover(null)} onDone={() => { setHandover(null); loadOrders(); }} />}
       {details && <OrderReceipt order={details} onHide={() => setDetails(null)} />}
+      {editing && <OrderEditModal key={editing._id} order={editing} onClose={() => setEditing(null)} onChanged={loadOrders} />}
     </div>
   );
 }

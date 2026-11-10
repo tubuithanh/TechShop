@@ -7,6 +7,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { getScopedStoreId } = require('../middlewares/authMiddleware');
 const { transitionOrder, inScope } = require('./orderController');
 const { searchFilter } = require('../utils/search');
+const { historyEntry } = require('../utils/orderHistory');
 
 // Giao nhận hàng (UC37 – UC40). Hai vai:
 //  - Quản lý chi nhánh (quyền deliveries.manage): phân công đơn cho nhân viên giao hàng, xác nhận đã nhận tiền COD.
@@ -79,8 +80,9 @@ const assignShipper = asyncHandler(async (req, res) => {
     }
   }
   const updated = await Order.findOneAndUpdate(
-    { _id: order._id, status: order.status, shipperId: order.shipperId },
-    { $set: { shipperId: shipperId || null, assignedAt: shipperId ? new Date() : null } },
+    { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, shipperId: order.shipperId },
+    { $set: { shipperId: shipperId || null, assignedAt: shipperId ? new Date() : null },
+      $push: { statusHistory: historyEntry(req, order.status, shipperId ? `Phân công giao hàng: ${shippers.find(s => String(s._id) === shipperId)?.name}` : 'Gỡ phân công giao hàng', { shipperId: { from: order.shipperId, to: shipperId } }) } },
     { new: true }
   ).populate(...POPULATE_SHIPPER);
   if (!updated) return res.status(409).json({ message: 'Đơn hàng vừa thay đổi trạng thái, vui lòng tải lại' });
@@ -164,7 +166,7 @@ const reportResult = asyncHandler(async (req, res) => {
   // Hẹn giao lại: đơn vẫn "Đang giao", ghi lại lần giao thất bại
   const kept = await Order.findOneAndUpdate(
     { _id: order._id, status: 'shipping', shipperId: req.account._id, $expr: { $eq: [{ $size: { $ifNull: ['$deliveryAttempts', []] } }, order.deliveryAttempts.length] } },
-    { $push: { deliveryAttempts: attempt } },
+    { $push: { deliveryAttempts: attempt, statusHistory: historyEntry(req, order.status, `Giao chưa thành công: ${reason}`) } },
     { new: true }
   );
   if (!kept) return res.status(409).json({ message: 'Đơn hàng vừa thay đổi, vui lòng tải lại' });
@@ -185,7 +187,7 @@ const settleCod = asyncHandler(async (req, res) => {
   if (!inScope(req, order)) return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác' });
   const updated = await Order.findOneAndUpdate(
     { _id: order._id, paymentMode: 'cod', codCollectedAt: { $ne: null }, codSettledAt: null },
-    { $set: { codSettledAt: new Date(), codSettledBy: req.account._id } },
+    { $set: { codSettledAt: new Date(), codSettledBy: req.account._id }, $push: { statusHistory: historyEntry(req, order.status, 'Đã đối soát tiền COD') } },
     { new: true }
   );
   if (!updated) return res.status(400).json({ message: 'Đơn không có tiền COD chờ đối soát' });

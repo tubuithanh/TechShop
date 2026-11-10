@@ -8,6 +8,7 @@ import { getAccessToken } from '../services/api';
 import { connectSocket } from '../services/socket';
 import { ORDER_LABELS, orderMethod } from '../utils/orderWorkflow';
 import VatBreakdown from '../components/VatBreakdown';
+import OrderHistory from '../components/OrderHistory';
 
 const homeSteps = ['pending', 'confirmed', 'processing', 'shipping', 'delivered'];
 const statusLabel = {
@@ -265,7 +266,8 @@ export default function OrderDetailPage() {
         </div>
       )}
 
-      {['pending', 'confirmed'].includes(order.status) && (
+      {order.activeTransferId && <Alert variant="info">Đơn đang được điều phối sang chi nhánh khác. Bạn có thể tiếp tục thao tác sau khi điều phối hoàn tất.</Alert>}
+      {!order.activeTransferId && ['pending', 'confirmed'].includes(order.status) && (
         <Button variant="outline-danger" size="sm" onClick={handleCancel} className="mb-5">
           Hủy đơn hàng
         </Button>
@@ -312,6 +314,7 @@ export default function OrderDetailPage() {
           {warrantyMsg && <div className={`small mt-2 ${warrantyMsg.ok ? 'text-success' : 'text-danger'}`}>{warrantyMsg.text}</div>}
         </div>
       )}
+      <OrderHistory order={order} />
     </Container>
   );
 }

@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Evidence = require('../models/DeliveryEvidence');
 const asyncHandler = require('../utils/asyncHandler');
 const { transitionOrder, inScope } = require('./orderController');
+const { historyEntry } = require('../utils/orderHistory');
 const trim = v => typeof v === 'string' ? v.trim() : '';
 
 async function validateHandover(req, order, needsImages = false) {
@@ -50,7 +51,10 @@ const receiveReturn = asyncHandler(async (req, res) => {
 const confirmPayment = asyncHandler(async (req, res) => {
   const order = await load(req, res); if (!order) return;
   if (order.paymentMode !== 'bank_transfer' || !['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'].includes(order.status) || req.body.confirmed !== true) return res.status(400).json({ message: 'Không thể xác nhận chuyển khoản cho đơn này' });
-  const updated = await Order.findOneAndUpdate({ _id: order._id, status: order.status, paymentStatus: { $in: ['pending', 'failed'] } }, { $set: { paymentStatus: 'paid', receipt: { amount: order.grandTotal, at: new Date(), by: req.account._id, channel: 'bank_transfer' } } }, { new: true });
+  const updated = await Order.findOneAndUpdate({ _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, paymentStatus: { $in: ['pending', 'failed'] } }, {
+    $set: { paymentStatus: 'paid', receipt: { amount: order.grandTotal, at: new Date(), by: req.account._id, channel: 'bank_transfer' } },
+    $push: { statusHistory: historyEntry(req, order.status, 'Xác nhận đã nhận chuyển khoản', { paymentStatus: { from: order.paymentStatus, to: 'paid' } }) }
+  }, { new: true });
   if (!updated) return res.status(409).json({ message: 'Đơn đã thay đổi, vui lòng tải lại' });
   res.json({ data: updated });
 });
@@ -59,7 +63,7 @@ const confirmRefund = asyncHandler(async (req, res) => {
   if (req.body.confirmed !== true || !trim(req.body.note)) return res.status(400).json({ message: 'Cần xác nhận đã hoàn tiền thực tế và nhập ghi chú giao dịch' });
   const updated = await Order.findOneAndUpdate({ _id: order._id, status: { $in: ['cancelled', 'returned'] }, refundStatus: 'pending', paymentStatus: 'paid' }, {
     $set: { refundStatus: 'completed', paymentStatus: 'refunded', refundedAt: new Date(), refundedBy: req.account._id },
-    $push: { statusHistory: { status: order.status, note: `Đã hoàn tiền: ${trim(req.body.note).slice(0, 1000)}`, changedBy: req.account._id } }
+    $push: { statusHistory: historyEntry(req, order.status, `Đã hoàn tiền: ${trim(req.body.note).slice(0, 1000)}`, { paymentStatus: { from: order.paymentStatus, to: 'refunded' } }) }
   }, { new: true });
   if (!updated) return res.status(409).json({ message: 'Đơn không có khoản chờ hoàn tiền' });
   res.json({ data: updated });

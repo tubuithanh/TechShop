@@ -88,7 +88,7 @@ const create = asyncHandler(async (req, res) => {
         saved.status = 'delivered'; saved.paymentStatus = 'paid';
         saved.handover = { recipientName: fullName, note, at, by: req.account._id };
         saved.receipt = { amount: saved.grandTotal, at, by: req.account._id, channel: 'counter' };
-        saved.statusHistory = [{ status: 'delivered', note: 'Bán tại quầy: đã thu tiền và bàn giao', changedBy: req.account._id, changedAt: at }];
+        saved.statusHistory.push(require('../utils/orderHistory').historyEntry(req, 'delivered', 'Bán tại quầy: đã thu tiền và bàn giao', undefined, undefined, 'status', saved.storeId));
         await saved.save({ session });
         await adjustSoldCount(saved.items, 1, session);
         await require('../utils/warrantyCards').createCardsForOrder(saved, session, at); // sổ bảo hành điện tử

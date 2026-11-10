@@ -3,6 +3,7 @@ import { Alert, Button, Modal, Table } from 'react-bootstrap';
 import api from '../../services/api';
 import { money, orderLabel, orderMethod } from '../../utils/orderWorkflow';
 import VatBreakdown from '../VatBreakdown';
+import OrderHistory from '../OrderHistory';
 
 function EvidenceImage({ orderId, id }) {
   const [url, setUrl] = useState(''); const [error, setError] = useState('');
@@ -36,7 +37,7 @@ export default function OrderReceipt({ order: o, onHide }) {
       {o.handover?.at && <p>Người nhận: {o.handover.recipientName}<br />Bàn giao: {new Date(o.handover.at).toLocaleString('vi-VN')} · Nhân viên: {o.handover.by?.name || 'Đã ghi nhận'}<br />Ghi chú: {o.handover.note || '—'}</p>}
       <div className="d-flex flex-wrap gap-2">{o.handover?.evidenceIds?.map(id => <EvidenceImage key={id} orderId={o._id} id={id} />)}</div>
       {o.returnReceivedAt && <p>Kho nhận lại: {new Date(o.returnReceivedAt).toLocaleString('vi-VN')}</p>}
-      <h6 className="mt-3">Lịch sử xử lý</h6>{o.statusHistory?.map((h,k) => <div className="small" key={k}>{new Date(h.changedAt).toLocaleString('vi-VN')} · {orderLabel({ ...o, status: h.status })} · {h.note}</div>)}
+      <OrderHistory order={o} />
     </Modal.Body><Modal.Footer><Button variant="secondary" onClick={onHide}>Đóng</Button><Button onClick={() => window.print()}>In phiếu</Button></Modal.Footer>
     <style>{`@media print { body > * { visibility: hidden; } .modal, .modal * { visibility: visible; } .modal { position: absolute; overflow: visible; } .modal-header, .modal-footer, .modal-backdrop { display: none !important; } .modal-dialog { max-width: 100%; margin: 0; } .modal-content { border: 0; } }`}</style>
   </Modal>;

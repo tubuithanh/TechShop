@@ -48,7 +48,7 @@ const getLoyalty = asyncHandler(async (req, res) => {
     status: o.status,
     points: o.status === 'returned' ? -o.loyaltyPoints : o.loyaltyPoints,
     // Ngày đổi sang trạng thái hiện tại (giao thành công / trả hàng)
-    date: [...(o.statusHistory || [])].reverse().find((h) => h.status === o.status)?.changedAt || o.createdAt
+    date: [...(o.statusHistory || [])].reverse().find((h) => h.status === o.status && h.eventType !== 'activity')?.changedAt || o.createdAt
   }));
   const config = await getLoyaltyConfig();
   res.json({ data: { ...tierFor(user?.loyaltyPoints, config), enabled: config.enabled, pointValue: config.pointValue, tiers: config.tiers, history } });

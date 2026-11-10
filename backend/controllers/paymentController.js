@@ -98,7 +98,8 @@ async function applyResult(result, io) {
         paymentStatus,
         ...(refundPending ? { refundStatus: 'pending' } : {}),
         ...(result.success ? { 'paymentInfo.paidAt': new Date(), 'paymentInfo.txnRef': result.txnRef } : {})
-      }
+      },
+      $push: { statusHistory: { status: order.status, eventType: 'activity', actorName: LABEL[order.paymentMode] || 'Cổng thanh toán', actorRole: 'system', note: result.success ? 'Thanh toán thành công' : 'Thanh toán thất bại', changes: { paymentStatus: { from: order.paymentStatus, to: paymentStatus } } } }
     },
     { new: true }
   );

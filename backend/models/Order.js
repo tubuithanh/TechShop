@@ -39,6 +39,11 @@ const orderSchema = new mongoose.Schema(
     workflowVersion: { type: Number, default: 2 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
     createdByName: { type: String, default: '' },
+    confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+    confirmedByName: String,
+    confirmedAt: Date,
+    confirmedStoreName: String,
+    activeTransferId: { type: mongoose.Schema.Types.ObjectId, ref: 'OrderTransfer', default: null },
     clientRequestId: String,
     requestFingerprint: { type: String, select: false },
     storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', required: true },
@@ -94,7 +99,13 @@ const orderSchema = new mongoose.Schema(
         status: String,
         note: String,
         changedAt: { type: Date, default: Date.now },
-        changedBy: { type: mongoose.Schema.Types.ObjectId }
+        changedBy: { type: mongoose.Schema.Types.ObjectId },
+        actorName: String,
+        actorRole: String,
+        eventType: { type: String, enum: ['status', 'activity'] },
+        storeName: String,
+        storeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
+        changes: mongoose.Schema.Types.Mixed
       }
     ],
     note: String,
@@ -150,6 +161,8 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ storeId: 1, createdAt: -1 });
 orderSchema.index({ userId: 1 });
+orderSchema.index({ userId: 1, status: 1, createdAt: -1, _id: -1 });
+orderSchema.index({ userId: 1, createdAt: -1, _id: -1 });
 orderSchema.index({ shipperId: 1, status: 1 });
 orderSchema.index({ createdBy: 1, clientRequestId: 1 }, { unique: true, partialFilterExpression: { clientRequestId: { $type: 'string' } } });
 

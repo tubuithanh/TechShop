@@ -1,3 +1,4 @@
+const { historyEntry, enrichHistory } = require('../utils/orderHistory');
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
@@ -315,7 +316,7 @@ async function placeOrder(userId, input, session) {
           shippingVat,
           note,
           invoiceInfo,
-          statusHistory: [{ status: 'pending', note: 'Đơn hàng được tạo', changedBy: userId }]
+          statusHistory: [{ status: 'pending', eventType: 'status', storeId, note: 'Đơn hàng được tạo', changedBy: input.createdBy || userId, actorName: input.createdByName || input.actorName, actorRole: input.posItems ? 'staff' : 'customer' }]
         }
       ],
       { session }
@@ -382,7 +383,7 @@ const createOrder = asyncHandler(async (req, res) => {
   let order;
   try {
     order = await withTransaction((session) =>
-      placeOrder(req.account._id, { storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo, expectedTotal }, session)
+      placeOrder(req.account._id, { actorName: req.account.displayName, storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo, expectedTotal }, session)
     );
   } catch (err) {
     if (err instanceof BusinessError) return res.status(err.status).json({ message: err.message });
@@ -410,8 +411,19 @@ const createOrder = asyncHandler(async (req, res) => {
 
 // @route GET /api/orders
 const getMyOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({ userId: req.account._id }).populate('storeId', 'name city').sort({ createdAt: -1 });
-  res.json({ data: orders });
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ dành cho tài khoản khách hàng' });
+  const page = Math.min(1000000, Math.max(1, Math.floor(Number(req.query.page) || 1)));
+  const limit = Math.min(100, Math.max(1, Math.floor(Number(req.query.limit) || 10)));
+  const base = { userId: req.account._id };
+  const status = req.query.status;
+  if (status && !Order.schema.path('status').enumValues.includes(status)) return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
+  const filter = { ...base, ...(status ? { status } : {}) };
+  const [orders, total, counts] = await Promise.all([
+    Order.find(filter).populate('storeId', 'name city').sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
+    Order.countDocuments(filter),
+    Order.aggregate([{ $match: base }, { $group: { _id: '$status', count: { $sum: 1 } } }])
+  ]);
+  res.json({ data: await enrichHistory(orders), total, page, totalPages: Math.ceil(total / limit), counts: Object.fromEntries(counts.map(c => [c._id, c.count])) });
 });
 
 // @route GET /api/orders/:id
@@ -429,7 +441,7 @@ const getOrderById = asyncHandler(async (req, res) => {
   if (!isOwner && !inScope(req, order)) {
     return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác, bạn không có quyền xem' });
   }
-  res.json({ data: order });
+  res.json({ data: (await enrichHistory([order]))[0] });
 });
 
 // @route PUT /api/orders/:id/cancel
@@ -439,6 +451,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
   if (String(order.userId) !== String(req.account._id)) {
     return res.status(403).json({ message: 'Bạn không có quyền hủy đơn hàng này' });
   }
+  if (order.activeTransferId) return res.status(409).json({ message: 'Đơn đang chờ điều phối, vui lòng chờ hoặc liên hệ cửa hàng hủy yêu cầu điều phối' });
   if (!ORDER_STATUS_TRANSITIONS[order.status]?.includes('cancelled')) {
     return res.status(400).json({ message: 'Đơn hàng đã được xử lý, không thể hủy' });
   }
@@ -453,7 +466,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
   // Đổi trạng thái + hoàn kho + trả lượt mã chạy chung 1 transaction: không bao giờ hủy rồi mà chưa hoàn kho.
   const updated = await withTransaction(async (session) => {
     const changed = await Order.findOneAndUpdate(
-      { _id: order._id, status: order.status, paymentStatus: order.paymentStatus },
+      { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, paymentStatus: order.paymentStatus },
       {
         $set: {
           status: 'cancelled',
@@ -461,7 +474,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
           // Đơn đã thanh toán online bị hủy -> chuyển sang "đã hoàn tiền" (bản demo mô phỏng việc hoàn tiền)
           ...(order.paymentStatus === 'paid' ? { refundStatus: 'pending' } : {})
         },
-        $push: { statusHistory: { status: 'cancelled', note: cancelReason, changedBy: req.account._id } }
+        $push: { statusHistory: historyEntry(req, 'cancelled', cancelReason, { status: { from: order.status, to: 'cancelled' } }, undefined, 'status', order.storeId) }
       },
       { new: true, session }
     );
@@ -516,7 +529,7 @@ const getAllOrders = asyncHandler(async (req, res) => {
   }
   const grouped = await Order.aggregate([{ $match: countFilter }, { $group: { _id: '$status', n: { $sum: 1 } } }]);
   const statusCounts = Object.fromEntries(grouped.map((g) => [g._id, g.n]));
-  res.json({ data: orders, total, page: Number(page), totalPages: Math.ceil(total / limit), statusCounts });
+  res.json({ data: await enrichHistory(orders), total, page: Number(page), totalPages: Math.ceil(total / limit), statusCounts });
 });
 
 // @route PUT /api/orders/:id/status
@@ -543,6 +556,8 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 // Dùng chung cho nhân viên xử lý đơn (updateOrderStatus) và nhân viên giao hàng (deliveryController).
 // extraSet / extraPush: trường ghi thêm cùng lệnh (VD lần giao hàng, thời điểm thu COD). Trả { updated } hoặc { error }.
 async function transitionOrder(req, order, status, { note, extraSet = {}, extraPush = {}, action } = {}) {
+  if (order.activeTransferId) return { error: { status: 409, message: 'Đơn đang chờ điều phối; hãy hoàn tất hoặc hủy yêu cầu điều phối' } };
+  const actorStore = await Store.findById(order.storeId).select('name').lean();
   if (extraSet.handover?.evidenceIds?.length && !(await require('../utils/transaction').transactionsSupported())) return { error: { status: 503, message: 'Cần MongoDB replica set để lưu bằng chứng và bàn giao an toàn' } };
   if (status === 'shipping' && order.paymentMode !== 'cod' && order.paymentStatus !== 'paid') return { error: { status: 400, message: 'Cửa hàng cần xác nhận thanh toán trước khi giao' } };
   // Đơn thanh toán online (VNPay/MoMo) phải thanh toán xong mới được xác nhận/giao - nếu không có thể giao hàng
@@ -572,10 +587,11 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
   const loyaltyConfig = status === 'delivered' ? await getLoyaltyConfig() : null;
   const updated = await withTransaction(async (session) => {
     const changed = await Order.findOneAndUpdate(
-      { _id: order._id, status: order.status, paymentStatus: order.paymentStatus, ...(['deliverySuccess', 'deliveryReturn', 'shipperPickup'].includes(action) ? { shipperId: order.shipperId } : {}), ...(action === 'deliveryReturn' ? { $expr: { $eq: [{ $size: { $ifNull: ['$deliveryAttempts', []] } }, order.deliveryAttempts.length] } } : {}) },
+      { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, paymentStatus: order.paymentStatus, ...(['deliverySuccess', 'deliveryReturn', 'shipperPickup'].includes(action) ? { shipperId: order.shipperId } : {}), ...(action === 'deliveryReturn' ? { $expr: { $eq: [{ $size: { $ifNull: ['$deliveryAttempts', []] } }, order.deliveryAttempts.length] } } : {}) },
       {
         $set: {
           status,
+          ...(status === 'confirmed' ? { confirmedBy: req.account._id, confirmedByName: req.account.name || req.account.displayName, confirmedAt: new Date(), confirmedStoreName: actorStore?.name || '' } : {}),
           ...extraSet,
           ...(status === 'returning' ? { returnRequestedAt: new Date(), returnWasDelivered: order.status === 'delivered' } : {}),
           ...(status === 'delivered' && order.paymentMode === 'cod' ? { paymentStatus: 'paid' } : {}),
@@ -587,7 +603,7 @@ async function transitionOrder(req, order, status, { note, extraSet = {}, extraP
             ? { refundStatus: 'pending' }
             : {})
         },
-        $push: { statusHistory: { status, note, changedBy: req.account._id }, ...extraPush }
+        $push: { statusHistory: historyEntry(req, status, note, { status: { from: order.status, to: status } }, actorStore?.name, 'status', order.storeId), ...extraPush }
       },
       { new: true, session }
     );
