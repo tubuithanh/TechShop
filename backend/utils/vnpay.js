@@ -135,7 +135,18 @@ async function testConnection(cfg) {
   try {
     res = await fetch(paymentUrl, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
   } catch (err) {
-    return { ok: false, message: `Không kết nối được tới VNPay (${err.cause?.code || err.name}): ${cfg.url}` };
+    const code = err.cause?.code || err.name;
+    // Máy chủ đặt ở nước ngoài (VD: Render) thường bị VNPay sandbox không phản hồi -> quá thời gian chờ.
+    // Trường hợp này KHÔNG có nghĩa cấu hình sai: khách mở trang VNPay bằng trình duyệt của mình nên vẫn thanh toán được.
+    if (/TIMEOUT|TimeoutError|AbortError/i.test(code)) {
+      return {
+        ok: false,
+        message: `Máy chủ không kết nối được tới VNPay (${code}). VNPay sandbox thường không phản hồi máy chủ đặt ở nước ngoài ` +
+          '(VD: Render) - điều này không có nghĩa cấu hình sai, khách vẫn mở được trang thanh toán bằng trình duyệt. ' +
+          'Để kiểm tra Terminal ID / Secret Key, hãy chạy backend trên máy tại Việt Nam rồi bấm "Kiểm tra kết nối".'
+      };
+    }
+    return { ok: false, message: `Không kết nối được tới VNPay (${code}): ${cfg.url}` };
   }
   const location = res.headers.get('location') || '';
   const code = location.match(/Error\.html\?code=(\d+)/i)?.[1];
