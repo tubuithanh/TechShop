@@ -26,10 +26,14 @@ async function loadPayableOrder(req, mode) {
 
 // Lưu mã giao dịch của lần thử này - chỉ kết quả trả về khớp ĐÚNG mã này mới được ghi nhận.
 // Chỉ đặt lại "pending" nếu CHƯA thanh toán (điều kiện nguyên tử - tránh đè kết quả "paid" vừa về)
-function rememberAttempt(order, txnRef) {
+// createDate (VNPay): lưu lại để sau này hoàn tiền (API refund cần đúng vnp_CreateDate của giao dịch gốc)
+function rememberAttempt(order, txnRef, createDate) {
   return Order.updateOne(
     { _id: order._id, paymentStatus: { $nin: ['paid', 'refunded'] }, status: order.status },
-    { $set: { 'paymentInfo.txnRef': txnRef, paymentStatus: 'pending' }, $push: { 'paymentInfo.txnRefs': txnRef } }
+    {
+      $set: { 'paymentInfo.txnRef': txnRef, paymentStatus: 'pending', ...(createDate ? { [`paymentInfo.createDates.${txnRef}`]: createDate } : {}) },
+      $push: { 'paymentInfo.txnRefs': txnRef }
+    }
   );
 }
 
@@ -41,8 +45,8 @@ const createVnpayPayment = asyncHandler(async (req, res) => {
   const { order, status, error } = await loadPayableOrder(req, 'vnpay');
   if (error) return res.status(status).json({ message: error });
   const ipAddr = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
-  const { txnRef, paymentUrl } = await vnpay.buildPaymentUrl({ order, ipAddr });
-  await rememberAttempt(order, txnRef);
+  const { txnRef, paymentUrl, createDate } = await vnpay.buildPaymentUrl({ order, ipAddr });
+  await rememberAttempt(order, txnRef, createDate);
   res.json({ data: { paymentUrl } });
 });
 
@@ -83,7 +87,8 @@ async function applyResult(result, io) {
   const info = {
     'paymentInfo.transactionNo': result.transactionNo,
     'paymentInfo.bankCode': result.bankCode,
-    'paymentInfo.responseCode': result.responseCode
+    'paymentInfo.responseCode': result.responseCode,
+    ...(result.payDate ? { 'paymentInfo.payDate': result.payDate } : {})
   };
   if (!result.success && order.paymentInfo?.txnRef !== result.txnRef) return { code: 'ok', order };
   let paymentStatus = result.success ? 'paid' : 'failed';

@@ -92,7 +92,11 @@ const orderSchema = new mongoose.Schema(
       transactionNo: String,
       bankCode: String,
       responseCode: String,
-      paidAt: Date
+      paidAt: Date,
+      // Thời điểm tạo từng lần thử thanh toán (vnp_CreateDate, dạng yyyyMMddHHmmss) - API hoàn tiền VNPay bắt buộc
+      // gửi lại đúng giá trị này của giao dịch gốc
+      createDates: { type: Map, of: String, default: undefined },
+      payDate: String // vnp_PayDate / responseTime cổng thanh toán trả về
     },
     statusHistory: [
       {
@@ -174,7 +178,29 @@ const orderSchema = new mongoose.Schema(
     returnWasDelivered: Boolean,
     returnReceivedAt: Date,
     returnReceivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
-    refundStatus: { type: String, enum: ['none', 'pending', 'completed'], default: 'none' },
+    // processing: đang gửi lệnh hoàn tiền tới VNPay / MoMo (chặn 2 người bấm hoàn tiền cùng lúc)
+    refundStatus: { type: String, enum: ['none', 'pending', 'processing', 'completed'], default: 'none' },
+    // Chi tiết hoàn tiền: qua cổng thanh toán (gateway) hay hoàn thủ công (manual), kèm mọi lần thử gọi cổng
+    refundInfo: {
+      method: { type: String, enum: ['gateway', 'manual'] },
+      gateway: String,
+      amount: Number,
+      requestId: String,
+      gatewayTransNo: String,
+      note: String,
+      attempts: [
+        {
+          _id: false,
+          at: { type: Date, default: Date.now },
+          by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+          gateway: String,
+          requestId: String,
+          ok: Boolean,
+          code: String,
+          message: String
+        }
+      ]
+    },
     refundedAt: Date,
     refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }
   },

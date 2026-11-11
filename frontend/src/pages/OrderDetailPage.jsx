@@ -162,6 +162,16 @@ export default function OrderDetailPage() {
         <span className={`badge text-bg-${paymentStatusLabel[order.paymentStatus]?.bg || 'secondary'}`}>
           {paymentStatusLabel[order.paymentStatus]?.text || order.paymentStatus}
         </span>
+        {['pending', 'processing'].includes(order.refundStatus) && (
+          <span className="badge text-bg-warning">Đang chờ hoàn tiền {(order.grandTotal || 0).toLocaleString('vi-VN')}đ</span>
+        )}
+        {order.refundStatus === 'completed' && order.refundedAt && (
+          <span className="text-success">
+            Đã hoàn {(order.refundInfo?.amount ?? order.grandTotal ?? 0).toLocaleString('vi-VN')}đ
+            {order.refundInfo?.method === 'gateway' ? ` về ${order.refundInfo.gateway === 'vnpay' ? 'VNPay' : 'MoMo'}` : ''} ngày {new Date(order.refundedAt).toLocaleDateString('vi-VN')}
+            {order.refundInfo?.method === 'gateway' && ' (tiền về tài khoản / thẻ tùy ngân hàng, thường 1-7 ngày làm việc)'}
+          </span>
+        )}
         {PAYMENT_GATEWAYS[order.paymentMode] &&
           !['paid', 'refunded'].includes(order.paymentStatus) &&
           !['cancelled', 'returned', 'returning'].includes(order.status) && (

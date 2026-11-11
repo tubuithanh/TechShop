@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Evidence = require('../models/DeliveryEvidence');
 const asyncHandler = require('../utils/asyncHandler');
+const Notification = require('../models/Notification');
+const vnpay = require('../utils/vnpay');
+const momo = require('../utils/momo');
 const { transitionOrder, inScope } = require('./orderController');
 const { historyEntry } = require('../utils/orderHistory');
 const trim = v => typeof v === 'string' ? v.trim() : '';
@@ -58,14 +61,92 @@ const confirmPayment = asyncHandler(async (req, res) => {
   if (!updated) return res.status(409).json({ message: 'Đơn đã thay đổi, vui lòng tải lại' });
   res.json({ data: updated });
 });
+// Thông tin giao dịch gốc để hoàn qua cổng thanh toán: mã giao dịch của lần thanh toán THÀNH CÔNG
+function gatewayInfo(order) {
+  const info = order.paymentInfo || {};
+  const txnRef = info.txnRef;
+  const createDates = info.createDates instanceof Map ? Object.fromEntries(info.createDates) : (info.createDates || {});
+  return { txnRef, transactionNo: info.transactionNo, transactionDate: createDates[txnRef] || info.payDate };
+}
+const GATEWAYS = ['vnpay', 'momo'];
+
+// @route POST /api/orders/:id/confirm-refund
+// body.method = 'gateway': gửi lệnh hoàn tiền tới VNPay / MoMo (đơn thanh toán online), thành công mới ghi nhận
+// body.method = 'manual' (mặc định): nhân viên đã tự hoàn (tiền mặt, chuyển khoản, trên trang merchant) - bắt buộc ghi chú
 const confirmRefund = asyncHandler(async (req, res) => {
   const order = await load(req, res); if (!order) return;
-  if (req.body.confirmed !== true || !trim(req.body.note)) return res.status(400).json({ message: 'Cần xác nhận đã hoàn tiền thực tế và nhập ghi chú giao dịch' });
-  const updated = await Order.findOneAndUpdate({ _id: order._id, status: { $in: ['cancelled', 'returned'] }, refundStatus: 'pending', paymentStatus: 'paid' }, {
-    $set: { refundStatus: 'completed', paymentStatus: 'refunded', refundedAt: new Date(), refundedBy: req.account._id },
-    $push: { statusHistory: historyEntry(req, order.status, `Đã hoàn tiền: ${trim(req.body.note).slice(0, 1000)}`, { paymentStatus: { from: order.paymentStatus, to: 'refunded' } }) }
+  const method = req.body.method === 'gateway' ? 'gateway' : 'manual';
+  const note = trim(req.body.note).slice(0, 1000);
+  if (req.body.confirmed !== true) return res.status(400).json({ message: 'Cần xác nhận hoàn tiền' });
+  if (method === 'manual' && !note) return res.status(400).json({ message: 'Cần xác nhận đã hoàn tiền thực tế và nhập ghi chú giao dịch' });
+  if (method === 'gateway' && !GATEWAYS.includes(order.paymentMode)) {
+    return res.status(400).json({ message: 'Chỉ đơn thanh toán qua VNPay / MoMo mới hoàn tự động qua cổng thanh toán' });
+  }
+
+  // Giữ chỗ: chỉ 1 yêu cầu được chuyển "chờ hoàn" -> "đang hoàn" (2 người bấm cùng lúc không hoàn 2 lần)
+  const claimed = await Order.findOneAndUpdate(
+    { _id: order._id, status: { $in: ['cancelled', 'returned'] }, refundStatus: 'pending', paymentStatus: 'paid' },
+    { $set: { refundStatus: 'processing' } },
+    { new: true }
+  );
+  if (!claimed) return res.status(409).json({ message: 'Đơn không có khoản chờ hoàn tiền (hoặc đang được người khác xử lý)' });
+  const amount = Math.round(claimed.grandTotal);
+
+  let gatewayResult = null;
+  if (method === 'gateway') {
+    const g = gatewayInfo(claimed);
+    try {
+      if (claimed.paymentMode === 'vnpay') {
+        const ipAddr = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+        gatewayResult = await vnpay.refund({ ...g, amount, full: true, createBy: req.account.name, ipAddr, orderInfo: `Hoan tien don ${claimed.orderCode}` });
+      } else {
+        gatewayResult = await momo.refund({ transId: g.transactionNo, amount, orderCode: claimed.orderCode, description: `Hoan tien don ${claimed.orderCode}` });
+      }
+    } catch (err) {
+      const code = String(err.code ?? err.resultCode ?? 'ERROR');
+      // Trả về "chờ hoàn" để thử lại / hoàn thủ công; ghi lại lần thử thất bại
+      await Order.updateOne({ _id: claimed._id, refundStatus: 'processing' }, {
+        $set: { refundStatus: 'pending' },
+        $push: { 'refundInfo.attempts': { at: new Date(), by: req.account._id, gateway: claimed.paymentMode, ok: false, code, message: err.message } }
+      });
+      if (err instanceof vnpay.VnpayRefundError || err instanceof momo.MomoError) {
+        return res.status(502).json({ message: `${claimed.paymentMode === 'vnpay' ? 'VNPay' : 'MoMo'}: ${err.message}`, code });
+      }
+      throw err;
+    }
+  }
+
+  const label = { vnpay: 'VNPay', momo: 'MoMo' }[claimed.paymentMode];
+  const historyNote = method === 'gateway'
+    ? `Đã hoàn ${amount.toLocaleString('vi-VN')}đ qua ${label} (mã yêu cầu ${gatewayResult.requestId})${note ? ` - ${note}` : ''}`
+    : `Đã hoàn tiền: ${note}`;
+  const updated = await Order.findOneAndUpdate({ _id: claimed._id, refundStatus: 'processing' }, {
+    $set: {
+      refundStatus: 'completed', paymentStatus: 'refunded', refundedAt: new Date(), refundedBy: req.account._id,
+      'refundInfo.method': method,
+      'refundInfo.gateway': method === 'gateway' ? claimed.paymentMode : undefined,
+      'refundInfo.amount': amount,
+      'refundInfo.requestId': gatewayResult?.requestId,
+      'refundInfo.gatewayTransNo': gatewayResult?.transactionNo || gatewayResult?.transId,
+      'refundInfo.note': note
+    },
+    $push: {
+      statusHistory: historyEntry(req, claimed.status, historyNote, { paymentStatus: { from: 'paid', to: 'refunded' } }),
+      ...(gatewayResult ? { 'refundInfo.attempts': { at: new Date(), by: req.account._id, gateway: claimed.paymentMode, requestId: gatewayResult.requestId, ok: true, code: gatewayResult.code, message: gatewayResult.message } } : {})
+    }
   }, { new: true });
-  if (!updated) return res.status(409).json({ message: 'Đơn không có khoản chờ hoàn tiền' });
+
+  // Báo cho khách
+  if (updated?.userId) {
+    await Notification.create({
+      userId: updated.userId, type: 'order', title: 'Đã hoàn tiền',
+      message: method === 'gateway'
+        ? `Đơn ${updated.orderCode}: đã hoàn ${amount.toLocaleString('vi-VN')}đ về ${label}. Tiền về tài khoản / thẻ tùy thời gian xử lý của ngân hàng (thường 1-7 ngày làm việc).`
+        : `Đơn ${updated.orderCode}: cửa hàng đã hoàn ${amount.toLocaleString('vi-VN')}đ cho bạn.`,
+      link: `/account/orders/${updated._id}`
+    }).catch(() => {});
+  }
   res.json({ data: updated });
 });
+
 module.exports = { validateHandover, handover, receiveReturn, confirmPayment, confirmRefund };

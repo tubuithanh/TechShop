@@ -442,7 +442,13 @@ const getOrderById = asyncHandler(async (req, res) => {
   if (!isOwner && !inScope(req, order)) {
     return res.status(403).json({ message: 'Đơn hàng thuộc chi nhánh khác, bạn không có quyền xem' });
   }
-  res.json({ data: (await enrichHistory([order]))[0] });
+  const data = (await enrichHistory([order]))[0];
+  // Khách xem đơn của mình: không cần chi tiết kỹ thuật các lần thử hoàn tiền qua cổng thanh toán
+  if (req.accountRole === 'customer' && data?.refundInfo) {
+    const { attempts, requestId, ...rest } = data.refundInfo.toObject ? data.refundInfo.toObject() : data.refundInfo;
+    data.refundInfo = rest;
+  }
+  res.json({ data });
 });
 
 // @route PUT /api/orders/:id/cancel
@@ -505,6 +511,9 @@ const getAllOrders = asyncHandler(async (req, res) => {
   if (status) filter.status = status;
   if (storeId) filter.storeId = storeId;
   if (paymentStatus) filter.paymentStatus = paymentStatus;
+  // Lọc khoản hoàn tiền: chờ hoàn (gồm đang gửi lệnh hoàn) / đã hoàn
+  if (req.query.refundStatus === 'pending') filter.refundStatus = { $in: ['pending', 'processing'] };
+  if (req.query.refundStatus === 'completed') filter.refundStatus = 'completed';
   if (paymentMode) filter.paymentMode = paymentMode;
   const created = dateRange(from, to);
   if (created) filter.createdAt = created;

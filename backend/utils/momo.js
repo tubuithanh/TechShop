@@ -148,6 +148,7 @@ async function verifyResult(params) {
     responseCode: String(params.resultCode),
     transactionNo: params.transId ? String(params.transId) : undefined,
     bankCode: params.payType ? String(params.payType) : undefined,
+    payDate: params.responseTime ? String(params.responseTime) : undefined,
     message: params.message ? String(params.message) : ''
   };
 }
@@ -164,7 +165,63 @@ async function testConnection(cfg) {
   }
 }
 
+
+// ---------- HOÀN TIỀN (API /v2/gateway/api/refund) ----------
+const REFUND_ERRORS = {
+  11: 'Truy cập bị từ chối (kiểm tra Partner Code / Access Key)',
+  12: 'Phiên bản API không hỗ trợ',
+  13: 'Xác thực doanh nghiệp thất bại',
+  20: 'Yêu cầu sai định dạng',
+  22: 'Số tiền hoàn không hợp lệ',
+  40: 'Mã yêu cầu bị trùng',
+  41: 'Mã giao dịch hoàn tiền bị trùng',
+  42: 'Không tìm thấy giao dịch gốc',
+  43: 'Giao dịch đang được xử lý, vui lòng thử lại sau',
+  1080: 'Giao dịch hoàn tiền đang được xử lý',
+  1081: 'Giao dịch gốc đã được hoàn tiền hoặc không thể hoàn',
+  1088: 'Giao dịch gốc không hỗ trợ hoàn tiền',
+  11007: 'Chữ ký không hợp lệ (kiểm tra Access Key / Secret Key)'
+};
+
+// Hoàn tiền giao dịch MoMo. transId = mã giao dịch MoMo của lần thanh toán gốc (lưu ở paymentInfo.transactionNo).
+// Trả về { requestId, code, message, transId } nếu thành công (resultCode = 0), ném MomoError nếu không.
+async function refund({ transId, amount, description, orderCode, cfg, now = new Date() }) {
+  const c = cfg || (await getConfig());
+  if (!isComplete(c)) throw new MomoError('MoMo chưa được cấu hình');
+  if (!transId) throw new MomoError('Đơn thiếu mã giao dịch MoMo (transId) - không hoàn tự động được');
+  const refundId = `${String(orderCode || 'RF').replace(/[^0-9a-zA-Z]/g, '')}RF${now.getTime()}${crypto.randomInt(100, 999)}`;
+  const p = {
+    orderId: refundId, // mã của GIAO DỊCH HOÀN TIỀN (mới), không phải mã thanh toán gốc
+    requestId: refundId,
+    amount: String(Math.round(amount)),
+    transId: String(transId),
+    description: description || ''
+  };
+  const raw = `accessKey=${c.accessKey}&amount=${p.amount}&description=${p.description}&orderId=${p.orderId}` +
+    `&partnerCode=${c.partnerCode}&requestId=${p.requestId}&transId=${p.transId}`;
+  const body = { partnerCode: c.partnerCode, ...p, transId: Number(p.transId), lang: 'vi', signature: hmac(raw, c.secretKey) };
+  let res;
+  try {
+    res = await fetch(`${c.endpoint.replace(/\/$/, '')}/v2/gateway/api/refund`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000)
+    });
+  } catch (err) {
+    throw new MomoError(`Không kết nối được tới MoMo (${err.cause?.code || err.name}) - chưa biết kết quả, hãy kiểm tra trên trang doanh nghiệp MoMo trước khi thử lại`, 'NETWORK');
+  }
+  const data = await res.json().catch(() => null);
+  if (!data) throw new MomoError(`MoMo phản hồi không hợp lệ (HTTP ${res.status})`, 'BAD_RESPONSE');
+  if (data.resultCode !== 0) {
+    const msg = REFUND_ERRORS[data.resultCode] || String(data.message || 'MoMo từ chối hoàn tiền').replace(/\s*Vui lòng kiểm tra dữ liệu gốc[\s\S]*$/i, '').trim();
+    throw new MomoError(msg, data.resultCode);
+  }
+  return { requestId: refundId, code: '0', message: data.message || 'Thành công', transId: data.transId ? String(data.transId) : undefined };
+}
+
 module.exports = {
+  refund,
   isConfigured,
   getConfig,
   configFromEnv,

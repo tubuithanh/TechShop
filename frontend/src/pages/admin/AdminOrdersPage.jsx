@@ -15,6 +15,7 @@ import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import EInvoiceExportModal from '../../components/admin/EInvoiceExportModal';
+import RefundModal from '../../components/admin/RefundModal';
 import { FileEarmarkSpreadsheet } from 'react-bootstrap-icons';
 import { downloadCsv } from '../../utils/csvExport';
 
@@ -43,10 +44,11 @@ export default function AdminOrdersPage() {
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showInvoiceExport, setShowInvoiceExport] = useState(false);
+  const [refunding, setRefunding] = useState(null); // đơn đang mở hộp thoại hoàn tiền
   const { settings } = useSettings();
   const { user } = useAuth();
   const pageSize = settings.productsPerPage || 20;
-  const query = useListQuery(['status', 'paymentStatus', 'paymentMode', 'storeId', 'source', 'deliveryMethod', 'from', 'to']);
+  const query = useListQuery(['status', 'paymentStatus', 'refundStatus', 'paymentMode', 'storeId', 'source', 'deliveryMethod', 'from', 'to']);
   const { data: orders, total, totalPages, loading, meta, reload: loadOrders } = useAdminList(orderService.getAllOrdersAdmin, {
     ...query.apiParams,
     limit: pageSize
@@ -104,6 +106,14 @@ export default function AdminOrdersPage() {
       ]
     },
     {
+      key: 'refundStatus',
+      label: 'Hoàn tiền',
+      options: [
+        { value: 'pending', label: 'Chờ hoàn tiền' },
+        { value: 'completed', label: 'Đã hoàn tiền' }
+      ]
+    },
+    {
       key: 'paymentMode',
       label: 'Hình thức',
       options: [
@@ -154,6 +164,7 @@ export default function AdminOrdersPage() {
           </Button>
         </div>
       </div>
+      {refunding && <RefundModal order={refunding} onHide={() => setRefunding(null)} onDone={() => { setRefunding(null); loadOrders(); }} />}
       {showInvoiceExport && (
         <EInvoiceExportModal
           apiParams={query.apiParams}
@@ -228,7 +239,8 @@ export default function AdminOrdersPage() {
                   {o.activeTransferId && <div className="small text-warning">Đang chờ điều phối</div>}
                   {o.confirmedAt && <div className="small text-muted">Xác nhận: {o.confirmedByName || 'Nhân viên'}<br />{new Date(o.confirmedAt).toLocaleString('vi-VN')}</div>}
                   {o.paymentStatus === 'paid' && <div className="small text-success mt-1">Đã thanh toán</div>}
-                  {o.refundStatus === 'pending' && <div className="small text-warning mt-1">Chờ hoàn tiền</div>}
+                  {['pending', 'processing'].includes(o.refundStatus) && <div className="small text-warning mt-1">{o.refundStatus === 'processing' ? 'Đang hoàn tiền...' : 'Chờ hoàn tiền'}</div>}
+                  {o.refundStatus === 'completed' && o.refundInfo?.method && <div className="small text-success mt-1">Đã hoàn {o.refundInfo.method === 'gateway' ? `qua ${o.refundInfo.gateway === 'vnpay' ? 'VNPay' : 'MoMo'}` : 'thủ công'}</div>}
                 </td>
                 <td className="p-3">
                   <Form.Select
@@ -249,7 +261,7 @@ export default function AdminOrdersPage() {
                   {o.deliveryMethod === 'store_pickup' && ['ready_for_pickup', 'shipping'].includes(o.status) && <Button className="mt-1" size="sm" disabled={busy} onClick={() => setHandover(o)}>Bàn giao cho khách</Button>}
                   {o.status === 'returning' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'receive-return', { received: true }, 'Xác nhận đã nhận và kiểm đếm đầy đủ hàng trả? Hệ thống sẽ hoàn kho.')}>Đã nhận hàng trả</Button>}
                   {o.paymentMode === 'bank_transfer' && ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'].includes(o.status) && o.paymentStatus !== 'paid' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'confirm-payment', { confirmed: true }, 'Xác nhận đã nhận đủ tiền chuyển khoản?')}>Đã nhận chuyển khoản</Button>}
-                  {o.refundStatus === 'pending' && ['cancelled', 'returned'].includes(o.status) && <Button className="mt-1" variant="warning" size="sm" disabled={busy} onClick={() => { const note = window.prompt('Ghi chú/mã giao dịch hoàn tiền thực tế:'); if (note?.trim()) action(o, 'confirm-refund', { confirmed: true, note }, 'Xác nhận khách đã nhận đủ tiền hoàn?'); }}>Xác nhận hoàn tiền</Button>}
+                  {o.refundStatus === 'pending' && ['cancelled', 'returned'].includes(o.status) && <Button className="mt-1" variant="warning" size="sm" disabled={busy} onClick={() => setRefunding(o)}>Hoàn tiền</Button>}
                 </td>
               </tr>
             ))}

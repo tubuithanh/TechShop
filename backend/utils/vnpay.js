@@ -91,7 +91,7 @@ async function buildPaymentUrl({ order, ipAddr, now = new Date(), cfg }) {
     vnp_ExpireDate: vnTime(new Date(now.getTime() + 15 * 60 * 1000))
   };
   const { query, hash } = signedQuery(params, hashSecret);
-  return { txnRef, paymentUrl: `${url}?${query}&vnp_SecureHash=${hash}` };
+  return { txnRef, createDate: params.vnp_CreateDate, paymentUrl: `${url}?${query}&vnp_SecureHash=${hash}` };
 }
 
 // Kiểm tra chữ ký của dữ liệu VNPay gửi về (trang return và IPN). Trả về null nếu chữ ký sai.
@@ -109,7 +109,8 @@ async function verifyReturn(queryParams) {
     success: rest.vnp_ResponseCode === '00' && rest.vnp_TransactionStatus === '00',
     responseCode: rest.vnp_ResponseCode,
     transactionNo: rest.vnp_TransactionNo,
-    bankCode: rest.vnp_BankCode
+    bankCode: rest.vnp_BankCode,
+    payDate: rest.vnp_PayDate
   };
 }
 
@@ -146,7 +147,87 @@ async function testConnection(cfg) {
   return { ok: false, message: `VNPay phản hồi không như mong đợi (HTTP ${res.status})` };
 }
 
+
+// ---------- HOÀN TIỀN (API merchant_webapi, lệnh "refund") ----------
+// Địa chỉ API truy vấn / hoàn tiền nằm cùng tên miền với cổng thanh toán:
+//   sandbox:  https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
+//   thật:     https://<tên miền VNPay cấp>/merchant_webapi/api/transaction
+function apiUrlFrom(payUrl) {
+  try { return `${new URL(payUrl).origin}/merchant_webapi/api/transaction`; } catch { return 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction'; }
+}
+
+const REFUND_ERRORS = {
+  '02': 'Mã merchant (TmnCode) không hợp lệ',
+  '03': 'Dữ liệu gửi sang không đúng định dạng',
+  '91': 'Không tìm thấy giao dịch gốc cần hoàn',
+  '94': 'Yêu cầu bị trùng (đã gửi hoàn tiền cho giao dịch này)',
+  '95': 'Giao dịch gốc không thành công, không thể hoàn tiền',
+  '97': 'Chữ ký không hợp lệ (kiểm tra Secret Key)',
+  '99': 'Lỗi khác từ VNPay'
+};
+
+class VnpayRefundError extends Error {
+  constructor(message, code) { super(message); this.code = code; }
+}
+
+// Hoàn tiền 1 giao dịch đã thanh toán. amount = số tiền hoàn (đồng); full = hoàn toàn bộ (02) hay một phần (03).
+// Trả về { requestId, code, message, transactionNo } nếu VNPay chấp nhận (vnp_ResponseCode = 00), ném lỗi nếu không.
+async function refund({ txnRef, transactionNo, transactionDate, amount, full = true, createBy, ipAddr, orderInfo, cfg, now = new Date() }) {
+  const c = cfg || (await getConfig());
+  if (!isComplete(c)) throw new VnpayRefundError('VNPay chưa được cấu hình');
+  if (!txnRef || !transactionDate) throw new VnpayRefundError('Đơn thiếu thông tin giao dịch gốc (mã giao dịch / thời gian tạo) - không hoàn tự động được');
+  const p = {
+    vnp_RequestId: `RF${now.getTime()}${crypto.randomBytes(2).toString('hex')}`.slice(0, 32),
+    vnp_Version: '2.1.0',
+    vnp_Command: 'refund',
+    vnp_TmnCode: c.tmnCode,
+    vnp_TransactionType: full ? '02' : '03',
+    vnp_TxnRef: txnRef,
+    vnp_Amount: Math.round(amount) * 100,
+    vnp_TransactionNo: transactionNo || '0',
+    vnp_TransactionDate: transactionDate,
+    vnp_CreateBy: String(createBy || 'admin').slice(0, 250),
+    vnp_CreateDate: vnTime(now),
+    vnp_IpAddr: ipAddr || '127.0.0.1',
+    vnp_OrderInfo: orderInfo || `Hoan tien giao dich ${txnRef}`
+  };
+  // Chữ ký API: các trường nối bằng "|" theo đúng thứ tự tài liệu VNPay, HMAC-SHA512
+  const signData = [p.vnp_RequestId, p.vnp_Version, p.vnp_Command, p.vnp_TmnCode, p.vnp_TransactionType, p.vnp_TxnRef,
+    p.vnp_Amount, p.vnp_TransactionNo, p.vnp_TransactionDate, p.vnp_CreateBy, p.vnp_CreateDate, p.vnp_IpAddr, p.vnp_OrderInfo].join('|');
+  p.vnp_SecureHash = crypto.createHmac('sha512', c.hashSecret).update(Buffer.from(signData, 'utf-8')).digest('hex');
+
+  let res;
+  try {
+    res = await fetch(apiUrlFrom(c.url), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p),
+      signal: AbortSignal.timeout(20000)
+    });
+  } catch (err) {
+    throw new VnpayRefundError(`Không kết nối được tới VNPay (${err.cause?.code || err.name}) - chưa biết kết quả, hãy kiểm tra trên trang merchant trước khi thử lại`, 'NETWORK');
+  }
+  const data = await res.json().catch(() => null);
+  if (!data) throw new VnpayRefundError(`VNPay phản hồi không hợp lệ (HTTP ${res.status})`, 'BAD_RESPONSE');
+  // Kiểm tra chữ ký phản hồi để chắc chắn dữ liệu đến từ VNPay
+  if (data.vnp_SecureHash) {
+    const respData = [data.vnp_ResponseId, data.vnp_Command, data.vnp_ResponseCode, data.vnp_Message, data.vnp_TmnCode, data.vnp_TxnRef,
+      data.vnp_Amount, data.vnp_BankCode, data.vnp_PayDate, data.vnp_TransactionNo, data.vnp_TransactionType, data.vnp_TransactionStatus,
+      data.vnp_OrderInfo].map((v) => v ?? '').join('|');
+    const expected = crypto.createHmac('sha512', c.hashSecret).update(Buffer.from(respData, 'utf-8')).digest('hex');
+    if (expected.toLowerCase() !== String(data.vnp_SecureHash).toLowerCase()) {
+      throw new VnpayRefundError('Chữ ký phản hồi từ VNPay không hợp lệ', 'BAD_SIGNATURE');
+    }
+  }
+  const code = String(data.vnp_ResponseCode ?? '');
+  if (code !== '00') throw new VnpayRefundError(REFUND_ERRORS[code] || data.vnp_Message || `VNPay từ chối hoàn tiền (mã ${code})`, code);
+  return { requestId: p.vnp_RequestId, code, message: data.vnp_Message || 'Thành công', transactionNo: data.vnp_TransactionNo };
+}
+
 module.exports = {
+  refund,
+  VnpayRefundError,
+  apiUrlFrom,
   isConfigured,
   getConfig,
   configFromEnv,
