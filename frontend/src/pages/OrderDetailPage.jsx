@@ -9,6 +9,7 @@ import { connectSocket } from '../services/socket';
 import { ORDER_LABELS, orderMethod } from '../utils/orderWorkflow';
 import VatBreakdown from '../components/VatBreakdown';
 import ShipmentTracking from '../components/ShipmentTracking';
+import OrderReviewButton from '../components/OrderReviewButton';
 
 const homeSteps = ['pending', 'confirmed', 'processing', 'shipping', 'delivered'];
 const statusLabel = {
@@ -208,6 +209,7 @@ export default function OrderDetailPage() {
             <span>
               {item.name}
               {item.variantLabel && <span className="text-muted"> ({item.variantLabel})</span>} x{item.quantity}
+              {order.status === 'delivered' && <OrderReviewButton order={order} item={item} />}
             </span>
             <span>{formatVND(item.unitPrice * item.quantity)}</span>
           </ListGroup.Item>

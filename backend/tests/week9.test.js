@@ -49,7 +49,8 @@ async function setup() {
 
 describe('Tuần 9: đánh giá, hỏi đáp, bảo hành, dashboard, nhân viên', () => {
   test('TC-149: Chỉ khách hàng đánh giá sản phẩm; nội dung và trả lời đánh giá được kiểm tra', async () => {
-    const { product, t } = await setup();
+    const { product, t, deliveredOrder, store1 } = await setup();
+    await deliveredOrder(store1._id, 1, 1000000);
     const review = (token, body) => auth(request(app).post(`/api/products/${product._id}/reviews`), token).send(body);
     expect((await review(t.admin, { rating: 5, message: 'Tuyệt' })).statusCode).toBe(403);
     expect((await review(t.cskh, { rating: 5, message: 'Tuyệt' })).statusCode).toBe(403);

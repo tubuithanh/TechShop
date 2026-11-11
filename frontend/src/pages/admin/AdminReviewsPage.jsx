@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Container, Card, Badge, Form, Button, InputGroup } from 'react-bootstrap';
+import { Container, Card, Form, Button, InputGroup } from 'react-bootstrap';
 import { reviewService } from '../../services/reviewService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
@@ -12,7 +12,7 @@ export default function AdminReviewsPage() {
   const [replyDrafts, setReplyDrafts] = useState({});
   const { settings } = useSettings();
   const pageSize = settings.productsPerPage || 20;
-  const query = useListQuery(['status', 'rating', 'replied']);
+  const query = useListQuery(['rating', 'replied']);
   const { data: reviews, total, totalPages, loading, reload: load } = useAdminList(reviewService.getAllAdmin, {
     ...query.apiParams,
     limit: pageSize
@@ -20,20 +20,9 @@ export default function AdminReviewsPage() {
   const page = query.values.page;
   const setPage = query.setPage;
   const filters = [
-    { key: 'status', label: 'Hiển thị', options: [{ value: 'visible', label: 'Đang hiển thị' }, { value: 'hidden', label: 'Đã ẩn' }] },
     { key: 'rating', label: 'Số sao', options: [5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: `${n} sao` })) },
     { key: 'replied', label: 'Phản hồi', options: [{ value: 'false', label: 'Chưa phản hồi' }, { value: 'true', label: 'Đã phản hồi' }] }
   ];
-
-  const handleHide = async (id) => {
-    if (!confirm('Ẩn đánh giá này khỏi trang sản phẩm?')) return;
-    try {
-      await reviewService.hide(id);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Không ẩn được đánh giá');
-    }
-    load();
-  };
 
   const handleReply = async (id) => {
     const content = replyDrafts[id];
@@ -72,9 +61,7 @@ export default function AdminReviewsPage() {
                     </div>
                   </div>
                 </div>
-                <Badge bg={r.status === 'visible' ? 'success' : 'danger'}>
-                  {r.status === 'visible' ? 'Đang hiển thị' : 'Đã ẩn'}
-                </Badge>
+
               </div>
               <p className="small text-secondary mb-2">{r.message}</p>
 
@@ -94,11 +81,7 @@ export default function AdminReviewsPage() {
                 <Button variant="outline-primary" onClick={() => handleReply(r._id)}>
                   Gửi phản hồi
                 </Button>
-                {r.status === 'visible' && (
-                  <Button variant="outline-danger" onClick={() => handleHide(r._id)}>
-                    Ẩn đánh giá
-                  </Button>
-                )}
+
               </InputGroup>
             </Card.Body>
           </Card>

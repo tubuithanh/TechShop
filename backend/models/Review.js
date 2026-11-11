@@ -12,6 +12,7 @@ const reviewSchema = new mongoose.Schema(
 
     // Mở rộng thêm
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+    reviewKey: String,
     images: [String],
     isVerifiedPurchase: { type: Boolean, default: false },
     status: { type: String, enum: ['visible', 'hidden'], default: 'visible' },
@@ -26,6 +27,7 @@ const reviewSchema = new mongoose.Schema(
 );
 
 reviewSchema.index({ productId: 1 });
+reviewSchema.index({ reviewKey: 1 }, { unique: true, partialFilterExpression: { reviewKey: { $type: 'string' } } });
 
 // Tìm kiếm không dấu: tên khách, nội dung, tên sản phẩm
 reviewSchema.plugin(searchablePlugin, {

@@ -4,23 +4,26 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
 const { searchFilter } = require('../utils/search');
-
-// Dùng chung cho createReview và hideReview - trước đây chỉ createReview tính lại điểm trung bình,
-// nên ẩn 1 đánh giá không cập nhật lại ratingAverage/ratingCount, để lại số liệu sai vĩnh viễn.
-async function recomputeProductRating(productId) {
+async function deliveredPurchase(req, productId, orderId) {
+  if (orderId && !mongoose.isValidObjectId(orderId)) return null;
+  return Order.findOne({ userId: req.account._id, status: 'delivered', 'items.productId': productId, ...(orderId ? { _id: orderId } : {}) }).select('_id').sort({ createdAt: -1 });
+}
+const eligibility = asyncHandler(async (req, res) => {
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ khách hàng được đánh giá' });
+  if (!mongoose.isValidObjectId(req.params.productId)) return res.status(400).json({ message: 'Sản phẩm không hợp lệ' });
+  const purchase = await deliveredPurchase(req, req.params.productId);
+  const review = await Review.findOne({ productId: req.params.productId, userId: req.account._id }).sort({ createdAt: -1 });
+  res.json({ data: { eligible: !!purchase, orderId: purchase?._id || null, review } });
+});async function recomputeProductRating(productId) {
   const stats = await Review.aggregate([
-    { $match: { productId, status: 'visible' } },
+    { $match: { productId } },
     { $group: { _id: '$productId', avgRating: { $avg: '$rating' }, count: { $sum: 1 } } }
   ]);
   await Product.findByIdAndUpdate(productId, {
     ratingAverage: stats.length > 0 ? Math.round(stats[0].avgRating * 10) / 10 : 0,
     ratingCount: stats.length > 0 ? stats[0].count : 0
   });
-}
-
-// Ảnh đánh giá: tối đa 3 đường link http(s) (ảnh khách đã tải lên qua /api/uploads) - khớp giao diện
-// và Điều khoản sử dụng. Trả về thông báo lỗi, hoặc null nếu hợp lệ.
-const MAX_REVIEW_IMAGES = 3;
+}const MAX_REVIEW_IMAGES = 3;
 function validateReviewImages(images) {
   if (images === undefined) return null;
   if (!Array.isArray(images) || images.length > MAX_REVIEW_IMAGES || images.some((u) => typeof u !== 'string' || !/^https?:\/\//.test(u))) {
@@ -33,7 +36,7 @@ function validateRating(rating) {
 }
 
 const getProductReviews = asyncHandler(async (req, res) => {
-  const reviews = await Review.find({ productId: req.params.productId, status: 'visible' })
+  const reviews = await Review.find({ productId: req.params.productId })
     .populate('userId', 'displayName avatar')
     .sort({ createdAt: -1 });
   res.json({ data: reviews });
@@ -41,10 +44,7 @@ const getProductReviews = asyncHandler(async (req, res) => {
 
 const createReview = asyncHandler(async (req, res) => {
   const { rating, images, orderId } = req.body;
-  const productId = req.params.productId;
-  // Chỉ khách hàng được đánh giá: trước đây tài khoản nhân viên / admin cũng gửi được đánh giá (kéo điểm trung
-  // bình sản phẩm lên), cho cả sản phẩm không tồn tại, nội dung dài tùy ý
-  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ khách hàng mới đánh giá sản phẩm' });
+  const productId = req.params.productId;  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ khách hàng mới đánh giá sản phẩm' });
   if (req.body.message !== undefined && typeof req.body.message !== 'string') {
     return res.status(400).json({ message: 'Nội dung đánh giá không hợp lệ' });
   }
@@ -52,62 +52,49 @@ const createReview = asyncHandler(async (req, res) => {
   if (message.length > 2000) return res.status(400).json({ message: 'Nội dung đánh giá tối đa 2000 ký tự' });
   const inputError = validateRating(rating) || validateReviewImages(images);
   if (inputError) return res.status(400).json({ message: inputError });
-  if (!mongoose.isValidObjectId(productId) || !(await Product.exists({ _id: productId, isActive: true }))) {
+  if (!mongoose.isValidObjectId(productId) || !(await Product.exists({ _id: productId }))) {
     return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
-  }
-
-  // Mỗi khách chỉ được đánh giá 1 lần cho 1 sản phẩm - trước đây không kiểm tra, 1 khách có thể gửi
-  // nhiều đánh giá liên tiếp cho cùng sản phẩm, làm sai lệch điểm trung bình (tính trùng nhiều lần
-  // ý kiến của cùng 1 người). CHỈ chặn nếu đánh giá cũ còn "visible" - nếu đánh giá trước đó đã bị
-  // admin ẩn (spam/vi phạm), khách vẫn cần được phép gửi lại 1 đánh giá khác, không nên bị khoá
-  // vĩnh viễn vì không có luồng "gỡ ẩn"/sửa đánh giá cũ nào khác trong hệ thống.
-  const existingReview = await Review.findOne({ productId, userId: req.account._id, status: 'visible' });
+  }  const existingReview = await Review.findOne({ productId, userId: req.account._id });
   if (existingReview) {
     return res.status(409).json({ message: 'Bạn đã đánh giá sản phẩm này rồi' });
   }
 
-  let isVerifiedPurchase = false;
-  if (orderId) {
-    const order = await Order.findOne({
-      _id: orderId,
-      userId: req.account._id,
-      status: 'delivered',
-      'items.productId': productId
-    });
-    isVerifiedPurchase = !!order;
-  }
+  const purchase = await deliveredPurchase(req, productId, orderId);
+  if (!purchase) return res.status(403).json({ message: 'Bạn chỉ được đánh giá sản phẩm trong đơn hàng của mình đã giao thành công' });
 
   const review = await Review.create({
     productId,
     userId: req.account._id,
-    orderId: orderId || null,
+    orderId: purchase._id,
+    reviewKey: String(req.account._id) + ":" + String(productId),
     displayName: req.account.displayName || req.account.name,
     photoURL: req.account.avatar,
     rating,
     message,
     images,
-    isVerifiedPurchase
+    isVerifiedPurchase: true
+  }).catch(err => {
+    if (err.code === 11000) { err.statusCode = 409; err.message = 'Bạn đã đánh giá sản phẩm này rồi'; }
+    throw err;
   });
 
   await recomputeProductRating(review.productId);
 
   res.status(201).json({ data: review });
-});
-
-// @route PUT /api/products/:productId/reviews/:reviewId - khách sửa đánh giá của chính mình (số sao,
-// nội dung, hình ảnh). Không cho sửa đánh giá đã bị quản trị viên ẩn - nếu không, khách có thể "lách" việc
-// kiểm duyệt bằng cách sửa lại nội dung vi phạm.
-const updateReview = asyncHandler(async (req, res) => {
+});const updateReview = asyncHandler(async (req, res) => {
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ khách hàng được đánh giá' });
   const review = await Review.findOne({ _id: req.params.reviewId, productId: req.params.productId });
   if (!review) return res.status(404).json({ message: 'Không tìm thấy đánh giá' });
   if (review.userId.toString() !== req.account._id.toString()) {
     return res.status(403).json({ message: 'Bạn chỉ được sửa đánh giá của chính mình' });
   }
-  if (review.status !== 'visible') {
-    return res.status(403).json({ message: 'Đánh giá đã bị ẩn do vi phạm quy định, không thể chỉnh sửa' });
-  }
-
   const { rating, message, images } = req.body;
+  const purchase = await deliveredPurchase(req, req.params.productId);
+  if (!purchase) return res.status(403).json({ message: 'Chỉ được sửa đánh giá sản phẩm đã nhận hàng' });
+  if (message !== undefined && typeof message !== 'string') return res.status(400).json({ message: 'Nội dung đánh giá không hợp lệ' });
+  review.orderId = purchase._id;
+  review.isVerifiedPurchase = true;
+  review.status = 'visible';
   const inputError = (rating !== undefined && validateRating(rating)) || validateReviewImages(images);
   if (inputError) return res.status(400).json({ message: inputError });
   if (message !== undefined && String(message).length > 2000) {
@@ -125,15 +112,6 @@ const updateReview = asyncHandler(async (req, res) => {
   res.json({ data: populated });
 });
 
-const hideReview = asyncHandler(async (req, res) => {
-  const review = await Review.findById(req.params.id);
-  if (!review) return res.status(404).json({ message: 'Không tìm thấy đánh giá' });
-  review.status = 'hidden';
-  await review.save();
-  await recomputeProductRating(review.productId);
-  res.json({ message: 'Đã ẩn đánh giá' });
-});
-
 const replyReview = asyncHandler(async (req, res) => {
   const review = await Review.findById(req.params.id);
   if (!review) return res.status(404).json({ message: 'Không tìm thấy đánh giá' });
@@ -145,8 +123,8 @@ const replyReview = asyncHandler(async (req, res) => {
 });
 
 const getAllReviewsAdmin = asyncHandler(async (req, res) => {
-  const { status, rating, replied, q, page = 1, limit = 20 } = req.query;
-  const filter = status ? { status } : {};
+  const { rating, replied, q, page = 1, limit = 20 } = req.query;
+  const filter = {};
   if (rating && Number(rating) >= 1 && Number(rating) <= 5) filter.rating = Number(rating);
   if (replied === 'true') filter['reply.content'] = { $exists: true, $ne: '' };
   if (replied === 'false') filter.$or = [{ 'reply.content': { $exists: false } }, { 'reply.content': '' }];
@@ -161,4 +139,4 @@ const getAllReviewsAdmin = asyncHandler(async (req, res) => {
   res.json({ data: reviews, total, page: Number(page), totalPages: Math.ceil(total / limit) });
 });
 
-module.exports = { getProductReviews, createReview, updateReview, hideReview, replyReview, getAllReviewsAdmin };
+module.exports = { getProductReviews, createReview, updateReview, eligibility, replyReview, getAllReviewsAdmin };

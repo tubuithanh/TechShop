@@ -18,6 +18,9 @@ async function setup() {
     variants: [{ color: 'Đen', price: 1000000 }]
   });
   const token = (await registerUser()).body.accessToken;
+  const userId = require('jsonwebtoken').decode(token).id;
+  await require('../models/Order').create({ orderCode:'REVIEW-TEST', userId, storeId:new (require('mongoose').Types.ObjectId)(), status:'delivered', paymentMode:'cod', items:[{productId:product._id,name:product.title,quantity:1,unitPrice:1000000}], itemsTotal:1000000,grandTotal:1000000 });
+  await Review.init();
   const created = await request(app)
     .post(`/api/products/${product._id}/reviews`)
     .set('Authorization', `Bearer ${token}`)
@@ -49,11 +52,11 @@ describe('Sửa đánh giá sản phẩm', () => {
     expect((await Review.findById(review._id)).rating).toBe(2);
   });
 
-  test('TC-44: Không sửa được đánh giá đã bị quản trị viên ẩn', async () => {
+  test('TC-44: Đánh giá cũ bị ẩn được hiển thị và chỉnh sửa', async () => {
     const { product, token, review } = await setup();
     await Review.updateOne({ _id: review._id }, { status: 'hidden' });
     const res = await edit(product, review._id, token, { message: 'Sửa lại nội dung vi phạm' });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
   });
 
   test('TC-45: Từ chối số sao ngoài 1-5 và quá 3 ảnh (cả khi viết mới lẫn khi sửa)', async () => {
@@ -68,4 +71,42 @@ describe('Sửa đánh giá sản phẩm', () => {
     expect(create.statusCode).toBe(400);
     expect((await Review.findById(review._id)).rating).toBe(2);
   });
+});
+
+test('Only own delivered orders containing the product qualify; duplicate submissions are rejected', async () => {
+  const { product, token } = await setup();
+  await Review.deleteMany({});
+  const Order = require('../models/Order');
+  const order = await Order.findOne();
+  const create = body => request(app).post(`/api/products/${product._id}/reviews`).set('Authorization', `Bearer ${token}`).send({rating:5,...body});
+  for (const status of ['pending','confirmed','processing','shipping','cancelled','returned','returning']) {
+    await Order.updateOne({_id:order._id},{status});
+    expect((await create({orderId:String(order._id)})).status).toBe(403);
+  }
+  await Order.updateOne({_id:order._id},{status:'delivered'});
+  expect((await create({orderId:'invalid'})).status).toBe(403);
+  const other=(await registerUser()).body.accessToken;
+  expect((await request(app).post(`/api/products/${product._id}/reviews`).set('Authorization',`Bearer ${other}`).send({rating:5,orderId:order._id})).status).toBe(403);
+  const eligible=await request(app).get(`/api/products/${product._id}/review-eligibility`).set('Authorization',`Bearer ${token}`);
+  expect(eligible.body.data).toMatchObject({eligible:true,orderId:String(order._id),review:null});
+  const results=await Promise.all([create({}),create({})]);
+  expect(results.map(r=>r.status).sort()).toEqual([201,409]);
+  expect(await Review.countDocuments()).toBe(1);
+  expect((await Review.findOne()).isVerifiedPurchase).toBe(true);
+  expect(String((await Review.findOne()).orderId)).toBe(String(order._id));
+});
+
+test('Hiding endpoint is removed; legacy hidden reviews return publicly and migration restores ratings', async () => {
+  const {product,token,review}=await setup();
+  await Review.updateOne({_id:review._id},{status:'hidden'});
+  await Product.updateOne({_id:product._id},{ratingAverage:0,ratingCount:0});
+  const list=await request(app).get(`/api/products/${product._id}/reviews`);
+  expect(list.body.data).toHaveLength(1);
+  expect((await request(app).put(`/api/reviews/${review._id}/hide`).set('Authorization',`Bearer ${token}`)).status).toBe(404);
+  await require('../utils/migrateProductReviews').migrateProductReviews();
+  expect((await Review.findById(review._id)).status).toBe('visible');
+  expect((await Product.findById(product._id)).ratingCount).toBe(1);
+  expect((await Product.findById(product._id)).ratingAverage).toBe(2);
+  await require('../utils/migrateProductReviews').migrateProductReviews();
+  expect(await Review.countDocuments()).toBe(1);
 });

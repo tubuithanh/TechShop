@@ -9,6 +9,7 @@ import { flyToCart } from '../utils/flyToCart';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
 import ReviewForm from '../components/ReviewForm';
+import api from '../services/api';
 import ProductGallery from '../components/ProductGallery';
 import { useCart } from '../store/CartContext';
 import { useAuth } from '../store/AuthContext';
@@ -47,6 +48,12 @@ export default function ProductDetailPage() {
   const [activeImage, setActiveImage] = useState(0);
   const [related, setRelated] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [reviewEligibility, setReviewEligibility] = useState(null);
+  useEffect(() => {
+    let live = true; setReviewEligibility(null);
+    if (user?.role === 'customer' && product?._id) api.get(`/products/${product._id}/review-eligibility`).then(r => { if (live) setReviewEligibility(r.data.data); }).catch(() => { if (live) setReviewEligibility({ eligible: false }); });
+    return () => { live = false; };
+  }, [product?._id, user?._id, user?.role]);
   const [zoomImage, setZoomImage] = useState(null); // ảnh đánh giá đang phóng to
   const [questions, setQuestions] = useState([]);
   const [quantity, setQuantity] = useState(1);
@@ -250,7 +257,7 @@ export default function ProductDetailPage() {
   };
 
   const handleCreateReview = async (values) => {
-    const created = await productService.createReview(product._id, values);
+    const created = await productService.createReview(product._id, { ...values, orderId: reviewEligibility?.orderId });
     const next = [created, ...reviews];
     setReviews(next);
     syncRating(next);
@@ -565,11 +572,12 @@ export default function ProductDetailPage() {
                 </div>
               </div>
             )}
-            {isCustomer && !myReview && (
+            {isCustomer && !myReview && reviewEligibility?.eligible && (
               <div className="mb-4">
                 <ReviewForm onSubmit={handleCreateReview} />
               </div>
             )}
+            {isCustomer && !myReview && !reviewEligibility?.eligible && <p className="small text-muted">{reviewEligibility ? 'Bạn có thể đánh giá sau khi nhận được sản phẩm trong đơn hàng đã giao thành công.' : 'Đang kiểm tra đơn hàng…'}</p>}
             {myReview && !editingReviewId && (
               <div className="small text-muted mb-3">
                 Bạn đã đánh giá sản phẩm này. Có thể sửa lại số sao, nội dung và hình ảnh ngay trong đánh giá của bạn bên dưới.

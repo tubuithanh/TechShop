@@ -14,6 +14,7 @@ const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
 
 const dbReady = connectDB().then(async () => {
   await migrateChat();
+  await require('./utils/migrateProductReviews').migrateProductReviews();
   await Promise.all([require('./models/Order').init(), require('./models/DeliveryEvidence').init()]);
   // Chưa có dữ liệu tỉnh/thành, phường/xã -> nạp dữ liệu mặc định (chỉ lần đầu)
   require('./utils/seedLocations')
