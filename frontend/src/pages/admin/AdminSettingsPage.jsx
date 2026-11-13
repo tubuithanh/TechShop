@@ -7,6 +7,7 @@ import {
 import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
 import VnpaySettingsPanel from '../../components/admin/VnpaySettingsPanel';
 import MomoSettingsPanel from '../../components/admin/MomoSettingsPanel';
+import ShippingProvidersPanel from '../../components/admin/ShippingProvidersPanel';
 import ThemeSettingsPanel from '../../components/admin/ThemeSettingsPanel';
 import SecuritySettingsPanel from '../../components/admin/SecuritySettingsPanel';
 import LoyaltySettingsPanel from '../../components/admin/LoyaltySettingsPanel';
@@ -22,6 +23,7 @@ const TABS = [
   { key: 'theme', label: 'Màu sắc giao diện', icon: PaletteFill },
   { key: 'footer', label: 'Chân trang (Footer)', icon: LayoutTextWindowReverse },
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
+  { key: 'carriers', label: 'Đơn vị giao hàng', icon: Truck },
   { key: 'vat', label: 'Thuế VAT', icon: CreditCard2FrontFill },
   { key: 'loyalty', label: 'Hạng thành viên', icon: AwardFill },
   { key: 'seo', label: 'SEO', icon: Search },
@@ -434,6 +436,7 @@ export default function AdminSettingsPage() {
                 {activeTab === 'payment' && <VnpaySettingsPanel />}
 
                 {activeTab === 'momo' && <MomoSettingsPanel />}
+                {activeTab === 'carriers' && <ShippingProvidersPanel />}
 
                 {activeTab === 'security' && <SecuritySettingsPanel />}
 

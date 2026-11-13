@@ -44,6 +44,11 @@ router.post('/payment/test', protect, authorize('admin'), testPaymentConfig);
 router.get('/payment/momo', protect, authorize('admin'), getMomoConfig);
 router.put('/payment/momo', protect, authorize('admin'), updateMomoConfig);
 router.post('/payment/momo/test', protect, authorize('admin'), testMomoConfig);
+// Đơn vị giao hàng (giả lập / Giao Hàng Nhanh / ... - có token bí mật) - CHỈ admin
+const shippingCfg = require('../controllers/shippingConfigController');
+router.get('/shipping', protect, authorize('admin'), shippingCfg.getShippingConfig);
+router.put('/shipping', protect, authorize('admin'), shippingCfg.updateShippingConfig);
+router.post('/shipping/test', protect, authorize('admin'), shippingCfg.testShippingConfig);
 
 // Template màu sắc giao diện - CHỈ admin
 router.get('/themes', protect, authorize('admin'), getThemeTemplates);

@@ -19,8 +19,13 @@ router.get('/track/:code/photos/:evidenceId', simulated.publicPhoto);
 router.use(protect);
 router.get('/locations/:kind', can('deliveries.manage'), shipments.locations);
 router.get('/:orderId/tracking', shipments.tracking);
-router.put('/:orderId/plan', can('deliveries.manage'), (req, res, next) => (process.env.SHIPPING_PROVIDER === 'ghn_sandbox' ? shipments : simulated).prepare(req, res, next));
-router.post('/:orderId/shipment', can('deliveries.manage'), (req, res, next) => (process.env.SHIPPING_PROVIDER === 'ghn_sandbox' ? shipments : simulated).create(req, res, next));
+// Đơn vị giao hàng đang dùng (Admin -> Đơn vị giao hàng, hoặc SHIPPING_PROVIDER) quyết định controller xử lý
+const { isGhnActive } = require('../utils/shippingConfig');
+const byProvider = (action) => async (req, res, next) => {
+  try { (await isGhnActive() ? shipments : simulated)[action](req, res, next); } catch (err) { next(err); }
+};
+router.put('/:orderId/plan', can('deliveries.manage'), byProvider('prepare'));
+router.post('/:orderId/shipment', can('deliveries.manage'), byProvider('create'));
 router.post('/:orderId/shipment/advance', can('deliveries.manage'), simulated.advance);
 router.post('/:orderId/dispatch', can('deliveries.manage'), simulated.dispatch);
 router.post('/:orderId/shipment/retire-sandbox', can('deliveries.manage'), simulated.retireSandbox);

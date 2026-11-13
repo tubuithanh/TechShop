@@ -22,7 +22,7 @@ function internalAllowed(order) {
 }
 async function roadDistance(from, to) {
   for (const p of [from, to]) if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng) || p.lat < -90 || p.lat > 90 || p.lng < -180 || p.lng > 180) throw new BusinessError(400, 'Cần tọa độ hợp lệ của chi nhánh và nơi nhận hàng');
-  const base = process.env.ROUTING_API_URL || 'https://router.project-osrm.org';
+  const base = (await require('./shippingConfig').getShippingConfig()).routingApiUrl;
   const url = new URL(`/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&alternatives=false&radiuses=200;200`, base);
   let result;
   try { result = await httpJson(url); } catch { throw new BusinessError(503, 'Chưa tính được tuyến đường. Vui lòng thử lại; không tự suy đoán khoảng cách.'); }

@@ -1,3 +1,4 @@
+const { isGhnActive, ghnSettings } = require('../utils/shippingConfig');
 const crypto = require('crypto');
 const Order = require('../models/Order');
 const Store = require('../models/Store');
@@ -123,7 +124,7 @@ async function lock(order) {
 async function syncOrder(req, initial, simulationUpdate) {
   if (!initial.shipment?.code || initial.shipment.phase !== 'active') return initial;
   const simulated = initial.shipment.environment === 'simulation';
-  if (!simulationUpdate && (simulated || process.env.SHIPPING_PROVIDER !== 'ghn_sandbox')) return initial;
+  if (!simulationUpdate && (simulated || !(await isGhnActive()))) return initial;
   if (!(await transactionsSupported())) fail(503, 'Đồng bộ giao hàng cần MongoDB replica set');
   const lease = await lock(initial);
   try {
@@ -171,7 +172,7 @@ const cancel = asyncHandler(async (req, res) => {
   try {
     const fresh = await Order.findById(order._id);
     if (!['confirmed', 'processing'].includes(fresh.status) || fresh.shipment.status !== 'ready_to_pick') fail(409, 'Vận đơn đã được bàn giao, không thể hủy');
-    if (order.shipment.environment !== 'simulation' && process.env.SHIPPING_PROVIDER !== 'ghn_sandbox') fail(409, 'Đây là vận đơn sandbox cũ; chưa thể hủy bằng chế độ giả lập');
+    if (order.shipment.environment !== 'simulation' && !(await isGhnActive())) fail(409, 'Đây là vận đơn sandbox cũ; chưa thể hủy bằng chế độ giả lập');
     const result = order.shipment.environment === 'simulation' ? [{ order_code: order.shipment.code, result: true }] : await ghn.cancel(order.shipment.shopId, order.shipment.code);
     if (!result?.some(r => r.order_code === order.shipment.code && r.result === true)) fail(409, 'GHN chưa xác nhận hủy. Hãy đồng bộ trạng thái.');
     const updated = await Order.findOneAndUpdate({ _id: order._id, 'shipment.lease': lease }, {
@@ -202,7 +203,7 @@ const settle = asyncHandler(async (req, res) => {
 });
 let polling = false;
 async function pollShipments(app) {
-  if (polling || process.env.SHIPPING_PROVIDER !== 'ghn_sandbox' || !process.env.GHN_TOKEN) return;
+  if (polling || !(await isGhnActive()) || !(await ghnSettings()).token) return;
   polling = true;
   try {
     const orders = await Order.find({ 'shipment.environment': 'sandbox', 'shipment.phase': 'active', 'shipment.status': { $nin: ['delivered', 'returned', 'cancel'] },

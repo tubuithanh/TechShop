@@ -127,7 +127,7 @@ const publicPhoto = asyncHandler(async (req, res) => {
 });
 const retireSandbox = asyncHandler(async (req, res) => {
   const order = await read(req);
-  if (process.env.SHIPPING_PROVIDER === 'ghn_sandbox' || order.shipment?.environment !== 'sandbox' || !['confirmed', 'processing'].includes(order.status) || !['creating', 'unknown', 'active', 'failed'].includes(order.shipment.phase)) fail(409, 'Chỉ ngừng vận đơn sandbox cũ chưa bàn giao');
+  if ((await require('../utils/shippingConfig').isGhnActive()) || order.shipment?.environment !== 'sandbox' || !['confirmed', 'processing'].includes(order.status) || !['creating', 'unknown', 'active', 'failed'].includes(order.shipment.phase)) fail(409, 'Chỉ ngừng vận đơn sandbox cũ chưa bàn giao');
   const updated = await Order.findOneAndUpdate({ _id: order._id, __v: order.__v, status: order.status, ...routing.shipmentGuard(order), $or: [{ 'shipment.busyUntil': null }, { 'shipment.busyUntil': { $lt: new Date() } }] }, {
     $set: { 'shipment.phase': 'cancelled', 'shipment.error': '', 'shipment.busyUntil': null }, $inc: { __v: 1 },
     $push: { statusHistory: historyEntry(req, order.status, `Ngừng theo dõi sandbox cũ ${order.shipment.code || order.shipment.clientCode || ''} để chuyển sang giả lập; không gửi lệnh hủy đến GHN`) }
