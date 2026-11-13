@@ -51,6 +51,8 @@ const settingSchema = new mongoose.Schema(
     homeSlidesSeeded: { type: Boolean, default: false, select: false },
     // Số lần tối đa mỗi IP / 15 phút cho từng nhóm (trống = mặc định trong middlewares/rateLimits.js)
     rateLimits: { type: mongoose.Schema.Types.Mixed, default: undefined, select: false },
+    // Ngưỡng (phút) coi là QUÁ HẠN cho từng nhóm việc ở trang Đơn hàng -> Việc cần làm (controllers/orderInboxController.js)
+    orderSla: { type: mongoose.Schema.Types.Mixed, default: undefined },
 
     maintenanceMode: { type: Boolean, default: false },
     maintenanceMessage: {

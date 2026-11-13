@@ -16,6 +16,7 @@ import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import EInvoiceExportModal from '../../components/admin/EInvoiceExportModal';
 import RefundModal from '../../components/admin/RefundModal';
+import OrderInbox from '../../components/admin/OrderInbox';
 import { FileEarmarkSpreadsheet } from 'react-bootstrap-icons';
 import { downloadCsv } from '../../utils/csvExport';
 
@@ -45,14 +46,23 @@ export default function AdminOrdersPage() {
   const [busy, setBusy] = useState(false);
   const [showInvoiceExport, setShowInvoiceExport] = useState(false);
   const [refunding, setRefunding] = useState(null); // đơn đang mở hộp thoại hoàn tiền
+  const [view, setViewState] = useState(() => (new URLSearchParams(window.location.search).get('view') === 'all' ? 'all' : 'inbox'));
+  const setView = (v) => {
+    setViewState(v);
+    const url = new URL(window.location.href);
+    if (v === 'all') url.searchParams.set('view', 'all'); else url.searchParams.delete('view');
+    window.history.replaceState(null, '', url);
+  };
+  const [inboxKey, setInboxKey] = useState(0); // đổi -> "Việc cần làm" tải lại sau mỗi thao tác
   const { settings } = useSettings();
   const { user } = useAuth();
   const pageSize = settings.productsPerPage || 20;
   const query = useListQuery(['status', 'paymentStatus', 'refundStatus', 'paymentMode', 'storeId', 'source', 'deliveryMethod', 'from', 'to']);
-  const { data: orders, total, totalPages, loading, meta, reload: loadOrders } = useAdminList(orderService.getAllOrdersAdmin, {
+  const { data: orders, total, totalPages, loading, meta, reload: reloadList } = useAdminList(orderService.getAllOrdersAdmin, {
     ...query.apiParams,
     limit: pageSize
   });
+  const loadOrders = () => { reloadList(); setInboxKey((k) => k + 1); };
   const page = query.values.page;
   const setPage = query.setPage;
 
@@ -151,6 +161,31 @@ export default function AdminOrdersPage() {
     finally { setBusy(false); loadOrders(); }
   };
 
+  // Nút thao tác của 1 đơn - dùng chung cho "Việc cần làm" và "Tất cả đơn"
+  const renderActions = (o) => (
+    <>
+      <Form.Select
+        size="sm"
+        value={o.status}
+        disabled={busy || !!o.activeTransferId || orderActions(o).length === 0}
+        onChange={(e) => handleChangeStatus(o._id, e.target.value)}
+      >
+        <option value={o.status}>{orderLabel(o)}</option>
+        {orderActions(o).map((s) => (
+          <option key={s} value={s}>
+            {ORDER_LABELS[s]}
+          </option>
+        ))}
+      </Form.Select>
+      {!['creating', 'unknown', 'active'].includes(o.shipment?.phase) && !o.activeTransferId && ['pending', 'confirmed'].includes(o.status) && <Button variant="outline-secondary" className="mt-1 me-1" size="sm" disabled={busy} onClick={() => setEditing(o)}>Sửa thông tin</Button>}
+      {!['creating', 'unknown', 'active'].includes(o.shipment?.phase) && !o.activeTransferId && o.source !== 'pos' && ['pending', 'confirmed', 'processing'].includes(o.status) && (!['vnpay', 'momo'].includes(o.paymentMode) || o.paymentStatus === 'paid') && <Button variant="outline-primary" className="mt-1" size="sm" disabled={busy} onClick={() => setTransfer(o)}>Điều phối chi nhánh</Button>}
+      {o.deliveryMethod === 'store_pickup' && ['ready_for_pickup', 'shipping'].includes(o.status) && <Button className="mt-1" size="sm" disabled={busy} onClick={() => setHandover(o)}>Bàn giao cho khách</Button>}
+      {o.status === 'returning' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'receive-return', { received: true }, 'Xác nhận đã nhận và kiểm đếm đầy đủ hàng trả? Hệ thống sẽ hoàn kho.')}>Đã nhận hàng trả</Button>}
+      {o.paymentMode === 'bank_transfer' && ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'].includes(o.status) && o.paymentStatus !== 'paid' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'confirm-payment', { confirmed: true }, 'Xác nhận đã nhận đủ tiền chuyển khoản?')}>Đã nhận chuyển khoản</Button>}
+      {o.refundStatus === 'pending' && ['cancelled', 'returned'].includes(o.status) && <Button className="mt-1" variant="warning" size="sm" disabled={busy} onClick={() => setRefunding(o)}>Hoàn tiền</Button>}
+    </>
+  );
+
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
@@ -173,7 +208,20 @@ export default function AdminOrdersPage() {
         />
       )}
 
+      <div className="order-view-switch mb-3" role="tablist" aria-label="Chế độ xem đơn hàng">
+        <button type="button" role="tab" aria-selected={view === 'inbox'} className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')}>
+          Việc cần làm
+        </button>
+        <button type="button" role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>
+          Tất cả đơn
+        </button>
+      </div>
+
       <OrderTransfers order={transfer} onClose={() => setTransfer(null)} onChanged={loadOrders} />
+      {view === 'inbox' ? (
+        <OrderInbox renderActions={renderActions} onDetails={setDetails} reloadKey={inboxKey} isAdmin={user?.role === 'admin'} />
+      ) : (
+      <>
       <AdminSearchBar
         query={query}
         placeholder="Mã đơn, tên người nhận, SĐT, tên sản phẩm..."
@@ -242,27 +290,7 @@ export default function AdminOrdersPage() {
                   {['pending', 'processing'].includes(o.refundStatus) && <div className="small text-warning mt-1">{o.refundStatus === 'processing' ? 'Đang hoàn tiền...' : 'Chờ hoàn tiền'}</div>}
                   {o.refundStatus === 'completed' && o.refundInfo?.method && <div className="small text-success mt-1">Đã hoàn {o.refundInfo.method === 'gateway' ? `qua ${o.refundInfo.gateway === 'vnpay' ? 'VNPay' : 'MoMo'}` : 'thủ công'}</div>}
                 </td>
-                <td className="p-3">
-                  <Form.Select
-                    size="sm"
-                    value={o.status}
-                    disabled={busy || !!o.activeTransferId || orderActions(o).length === 0}
-                    onChange={(e) => handleChangeStatus(o._id, e.target.value)}
-                  >
-                    <option value={o.status}>{orderLabel(o)}</option>
-                    {orderActions(o).map((s) => (
-                      <option key={s} value={s}>
-                        {ORDER_LABELS[s]}
-                      </option>
-                    ))}
-                  </Form.Select>
-                  {!['creating', 'unknown', 'active'].includes(o.shipment?.phase) && !o.activeTransferId && ['pending', 'confirmed'].includes(o.status) && <Button variant="outline-secondary" className="mt-1 me-1" size="sm" disabled={busy} onClick={() => setEditing(o)}>Sửa thông tin</Button>}
-                  {!['creating', 'unknown', 'active'].includes(o.shipment?.phase) && !o.activeTransferId && o.source !== 'pos' && ['pending', 'confirmed', 'processing'].includes(o.status) && (!['vnpay', 'momo'].includes(o.paymentMode) || o.paymentStatus === 'paid') && <Button variant="outline-primary" className="mt-1" size="sm" disabled={busy} onClick={() => setTransfer(o)}>Điều phối chi nhánh</Button>}
-                  {o.deliveryMethod === 'store_pickup' && ['ready_for_pickup', 'shipping'].includes(o.status) && <Button className="mt-1" size="sm" disabled={busy} onClick={() => setHandover(o)}>Bàn giao cho khách</Button>}
-                  {o.status === 'returning' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'receive-return', { received: true }, 'Xác nhận đã nhận và kiểm đếm đầy đủ hàng trả? Hệ thống sẽ hoàn kho.')}>Đã nhận hàng trả</Button>}
-                  {o.paymentMode === 'bank_transfer' && ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'].includes(o.status) && o.paymentStatus !== 'paid' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'confirm-payment', { confirmed: true }, 'Xác nhận đã nhận đủ tiền chuyển khoản?')}>Đã nhận chuyển khoản</Button>}
-                  {o.refundStatus === 'pending' && ['cancelled', 'returned'].includes(o.status) && <Button className="mt-1" variant="warning" size="sm" disabled={busy} onClick={() => setRefunding(o)}>Hoàn tiền</Button>}
-                </td>
+                <td className="p-3">{renderActions(o)}</td>
               </tr>
             ))}
           </tbody>
@@ -271,6 +299,8 @@ export default function AdminOrdersPage() {
           <AdminPagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
         </Card.Body>
       </Card>
+      </>
+      )}
       {handover && <HandoverModal key={handover._id} order={handover} onHide={() => setHandover(null)} onDone={() => { setHandover(null); loadOrders(); }} />}
       {details && <OrderReceipt order={details} onHide={() => setDetails(null)} />}
       {editing && <OrderEditModal key={editing._id} order={editing} onClose={() => setEditing(null)} onChanged={loadOrders} />}
