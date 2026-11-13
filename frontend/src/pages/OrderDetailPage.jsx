@@ -83,6 +83,11 @@ export default function OrderDetailPage() {
       );
   }, [id]);
 
+  // Từ danh sách đơn bấm "Đánh giá" -> cuộn tới danh sách sản phẩm
+  useEffect(() => {
+    if (order && window.location.hash === '#review') document.getElementById('review')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [order?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (order?.status === 'delivered') loadOpenWarranties();
   }, [order?.status, id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -213,7 +218,7 @@ export default function OrderDetailPage() {
         </Alert>
       )}
 
-      <ListGroup className="mb-4">
+      <ListGroup className="mb-4" id="review">
         {order.items.map((item, idx) => (
           <ListGroup.Item key={idx} className="d-flex justify-content-between small">
             <span>

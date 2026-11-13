@@ -38,6 +38,13 @@ const ORDER_STATUS_TRANSITIONS = {
   cancelled: [],
   returned: []
 };
+// Tab "Đơn hàng của tôi" phía khách
+const MY_ORDER_GROUPS = {
+  processing: ['pending', 'confirmed', 'processing'],
+  shipping: ['shipping', 'ready_for_pickup'],
+  delivered: ['delivered'],
+  closed: ['cancelled', 'returning', 'returned']
+};
 const RESTOCK_STATUSES = ['cancelled', 'returned'];
 
 
@@ -418,13 +425,37 @@ const getMyOrders = asyncHandler(async (req, res) => {
   const base = { userId: req.account._id };
   const status = req.query.status;
   if (status && !Order.schema.path('status').enumValues.includes(status)) return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
-  const filter = { ...base, ...(status ? { status } : {}) };
-  const [orders, total, counts] = await Promise.all([
+  // Nhóm tab theo góc nhìn khách: gom các trạng thái kỹ thuật
+  const group = MY_ORDER_GROUPS[req.query.group];
+  if (req.query.group && !group) return res.status(400).json({ message: 'Nhóm đơn không hợp lệ' });
+  const filter = { ...base, ...(status ? { status } : group ? { status: { $in: group } } : {}) };
+  const q = String(req.query.q || '').trim().slice(0, 100);
+  if (q) {
+    const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [{ orderCode: rx }, { 'items.name': rx }];
+  }
+  const Review = require('../models/Review');
+  const [orders, total, counts, reviewed, deliveredItems] = await Promise.all([
     Order.find(filter).populate('storeId', 'name city').sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
     Order.countDocuments(filter),
-    Order.aggregate([{ $match: base }, { $group: { _id: '$status', count: { $sum: 1 } } }])
+    Order.aggregate([{ $match: base }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Review.distinct('productId', { userId: req.account._id }),
+    Order.distinct('items.productId', { ...base, status: 'delivered' })
   ]);
-  res.json({ data: await enrichHistory(orders), total, page, totalPages: Math.ceil(total / limit), counts: Object.fromEntries(counts.map(c => [c._id, c.count])) });
+  const reviewedSet = new Set(reviewed.map(String));
+  const data = (await enrichHistory(orders)).map((o) => {
+    const obj = o.toObject ? o.toObject() : o;
+    // Sản phẩm trong đơn đã giao mà khách chưa đánh giá -> hiện nút "Đánh giá"
+    obj.toReview = obj.status === 'delivered' ? [...new Set(obj.items.map((i) => String(i.productId)).filter((id) => !reviewedSet.has(id)))] : [];
+    return obj;
+  });
+  const countMap = Object.fromEntries(counts.map(c => [c._id, c.count]));
+  const groupCounts = Object.fromEntries(Object.entries(MY_ORDER_GROUPS).map(([k, sts]) => [k, sts.reduce((n, st) => n + (countMap[st] || 0), 0)]));
+  const unpaid = await Order.countDocuments({ ...base, status: 'pending', paymentMode: { $in: ['vnpay', 'momo'] }, paymentStatus: { $in: ['pending', 'failed'] } });
+  res.json({
+    data, total, page, totalPages: Math.ceil(total / limit), counts: countMap, groupCounts,
+    todo: { toReview: deliveredItems.filter((id) => !reviewedSet.has(String(id))).length, shipping: groupCounts.shipping, unpaid }
+  });
 });
 
 // @route GET /api/orders/:id
