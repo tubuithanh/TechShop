@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Container, Row, Col, Table, Button, Form, Modal, Badge } from 'react-bootstrap';
 import { permissionGroupService } from '../../services/permissionGroupService';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 const emptyForm = { name: '', description: '', permissions: [] };
 
@@ -153,7 +154,7 @@ export default function AdminPermissionGroupsPage() {
           <tbody>
             {groups.map((g) => (
               <tr key={g._id}>
-                <td className="fw-medium">{g.name}</td>
+                <td className="fw-medium">{g.name}<AuditStamp audit={g.audit} /></td>
                 <td className="small text-muted">{g.description}</td>
                 <td>
                   <div className="d-flex flex-wrap gap-1" style={{ maxWidth: 360 }}>

@@ -5,6 +5,7 @@ import { Shop, GeoAltFill, Telephone, Clock, People, BoxSeam, ReceiptCutoff, Sea
 import { storeService } from '../../services/storeService';
 import { locationService } from '../../services/locationService';
 import StoreStaffModal from '../../components/admin/StoreStaffModal';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 const emptyForm = { name: '', address: '', city: '', phoneNumber: '', email: '', openHours: '8:00 - 21:30', lat: '', lng: '' };
 
@@ -126,6 +127,7 @@ export default function AdminStoresPage() {
                         <div style={{ minWidth: 0 }}>
                           <div className="fw-semibold text-truncate">{s.name}</div>
                           <div className="small text-muted">{s.city}</div>
+                          <AuditStamp audit={s.audit} />
                         </div>
                       </div>
                       {s.isActive

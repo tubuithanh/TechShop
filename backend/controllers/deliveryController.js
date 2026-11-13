@@ -1,3 +1,4 @@
+const { assignmentEntry, assignedBySet } = require('../utils/assignmentLog');
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Admin = require('../models/Admin');
@@ -47,6 +48,8 @@ const getDeliveries = asyncHandler(async (req, res) => {
   else if (req.query.view === 'pending') Object.assign(filter, { status: { $in: ASSIGNABLE }, shipperId: null, 'shipment.phase': { $nin: ['creating', 'unknown', 'active'] } });
   else if (req.query.view === 'ready') Object.assign(filter, { status: { $in: ASSIGNABLE }, $or: [{ shipperId: { $ne: null } }, { 'shipment.phase': { $in: ['creating', 'unknown', 'active'] } }] });
   else if (req.query.view === 'shipping') filter.status = 'shipping';
+  // Đang giao nhưng lần giao gần nhất thất bại -> cần liên hệ khách / giao lại
+  else if (req.query.view === 'failed') Object.assign(filter, { status: 'shipping', $expr: { $eq: [{ $arrayElemAt: ['$deliveryAttempts.result', -1] }, 'failed'] } });
   else if (req.query.view === 'history') filter.status = { $in: ['delivered', 'returned', 'cancelled'] };
   else if (req.query.view === 'settlement') Object.assign(filter, { $or: [
     { paymentMode: 'cod', codCollectedAt: { $ne: null }, codSettledAt: null },
@@ -61,7 +64,20 @@ const getDeliveries = asyncHandler(async (req, res) => {
     Order.countDocuments(filter),
     req.query.view === 'cod' ? Order.aggregate([{ $match: { ...filter, ...(filter.storeId ? { storeId: new mongoose.Types.ObjectId(filter.storeId) } : {}) } }, { $group: { _id: null, total: { $sum: '$grandTotal' } } }]) : Promise.resolve([])
   ]);
-  res.json({ data: orders, total, page, totalPages: Math.ceil(total / limit), codTotal: cod[0]?.total || 0 });
+  // Số đơn theo giai đoạn (cùng chi nhánh + từ khóa tìm kiếm) cho các thẻ lọc ở tab "Đơn cần giao"
+  let stages;
+  if (['assign', 'pending', 'ready', 'shipping', 'failed', undefined].includes(req.query.view)) {
+    const base = { deliveryMethod: 'home_delivery', ...storeFilter(req), ...searchFilter(req.query.q) };
+    const ACTIVE = ['creating', 'unknown', 'active'];
+    const [pending, ready, shipping, failed] = await Promise.all([
+      Order.countDocuments({ ...base, status: { $in: ASSIGNABLE }, shipperId: null, 'shipment.phase': { $nin: ACTIVE } }),
+      Order.countDocuments({ ...base, status: { $in: ASSIGNABLE }, $or: [{ shipperId: { $ne: null } }, { 'shipment.phase': { $in: ACTIVE } }] }),
+      Order.countDocuments({ ...base, status: 'shipping' }),
+      Order.countDocuments({ ...base, status: 'shipping', $expr: { $eq: [{ $arrayElemAt: ['$deliveryAttempts.result', -1] }, 'failed'] } })
+    ]);
+    stages = { pending, ready, shipping, failed };
+  }
+  res.json({ data: orders, total, page, totalPages: Math.ceil(total / limit), codTotal: cod[0]?.total || 0, stages });
 });
 
 // @route GET /api/deliveries/shippers?storeId= - quản lý: nhân viên giao hàng chọn được
@@ -95,8 +111,11 @@ const assignShipper = asyncHandler(async (req, res) => {
   }
   const updated = await Order.findOneAndUpdate(
     { _id: order._id, storeId: order.storeId, activeTransferId: null, status: order.status, shipperId: order.shipperId, 'deliveryPlan.verifiedAt': order.deliveryPlan?.verifiedAt || null, ...routing.shipmentGuard(order) },
-    { $set: { shipperId: shipperId || null, assignedAt: shipperId ? new Date() : null, ...(shipperId ? { deliveryPlan: { storeId: order.storeId, addressKey: routing.addressKey(order), mode: 'internal', assignmentMode: 'manager_choice', verifiedBy: req.account._id, verifiedAt: new Date() } } : {}) },
-      $push: { statusHistory: historyEntry(req, order.status, shipperId ? `Phân công giao hàng: ${shippers.find(s => String(s._id) === shipperId)?.name}` : 'Gỡ phân công giao hàng', { shipperId: { from: order.shipperId, to: shipperId } }) } },
+    { $set: { shipperId: shipperId || null, assignedAt: shipperId ? new Date() : null, ...(shipperId ? assignedBySet(req) : { assignedBy: null, assignedByName: '' }), ...(shipperId ? { deliveryPlan: { storeId: order.storeId, addressKey: routing.addressKey(order), mode: 'internal', assignmentMode: 'manager_choice', verifiedBy: req.account._id, verifiedAt: new Date() } } : {}) },
+      $push: {
+        statusHistory: historyEntry(req, order.status, shipperId ? `Phân công giao hàng: ${shippers.find(s => String(s._id) === shipperId)?.name}` : 'Gỡ phân công giao hàng', { shipperId: { from: order.shipperId, to: shipperId } }),
+        assignmentLog: assignmentEntry(req, { action: !shipperId ? 'unassign' : order.shipperId ? 'reassign' : 'assign', method: 'internal', shipper: shippers.find(s => String(s._id) === shipperId) })
+      } },
     { new: true }
   ).populate(...POPULATE_SHIPPER);
   if (!updated) return res.status(409).json({ message: 'Đơn hàng vừa thay đổi trạng thái, vui lòng tải lại' });

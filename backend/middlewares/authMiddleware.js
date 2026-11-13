@@ -48,6 +48,7 @@ const protect = async (req, res, next) => {
 
     req.account = account;
     req.accountRole = accountRole;
+    require('../utils/auditStamp').setActor(account, accountRole); // ghi nhận người thao tác (đóng dấu ai thêm / sửa)
     // Phạm vi chi nhánh của nhân viên (điều chuyển tạm thời, quản lý nhiều chi nhánh) - xem utils/staffScope.js.
     // getScopedStoreId / isStoreAllowed bên dưới đọc từ đây thay vì req.account.storeId.
     if (accountRole === 'staff') {

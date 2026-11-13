@@ -9,6 +9,7 @@ const { historyEntry } = require('../utils/orderHistory');
 const { BusinessError } = require('../utils/transaction');
 const asyncHandler = require('../utils/asyncHandler');
 const { getShippingConfig } = require('../utils/shippingConfig');
+const { assignmentEntry, assignedBySet } = require('../utils/assignmentLog');
 const shipments = require('./shipmentController');
 const simulated = require('./simulatedShipmentController');
 
@@ -94,8 +95,11 @@ async function dispatchGhn(req, res, next) {
   };
   const updated = await Order.findOneAndUpdate(
     { _id: order._id, __v: order.__v, status: order.status, activeTransferId: null, ...routing.shipmentGuard(order) },
-    { $set: { deliveryPlan: plan, shipperId: null, assignedAt: null }, $inc: { __v: 1 },
-      $push: { statusHistory: historyEntry(req, order.status, `Chọn GHN sandbox - giao tới ${ward.WardName}, ${district.DistrictName}, ${to.ProvinceName}`) } },
+    { $set: { deliveryPlan: plan, shipperId: null, ...assignedBySet(req) }, $inc: { __v: 1 },
+      $push: {
+        statusHistory: historyEntry(req, order.status, `Chọn GHN sandbox - giao tới ${ward.WardName}, ${district.DistrictName}, ${to.ProvinceName}`),
+        assignmentLog: assignmentEntry(req, { action: 'carrier', method: 'ghn_sandbox', note: `${ward.WardName}, ${district.DistrictName}, ${to.ProvinceName}` })
+      } },
     { new: true }
   );
   if (!updated) fail(409, 'Đơn vừa thay đổi, hãy tải lại');

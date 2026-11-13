@@ -4,6 +4,7 @@ import { ArrowRepeat, PencilSquare, Plus, Search, Trash } from 'react-bootstrap-
 import { locationService } from '../../services/locationService';
 import { useSettings } from '../../store/SettingsContext';
 import AdminPagination from '../../components/admin/AdminPagination';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 const normalize = (s) =>
   String(s || '')
@@ -242,7 +243,7 @@ export default function AdminLocationsPage() {
                   <tbody>
                     {wards.data.map((w) => (
                       <tr key={w._id}>
-                        <td>{w.name}</td>
+                        <td>{w.name}<AuditStamp audit={w.audit} /></td>
                         <td onClick={() => toggle('ward', w)}>{statusBadge(w.isActive)}</td>
                         <td className="text-end text-nowrap">
                           <Button size="sm" variant="link" className="p-1" onClick={() => openEdit('ward', w)} title="Sửa">

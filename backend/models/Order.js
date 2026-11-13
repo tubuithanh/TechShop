@@ -132,6 +132,25 @@ const orderSchema = new mongoose.Schema(
     // Nhân viên giao hàng được phân công (tài khoản quản trị có quyền deliveries.perform)
     shipperId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
     assignedAt: Date,
+    // Người phân công giao hàng gần nhất (lưu cả tên tại thời điểm đó) + nhật ký mọi lần phân công / đổi / gỡ /
+    // tạo - hủy vận đơn (utils/assignmentLog.js)
+    assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+    assignedByName: { type: String, default: '' },
+    assignmentLog: [
+      {
+        _id: false,
+        at: { type: Date, default: Date.now },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+        byName: String,
+        byRole: String,
+        action: { type: String, enum: ['assign', 'reassign', 'unassign', 'carrier', 'carrier_cancel'] },
+        method: String, // internal | simulation | ghn_sandbox
+        shipperId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+        shipperName: String,
+        carrierCode: String,
+        note: String
+      }
+    ],
     deliveryPlan: {
       storeId: mongoose.Schema.Types.ObjectId, addressKey: String,
       provinceId: Number, districtId: Number, wardCode: String,

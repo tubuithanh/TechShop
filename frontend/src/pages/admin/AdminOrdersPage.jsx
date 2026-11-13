@@ -19,6 +19,7 @@ import RefundModal from '../../components/admin/RefundModal';
 import OrderInbox from '../../components/admin/OrderInbox';
 import { FileEarmarkSpreadsheet } from 'react-bootstrap-icons';
 import { downloadCsv } from '../../utils/csvExport';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 const statusOptions = Object.keys(ORDER_LABELS);
 // Màu badge theo trạng thái (admin.css đổi sang dạng pill nền nhạt)
@@ -275,7 +276,7 @@ export default function AdminOrdersPage() {
                       HĐ công ty
                     </span>
                   )}
-                </td>
+                <AuditStamp audit={o.audit} /></td>
                 <td className="p-3">
                   {o.deliveryAddress?.fullName || o.userId?.displayName}
                   <div className="small text-muted">{o.deliveryAddress?.phone || o.userId?.phoneNumber}</div>

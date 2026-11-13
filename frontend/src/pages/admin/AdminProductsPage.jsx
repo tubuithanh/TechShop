@@ -16,6 +16,7 @@ import ProductUrlImport from '../../components/admin/ProductUrlImport';
 import DeleteProductModal from '../../components/admin/DeleteProductModal';
 import { useAuth } from '../../store/AuthContext';
 import { Trash } from 'react-bootstrap-icons';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 function formatVND(value) {
   return value?.toLocaleString('vi-VN') + 'đ';
@@ -484,7 +485,7 @@ export default function AdminProductsPage() {
                       {p.categoryId?.name && <div className="small text-muted">{p.categoryId.name}</div>}
                     </div>
                   </div>
-                </td>
+                <AuditStamp audit={p.audit} /></td>
                 <td className="p-3">{p.brandId?.name}</td>
                 <td className="p-3">{formatVND(p.effectivePrice ?? (p.salePrice || p.price))}</td>
                 <td className="p-3">{p.soldCount}</td>

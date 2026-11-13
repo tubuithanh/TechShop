@@ -1,3 +1,4 @@
+const { assignmentEntry } = require('../utils/assignmentLog');
 const { isGhnActive, ghnSettings } = require('../utils/shippingConfig');
 const crypto = require('crypto');
 const Order = require('../models/Order');
@@ -177,7 +178,8 @@ const cancel = asyncHandler(async (req, res) => {
     if (!result?.some(r => r.order_code === order.shipment.code && r.result === true)) fail(409, 'GHN chưa xác nhận hủy. Hãy đồng bộ trạng thái.');
     const updated = await Order.findOneAndUpdate({ _id: order._id, 'shipment.lease': lease }, {
       $set: { 'shipment.phase': 'cancelled', 'shipment.status': 'cancel', 'shipment.updatedAt': new Date() },
-      $push: { 'shipment.events': { status: 'cancel', at: new Date() }, statusHistory: historyEntry(req, order.status, `Đã hủy vận đơn ${order.shipment.code}; đơn bán hàng và tồn kho giữ nguyên`) }
+      $push: { 'shipment.events': { status: 'cancel', at: new Date() }, statusHistory: historyEntry(req, order.status, `Đã hủy vận đơn ${order.shipment.code}; đơn bán hàng và tồn kho giữ nguyên`),
+        assignmentLog: assignmentEntry(req, { action: 'carrier_cancel', method: order.shipment.environment === 'simulation' ? 'simulation' : 'ghn_sandbox', carrierCode: order.shipment.code }) }
     }, { new: true });
     res.json({ data: publicOrder(updated) });
   } finally { await Order.updateOne({ _id: order._id, 'shipment.lease': lease }, { $set: { 'shipment.busyUntil': null } }); }

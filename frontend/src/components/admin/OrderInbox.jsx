@@ -4,6 +4,7 @@ import { Inbox, ExclamationTriangleFill, Gear, ArrowClockwise, CheckCircleFill }
 import api from '../../services/api';
 import AdminPagination from './AdminPagination';
 import { orderMethod } from '../../utils/orderWorkflow';
+import AuditStamp from './AuditStamp';
 
 const formatVND = (v) => (v || 0).toLocaleString('vi-VN') + 'đ';
 
@@ -118,7 +119,7 @@ export default function OrderInbox({ renderActions, onDetails, reloadKey, isAdmi
                           Chờ {duration(o.inbox.waitedMinutes)}
                         </Badge>
                       </div>
-                    </td>
+                    <AuditStamp audit={o.audit} /></td>
                     <td className="p-3">
                       <Button variant="link" size="sm" className="p-0" onClick={() => onDetails(o)}>{o.orderCode}</Button>
                       <div className="small text-muted">{orderMethod(o)}</div>

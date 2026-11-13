@@ -7,6 +7,7 @@ import { useAuth } from '../../store/AuthContext';
 import WarrantyCardView, { formatVND } from '../../components/WarrantyCardView';
 import AdminPagination from '../../components/admin/AdminPagination';
 import { MultiPicker, useScopeOptions, idsOf } from '../../components/admin/ScopePicker';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 // ---------- Tab 1: Sổ bảo hành ----------
 function CardsTab() {
@@ -175,7 +176,7 @@ function PlansTab() {
         <tbody>
           {plans.map((p) => (
             <tr key={p._id}>
-              <td><div className="fw-medium">{p.name}</div><div className="small text-muted">{p.description}</div></td>
+              <td><div className="fw-medium">{p.name}</div><div className="small text-muted">{p.description}</div><AuditStamp audit={p.audit} /></td>
               <td>+{p.months} tháng</td>
               <td className="small">{priceText(p)}</td>
               <td className="small">{p.categoryIds?.length ? p.categoryIds.map((c) => c.name).join(', ') : 'Tất cả'}</td>

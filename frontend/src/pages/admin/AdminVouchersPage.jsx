@@ -6,6 +6,7 @@ import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import { useAuth } from '../../store/AuthContext';
 import { useScopeOptions, MultiPicker, ScopeSummary, searchProducts, idsOf, labelsOf } from '../../components/admin/ScopePicker';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 // Ô ngày (yyyy-mm-dd, giờ Việt Nam): bắt đầu = 00:00, hết hạn = 23:59:59 của ngày đã chọn. Trước đây gửi thẳng
 // "yyyy-mm-dd" (= 00:00) làm mã hết hạn từ ĐẦU ngày hết hạn, sớm hơn 1 ngày so với ý người tạo.
@@ -309,7 +310,7 @@ export default function AdminVouchersPage() {
           <tbody>
             {vouchers.map((v) => (
               <tr key={v._id}>
-                <td className="fw-medium">{v.code}</td>
+                <td className="fw-medium">{v.code}<AuditStamp audit={v.audit} /></td>
                 <td>{v.description}</td>
                 <td>
                   {v.discountType === 'percent' ? `${v.discountValue}%` : `${v.discountValue.toLocaleString()}đ`}

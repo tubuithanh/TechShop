@@ -111,4 +111,36 @@ describe('Phân công cho đơn vị vận chuyển theo cấu hình', () => {
     expect(String(res.body.data.shipperId)).toBe(String(c.shipper._id));
     expect(res.body.data.deliveryPlan.mode).toBe('internal');
   });
+
+  test('CD-5: Ghi lại ai phân công / đổi / tạo - hủy vận đơn; số đơn theo giai đoạn', async () => {
+    const c = await setup();
+    const other = await Admin.create({ name: 'Shipper B', email: 'shipcd2@test.vn', password: '12345678', role: 'staff', storeId: c.store._id, groupIds: c.manager.groupIds });
+    const list = async (view) => (await auth(request(app).get('/api/deliveries').query({ view }), token(c.manager))).body;
+    expect((await list('assign')).stages).toMatchObject({ pending: 1, ready: 0, shipping: 0, failed: 0 });
+
+    await c.api('post', 'dispatch', { method: 'internal', shipperId: String(c.shipper._id) });
+    let o = await Order.findById(c.order._id).lean();
+    expect(o).toMatchObject({ assignedByName: 'QL' });
+    expect(String(o.assignedBy)).toBe(String(c.manager._id));
+    expect(o.assignmentLog.at(-1)).toMatchObject({ action: 'assign', method: 'internal', byName: 'QL', shipperName: 'Shipper A' });
+    expect((await list('assign')).stages).toMatchObject({ pending: 0, ready: 1 });
+    expect((await list('ready')).data[0].assignedByName).toBe('QL');
+
+    // Đổi người qua API phân công
+    expect((await c.api('put', 'assign', { shipperId: String(other._id) })).statusCode).toBe(200);
+    o = await Order.findById(c.order._id).lean();
+    expect(o.assignmentLog.at(-1)).toMatchObject({ action: 'reassign', shipperName: 'Shipper B', byName: 'QL' });
+    // Gỡ phân công
+    await c.api('put', 'assign', { shipperId: null });
+    o = await Order.findById(c.order._id).lean();
+    expect(o.assignmentLog.at(-1)).toMatchObject({ action: 'unassign' });
+    expect(o.assignedByName).toBe('');
+
+    // Vận đơn giả lập + hủy vận đơn -> đều được ghi
+    await c.api('post', 'dispatch', { method: 'simulation' });
+    await c.api('post', 'shipment/cancel', {});
+    o = await Order.findById(c.order._id).lean();
+    expect(o.assignmentLog.map((l) => l.action)).toEqual(['assign', 'reassign', 'unassign', 'carrier', 'carrier_cancel']);
+    expect(o.assignmentLog.at(-2)).toMatchObject({ method: 'simulation', carrierCode: expect.stringMatching(/^GHN-DEMO-/) });
+  });
 });

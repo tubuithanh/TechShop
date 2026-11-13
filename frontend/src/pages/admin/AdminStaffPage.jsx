@@ -6,6 +6,7 @@ import { storeService } from '../../services/storeService';
 import { useAuth } from '../../store/AuthContext';
 import { Link } from 'react-router-dom';
 import { MultiPicker } from '../../components/admin/ScopePicker';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 const emptyForm = { name: '', email: '', password: '', role: 'staff', groupIds: [], storeId: '', managedStoreIds: [], title: '' };
 
@@ -255,7 +256,7 @@ export default function AdminStaffPage() {
                 <td className="fw-medium">
                   {s.name}
                   {s._id === user?._id && <span className="small text-muted"> (bạn)</span>}
-                </td>
+                <AuditStamp audit={s.audit} /></td>
                 <td>{s.email}</td>
                 <td>
                   <Badge bg={s.role === 'admin' ? 'dark' : 'info'}>{s.role === 'admin' ? 'Admin' : 'Staff'}</Badge>

@@ -40,7 +40,8 @@ function publicView(card, { full = false } = {}) {
     })),
     customerName: full ? card.customerName : undefined,
     customerPhone: full ? phone : phone.replace(/^(\d{3})\d+(\d{3})$/, '$1****$2'),
-    voidReason: card.voidReason
+    voidReason: card.voidReason,
+    audit: full ? card.audit : undefined // người thao tác cuối (nhập IMEI, bán gói...) - chỉ cho nhân viên / chủ sổ
   };
 }
 
@@ -73,7 +74,8 @@ const getMine = asyncHandler(async (req, res) => {
   const delivered = await Order.find({ userId: req.account._id, status: 'delivered' }).select('orderCode items userId deliveryAddress storeId statusHistory handover createdAt status');
   await ensureCardsForOrders(delivered);
   const cards = await WarrantyCard.find({ userId: req.account._id }).populate('productId', 'featuredImage').sort({ purchaseDate: -1 });
-  res.json({ data: cards.map((c) => publicView(c, { full: true })) });
+  // Khách xem sổ của mình: không cần biết nhân viên nào đã thao tác
+  res.json({ data: cards.map((c) => ({ ...publicView(c, { full: true }), audit: undefined })) });
 });
 
 async function ownCard(req, res) {

@@ -74,5 +74,20 @@ export default function DeliveryPlanModal({ order, onHide, onChanged }) {
       </div>}
       {shipment.codSettledAt && <p className="text-success mt-2">Đã đối soát COD GHN · {shipment.codSettlementReference}</p>}
     </div>}
+    {current.assignmentLog?.length > 0 && <div className="border-top mt-3 pt-3">
+      <h6>Lịch sử phân công</h6>
+      <ul className="list-unstyled small mb-0">
+        {[...current.assignmentLog].reverse().map((l, i) => (
+          <li key={i} className="mb-1">
+            <span className="text-muted">{new Date(l.at).toLocaleString('vi-VN')}</span> · <b>{l.byName}</b>{' '}
+            {({ assign: 'phân công', reassign: 'đổi phân công sang', unassign: 'gỡ phân công', carrier: 'giao cho đơn vị vận chuyển', carrier_cancel: 'hủy vận đơn' })[l.action] || l.action}{' '}
+            {l.shipperName && <b>{l.shipperName}</b>}
+            {l.method && l.method !== 'internal' && <> ({({ simulation: 'giả lập', ghn_sandbox: 'GHN sandbox' })[l.method] || l.method})</>}
+            {l.carrierCode && <> · <code>{l.carrierCode}</code></>}
+            {l.note && <span className="text-muted"> · {l.note}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>}
   </Modal.Body><Modal.Footer><Button variant="secondary" disabled={busy} onClick={onHide}>Đóng</Button></Modal.Footer></Modal>;
 }

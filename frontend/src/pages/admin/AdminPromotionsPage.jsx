@@ -6,6 +6,7 @@ import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import { useAuth } from '../../store/AuthContext';
 import { useScopeOptions, MultiPicker, ScopeSummary, searchProducts, idsOf, labelsOf } from '../../components/admin/ScopePicker';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 // Ngày bắt đầu = 00:00, ngày kết thúc = 23:59:59 (giờ máy người dùng) - giống trang mã giảm giá
 const toDayStart = (d) => (d ? new Date(`${d}T00:00:00`).toISOString() : undefined);
@@ -297,7 +298,7 @@ export default function AdminPromotionsPage() {
                   <td>
                     <div className="fw-medium">{p.name}</div>
                     {p.campaign && <Badge bg="light" text="dark" className="fw-normal border">{p.campaign}</Badge>}
-                  </td>
+                  <AuditStamp audit={p.audit} /></td>
                   <td className="text-nowrap fw-medium text-danger">{describe(p)}</td>
                   <td className="small" style={{ maxWidth: 240 }}><ScopeSummary v={p} tiers={scopeOptions.tiers} /></td>
                   <td className="small text-nowrap">

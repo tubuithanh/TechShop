@@ -1,3 +1,10 @@
+// Đóng dấu người thao tác (ai tạo / sửa / ẩn) lên mọi bảng chính - PHẢI đăng ký trước khi nạp bất kỳ model nào
+// (plugin toàn cục chỉ áp dụng cho model biên dịch SAU khi đăng ký). Không áp dụng cho bảng con (phiên bản sản phẩm...).
+const mongoose = require('mongoose');
+const auditStamp = require('./utils/auditStamp');
+mongoose.set('applyPluginsToChildSchemas', false);
+mongoose.plugin(auditStamp.auditPlugin);
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -57,6 +64,7 @@ app.use(
     credentials: true
   })
 );
+app.use(auditStamp.requestContext); // vùng nhớ theo request: trang đang thao tác + người thao tác (utils/auditStamp.js)
 app.use(express.json({ limit: '5mb' }));
 app.use('/api', apiLimiter); // giới hạn chung cho toàn bộ API (xem middlewares/rateLimits.js)
 app.use('/api', paginationGuard); // limit tối đa 200, page là số nguyên >= 1

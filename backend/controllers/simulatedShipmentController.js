@@ -1,3 +1,4 @@
+const { assignmentEntry, assignedBySet } = require('../utils/assignmentLog');
 const crypto = require('crypto');
 const Order = require('../models/Order');
 const Store = require('../models/Store');
@@ -23,12 +24,17 @@ const dispatch = asyncHandler(async (req, res) => {
   const now = new Date();
   const code = 'GHN-DEMO-' + crypto.randomBytes(16).toString('hex').toUpperCase();
   const plan = { storeId: order.storeId, addressKey: routing.addressKey(order), mode: internal ? 'internal' : 'ghn', assignmentMode: 'manager_choice', provinceName: order.deliveryAddress?.city, verifiedBy: req.account._id, verifiedAt: now };
-  const set = { deliveryPlan: plan, shipperId: shipper?._id || null, assignedAt: internal ? now : null, shipment: null };
+  const set = { deliveryPlan: plan, shipperId: shipper?._id || null, shipment: null, ...assignedBySet(req) };
   if (!internal) set.shipment = { provider: 'GHN', environment: 'simulation', phase: 'active', code, clientCode: code, status: 'ready_to_pick',
     codAmount: order.paymentStatus === 'paid' ? 0 : order.grandTotal, totalFee: order.shippingFee || 0,
     createdAt: now, updatedAt: now, expectedDeliveryTime: new Date(now.getTime() + 3 * 86400000), events: [{ status: 'ready_to_pick', at: now }] };
   const updated = await Order.findOneAndUpdate({ _id: order._id, __v: order.__v, status: order.status, paymentStatus: order.paymentStatus, shipperId: order.shipperId, activeTransferId: null, ...routing.shipmentGuard(order) }, {
-    $set: set, $inc: { __v: 1 }, $push: { statusHistory: historyEntry(req, order.status, internal ? `Shop tự giao — phân công ${shipper.name}` : `Chọn GHN giả lập — tạo vận đơn ${code}`) }
+    $set: set, $inc: { __v: 1 }, $push: {
+    statusHistory: historyEntry(req, order.status, internal ? `Shop tự giao — phân công ${shipper.name}` : `Chọn GHN giả lập — tạo vận đơn ${code}`),
+    assignmentLog: assignmentEntry(req, internal
+      ? { action: order.shipperId ? 'reassign' : 'assign', method: 'internal', shipper }
+      : { action: 'carrier', method: 'simulation', carrierCode: code })
+  }
   }, { new: true });
   if (!updated) fail(409, 'Đơn vừa thay đổi, hãy tải lại');
   res.json({ data: updated });

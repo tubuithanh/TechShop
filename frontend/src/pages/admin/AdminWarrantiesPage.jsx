@@ -10,6 +10,7 @@ import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
 import { resizeImageToDataUrl } from '../../utils/imageUpload';
+import AuditStamp from '../../components/admin/AuditStamp';
 import {
   RETURN_REASON_OPTIONS,
   WARRANTY_STATUS_LABEL,
@@ -158,7 +159,7 @@ export default function AdminWarrantiesPage() {
           <tbody>
             {warranties.map((w) => (
               <tr key={w._id}>
-                <td className="p-3">{w.ticketCode}</td>
+                <td className="p-3">{w.ticketCode}<AuditStamp audit={w.audit} /></td>
                 <td className="p-3">
                   {w.userId?.displayName || w.customerName}
                   <div className="small text-muted">{w.userId?.phoneNumber || w.customerPhone}</div>

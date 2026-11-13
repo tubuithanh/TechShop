@@ -11,6 +11,7 @@ import AdminThumb from '../../components/admin/AdminThumb';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 export default function AdminInventoryPage() {
   const { user } = useAuth();
@@ -195,7 +196,7 @@ export default function AdminInventoryPage() {
                       <div className="small text-muted">{inv.variantLabel}</div>
                     </div>
                   </div>
-                </td>
+                <AuditStamp audit={inv.audit} /></td>
                 <td className="fw-medium">
                   {inv.stock}
                   {inv.stock <= inv.lowStockThreshold && (

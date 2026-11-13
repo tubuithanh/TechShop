@@ -11,6 +11,7 @@ import useAdminList from '../../hooks/useAdminList';
 import ProductUrlImport from '../../components/admin/ProductUrlImport';
 import MarkdownEditor from '../../components/admin/MarkdownEditor';
 import AdminThumb from '../../components/admin/AdminThumb';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 const DELETE_ALL_CONFIRM = 'XOA TAT CA';
 
@@ -325,7 +326,7 @@ export default function AdminArticlesPage() {
                 {isAdmin && (
                   <td>
                     <Form.Check aria-label={`Chọn bài ${a.title}`} checked={selected.has(a._id)} onChange={() => toggleOne(a._id)} />
-                  </td>
+                  <AuditStamp audit={a.audit} /></td>
                 )}
                 <td>
                   <div className="d-flex align-items-center gap-3">

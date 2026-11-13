@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, EyeFill, EyeSlashFill, PencilSquare, Plus, Trash, U
 import { slideService } from '../../services/slideService';
 import { uploadService } from '../../services/uploadService';
 import HeroSlide from '../../components/HeroSlide';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 const EMPTY = {
   eyebrow: '',
@@ -229,7 +230,7 @@ export default function AdminSlidesPage() {
                           <Trash />
                         </Button>
                       </div>
-                    </Card.Body>
+                    <AuditStamp audit={s.audit} className="mt-2" /></Card.Body>
                   </Col>
                 </Row>
               </Card>

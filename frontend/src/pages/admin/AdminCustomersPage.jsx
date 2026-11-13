@@ -7,6 +7,7 @@ import AdminThumb from '../../components/admin/AdminThumb';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 export default function AdminCustomersPage() {
   const { settings } = useSettings();
@@ -63,7 +64,7 @@ export default function AdminCustomersPage() {
                     <AdminThumb src={c.avatar} name={c.displayName} size={36} rounded />
                     <span className="fw-medium">{c.displayName}</span>
                   </div>
-                </td>
+                <AuditStamp audit={c.audit} /></td>
                 <td className="p-3">{c.email || <span className="text-muted fst-italic">Chưa có email{c.zaloId ? ' (Zalo)' : ''}</span>}</td>
                 <td className="p-3">{c.phoneNumber}</td>
                 <td className="p-3 text-nowrap">

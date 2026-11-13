@@ -7,6 +7,7 @@ import AdminThumb from '../../components/admin/AdminThumb';
 import AdminSearchBar from '../../components/admin/AdminSearchBar';
 import useListQuery from '../../hooks/useListQuery';
 import useAdminList from '../../hooks/useAdminList';
+import AuditStamp from '../../components/admin/AuditStamp';
 
 export default function AdminReviewsPage() {
   const [replyDrafts, setReplyDrafts] = useState({});
@@ -83,7 +84,7 @@ export default function AdminReviewsPage() {
                 </Button>
 
               </InputGroup>
-            </Card.Body>
+            <AuditStamp audit={r.audit} className="mt-2" /></Card.Body>
           </Card>
         ))}
         {reviews.length === 0 && <div className="small text-muted">Chưa có đánh giá nào</div>}
