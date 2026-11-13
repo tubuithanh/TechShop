@@ -27,7 +27,11 @@ const byProvider = (action) => async (req, res, next) => {
 router.put('/:orderId/plan', can('deliveries.manage'), byProvider('prepare'));
 router.post('/:orderId/shipment', can('deliveries.manage'), byProvider('create'));
 router.post('/:orderId/shipment/advance', can('deliveries.manage'), simulated.advance);
-router.post('/:orderId/dispatch', can('deliveries.manage'), simulated.dispatch);
+// Phân công: shop tự giao / đơn vị vận chuyển theo cấu hình (giả lập, GHN sandbox...) - controllers/carrierDispatchController.js
+const carriers = require('../controllers/carrierDispatchController');
+router.get('/:orderId/carriers', can('deliveries.manage'), carriers.carrierOptions);
+router.post('/:orderId/carriers/ghn/fee', can('deliveries.manage'), carriers.ghnFee);
+router.post('/:orderId/dispatch', can('deliveries.manage'), carriers.dispatch);
 router.post('/:orderId/shipment/retire-sandbox', can('deliveries.manage'), simulated.retireSandbox);
 router.post('/:orderId/shipment/sync', can('deliveries.manage'), shipments.sync);
 router.post('/:orderId/shipment/cancel', can('deliveries.manage'), shipments.cancel);
