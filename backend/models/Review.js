@@ -15,6 +15,21 @@ const reviewSchema = new mongoose.Schema(
     reviewKey: String,
     images: [String],
     isVerifiedPurchase: { type: Boolean, default: false },
+    // Đánh giá nhiều tiêu chí (utils/reviewCriteria.js): điểm từng tiêu chí 1-5 (không bắt buộc), thẻ nhận xét nhanh,
+    // ẩn danh (hiện tên dạng "N***n"), phân loại đã mua (màu / dung lượng) lấy từ đơn hàng
+    criteria: {
+      quality: { type: Number, min: 1, max: 5 },
+      accuracy: { type: Number, min: 1, max: 5 },
+      packaging: { type: Number, min: 1, max: 5 },
+      delivery: { type: Number, min: 1, max: 5 },
+      service: { type: Number, min: 1, max: 5 }
+    },
+    tags: [String],
+    isAnonymous: { type: Boolean, default: false },
+    variantLabel: { type: String, default: '' },
+    // Khách khác bấm "Hữu ích"
+    helpfulBy: { type: [mongoose.Schema.Types.ObjectId], default: [], select: false },
+    helpfulCount: { type: Number, default: 0 },
     status: { type: String, enum: ['visible', 'hidden'], default: 'visible' },
     editedAt: { type: Date, default: null }, // lần khách sửa đánh giá gần nhất (hiển thị "Đã chỉnh sửa")
     reply: {

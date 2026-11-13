@@ -16,17 +16,18 @@ export default function ShipmentTracking({ order, onChanged }) {
   const data = shipment || order.shipment;
   return <div className="small mt-2">
     {!order.shipment?.code && order.deliveryPlan?.mode && <div><Badge bg={order.deliveryPlan.mode === 'express' ? 'danger' : 'info'}>{deliveryModeLabel(order.deliveryPlan)}</Badge></div>}
-    {order.shipment?.code && (order.shipment.environment === 'simulation'
+    {order.shipment?.code && (['simulation', 'sandbox'].includes(order.shipment.environment)
       ? <section className="border rounded-3 p-3 bg-white" aria-label="Thông tin vận chuyển">
           <div className="d-flex align-items-center gap-3">
             <div className="rounded-3 bg-light d-flex align-items-center justify-content-center flex-shrink-0" style={{width:44,height:44}}><Truck size={23} aria-hidden="true" /></div>
             <div className="flex-grow-1" style={{minWidth:0}}>
-              <div className="d-flex align-items-center flex-wrap gap-2"><strong className="text-dark">Giao Hàng Nhanh</strong><span className="badge bg-light text-secondary border fw-normal">Giả lập</span></div>
+              <div className="d-flex align-items-center flex-wrap gap-2"><strong className="text-dark">Giao Hàng Nhanh</strong><span className="badge bg-light text-secondary border fw-normal">{order.shipment.environment === 'sandbox' ? 'Môi trường thử nghiệm' : 'Giả lập'}</span></div>
+              <div className="small text-muted text-break">Mã vận đơn: <strong>{order.shipment.code}</strong></div>
               <div className={`mt-1 ${order.shipment.status === 'delivered' ? 'text-success' : 'text-muted'}`}>{SHIPMENT_LABELS[order.shipment.status] || 'Đang cập nhật vận chuyển'}</div>
             </div>
           </div>
           <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 border-top pt-3 mt-3">
-            <div className="text-muted">Cập nhật hành trình và ảnh giao nhận</div>
+            <div className="text-muted">{order.shipment.environment === 'sandbox' ? <Button variant="link" size="sm" className="p-0" onClick={load}>Cập nhật mới nhất từ GHN</Button> : 'Cập nhật hành trình và ảnh giao nhận'}</div>
             <a className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2" href={`/van-chuyen/${encodeURIComponent(order.shipment.code)}`} target="_blank" rel="noopener noreferrer" aria-label={`Theo dõi vận chuyển đơn ${order.orderCode}, mở tab mới`}>Theo dõi vận chuyển <BoxArrowUpRight size={13} aria-hidden="true" /></a>
           </div>
         </section>

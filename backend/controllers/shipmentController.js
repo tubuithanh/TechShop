@@ -1,6 +1,7 @@
 const { assignmentEntry } = require('../utils/assignmentLog');
 const { isGhnActive, ghnSettings } = require('../utils/shippingConfig');
 const crypto = require('crypto');
+const { notifyShipmentEvent } = require('../utils/shipmentNotify');
 const Order = require('../models/Order');
 const Store = require('../models/Store');
 const ghn = require('../utils/ghn');
@@ -159,10 +160,14 @@ async function syncOrder(req, initial, simulationUpdate) {
     // GHN returning/returned NEVER restocks by itself; warehouse still has to receive the parcel.
     const cancelled = data.status === 'cancel' && ['confirmed', 'processing'].includes(order.status);
     const same = order.shipment.status === data.status;
-    return await Order.findOneAndUpdate({ _id: order._id, 'shipment.lease': lease }, {
+    const previousStatus = initial.shipment.status;
+    const saved = await Order.findOneAndUpdate({ _id: order._id, 'shipment.lease': lease }, {
       $set: { 'shipment.status': data.status, 'shipment.phase': cancelled ? 'cancelled' : 'active', 'shipment.updatedAt': new Date(), 'shipment.error': '' },
       ...(!same ? { $push: { 'shipment.events': { status: data.status, at: new Date() }, statusHistory: historyEntry(carrierReq, order.status, `GHN${simulated ? ' giả lập' : ''}: ${data.status}${simulationUpdate?.note ? ' — ' + simulationUpdate.note : ''}`) } } : {})
     }, { new: true });
+    // Báo khách các bước đơn hàng không thể hiện (đang giao tới, giao thất bại, chuyển hoàn) - utils/shipmentNotify.js
+    if (saved && previousStatus !== data.status) await notifyShipmentEvent(saved, data.status, previousStatus, simulationUpdate?.note);
+    return saved;
   } finally { await Order.updateOne({ _id: initial._id, 'shipment.lease': lease }, { $set: { 'shipment.busyUntil': null } }); }
 }
 const sync = asyncHandler(async (req, res) => res.json({ data: publicOrder(await syncOrder(req, await read(req))) }));

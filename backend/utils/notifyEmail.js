@@ -100,12 +100,45 @@ function emailOrderPlaced(order) {
   });
 }
 
+// Đơn giao qua đơn vị vận chuyển: tên đơn vị, mã vận đơn, link trang theo dõi công khai
+function trackingInfo(order) {
+  const s = order.shipment;
+  if (!s?.code || !['simulation', 'sandbox'].includes(s.environment) || !['active', undefined].includes(s.phase)) return null;
+  return { carrier: s.environment === 'simulation' ? 'Giao Hàng Nhanh (giả lập)' : 'Giao Hàng Nhanh', code: s.code, url: `${clientUrl()}/van-chuyen/${encodeURIComponent(s.code)}` };
+}
+
+// Email báo các bước của vận đơn (đang giao tới, giao thất bại, chuyển hoàn) - utils/shipmentNotify.js
+function emailShipmentEvent(order, { title, message }) {
+  runInBackground(`vận đơn ${order.orderCode}`, async () => {
+    const [user, shop] = await Promise.all([recipient(order.userId), shopInfo()]);
+    if (!user) return;
+    const tracking = trackingInfo(order);
+    const url = tracking?.url || `${clientUrl()}/account/orders/${order._id}`;
+    await sendMail({
+      to: user.email,
+      subject: `Đơn hàng ${order.orderCode}: ${title} - ${shop.name}`,
+      html: layout({
+        shop,
+        title,
+        intro: `Xin chào ${esc(user.displayName || 'bạn')}, ${esc(message)}`,
+        body: infoTable([
+          ['Mã đơn hàng', order.orderCode],
+          ...(tracking ? [['Đơn vị vận chuyển', tracking.carrier], ['Mã vận đơn', tracking.code]] : [])
+        ]),
+        cta: { label: 'Theo dõi vận chuyển', url }
+      }),
+      text: plain(`Đơn hàng ${order.orderCode}: ${title}`, message, `Theo dõi: ${url}`)
+    });
+  });
+}
+
 function emailOrderStatus(order, status, note) {
   if (!ORDER_STATUS_MESSAGE[status]) return; // không gửi cho bước "chờ xác nhận"
   runInBackground(`trạng thái đơn ${order.orderCode}`, async () => {
     const [user, shop] = await Promise.all([recipient(order.userId), shopInfo()]);
     if (!user) return;
     const url = `${clientUrl()}/account/orders/${order._id}`;
+    const tracking = status === 'shipping' ? trackingInfo(order) : null;
     const refundNote =
       ['cancelled', 'returned'].includes(status) && order.paymentStatus === 'refunded'
         ? 'Số tiền bạn đã thanh toán online sẽ được hoàn về đúng tài khoản/thẻ đã dùng trong 7-15 ngày làm việc.'
@@ -121,12 +154,13 @@ function emailOrderStatus(order, status, note) {
           infoTable([
             ['Mã đơn hàng', order.orderCode],
             ['Trạng thái', ORDER_STATUS[status]],
+            ...(tracking ? [['Đơn vị vận chuyển', tracking.carrier], ['Mã vận đơn', tracking.code]] : []),
             ['Tổng tiền', vnd(order.grandTotal)],
             ['Ghi chú', status === 'cancelled' ? order.cancelReason || note : note]
           ]) + (refundNote ? `<p style="margin:0 0 16px;font-size:14px">${esc(refundNote)}</p>` : ''),
-        cta: { label: status === 'delivered' ? 'Đánh giá sản phẩm' : 'Xem đơn hàng', url }
+        cta: tracking ? { label: 'Theo dõi vận chuyển', url: tracking.url } : { label: status === 'delivered' ? 'Đánh giá sản phẩm' : 'Xem đơn hàng', url }
       }),
-      text: plain(`Đơn hàng ${order.orderCode}: ${ORDER_STATUS[status]}`, ORDER_STATUS_MESSAGE[status], refundNote, `Xem đơn hàng: ${url}`)
+      text: plain(`Đơn hàng ${order.orderCode}: ${ORDER_STATUS[status]}`, ORDER_STATUS_MESSAGE[status], refundNote, tracking ? `Theo dõi vận chuyển (${tracking.carrier}, mã ${tracking.code}): ${tracking.url}` : '', `Xem đơn hàng: ${url}`)
     });
   });
 }
@@ -227,6 +261,8 @@ async function sendChangeEmailCode(email, code, { expiresMinutes }) {
 }
 
 module.exports = {
+  emailShipmentEvent,
+  trackingInfo,
   emailOrderPlaced,
   emailOrderStatus,
   emailPaymentSuccess,

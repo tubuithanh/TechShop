@@ -96,7 +96,7 @@ test('Public link exposes only tracking, customers cannot change states and bran
   const url = `/api/deliveries/track/${code}`;
   const r = await request(app).get(url);
   expect(r.status).toBe(200);
-  expect(Object.keys(r.body.data).sort()).toEqual(['code','destination','environment','events','expectedDeliveryTime','status','updatedAt','photos'].sort());
+  expect(Object.keys(r.body.data).sort()).toEqual(['carrier','code','destination','environment','events','expectedDeliveryTime','status','updatedAt','photos'].sort());
   expect(JSON.stringify(r.body)).not.toMatch(/Customer|0901234567|130000|123 Street/);
   expect((await request(app).get('/api/deliveries/track/GHN-DEMO-FAKE')).status).toBe(404);
   expect((await c.api('post','shipment/advance',{ status:'picked',previousStatus:'ready_to_pick' },c.user)).status).toBe(403);

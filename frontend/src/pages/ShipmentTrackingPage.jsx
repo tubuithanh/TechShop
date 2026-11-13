@@ -37,8 +37,10 @@ export default function ShipmentTrackingPage() {
     return () => { live = false; clearInterval(timer); };
   }, [code, reload]);
   return <main className="min-vh-100 bg-light py-5"><Container style={{ maxWidth: 850 }}>
-    <div className="d-flex align-items-center justify-content-between mb-3"><h1 className="h3 mb-0">Theo dõi giao hàng</h1><Badge bg="warning" text="dark">GHN giả lập</Badge></div>
-    <Alert variant="info">Trang mô phỏng vận chuyển của TechShop, không phải website GHN chính thức. Không có giao nhận hoặc thu tiền thật qua trang này.</Alert>
+    <div className="d-flex align-items-center justify-content-between mb-3"><h1 className="h3 mb-0">Theo dõi giao hàng</h1><Badge bg="warning" text="dark">{data?.environment === 'sandbox' ? 'GHN · môi trường thử nghiệm' : 'GHN giả lập'}</Badge></div>
+    <Alert variant="info">{data?.environment === 'sandbox'
+      ? 'Vận đơn tạo trên môi trường thử nghiệm của Giao Hàng Nhanh - trạng thái được TechShop đồng bộ từ GHN mỗi phút.'
+      : 'Trang mô phỏng vận chuyển của TechShop, không phải website GHN chính thức. Không có giao nhận hoặc thu tiền thật qua trang này.'}</Alert>
     {busy && <Spinner animation="border" role="status"><span className="visually-hidden">Đang tải</span></Spinner>}
     {error && <Alert variant="danger">{error}</Alert>}
     {data && <Card className="shadow-sm"><Card.Body>

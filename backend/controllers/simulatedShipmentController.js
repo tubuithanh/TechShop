@@ -110,13 +110,14 @@ const advance = asyncHandler(async (req, res) => {
 });
 const publicTracking = asyncHandler(async (req, res) => {
   const code = req.params.code;
-  if (!/^GHN-DEMO-[A-F0-9]{32}$/.test(code)) fail(404, 'Không tìm thấy vận đơn giả lập');
-  const order = await Order.findOne({ 'shipment.code': code, 'shipment.environment': 'simulation' }).select('shipment deliveryPlan.provinceName carrierPickupProof carrierDeliveryProof');
-  if (!order) fail(404, 'Không tìm thấy vận đơn giả lập');
+  // Mã vận đơn giả lập (GHN-DEMO-...) hoặc mã GHN thật (môi trường test)
+  if (!/^GHN-DEMO-[A-F0-9]{32}$/.test(code) && !/^[A-Z0-9][A-Z0-9-]{4,39}$/i.test(code)) fail(404, 'Không tìm thấy vận đơn');
+  const order = await Order.findOne({ 'shipment.code': code, 'shipment.environment': { $in: ['simulation', 'sandbox'] } }).select('shipment deliveryPlan.provinceName carrierPickupProof carrierDeliveryProof');
+  if (!order) fail(404, 'Không tìm thấy vận đơn');
   res.set('Cache-Control', 'no-store');
   const s = order.shipment;
   // Allowlist only: no recipient, address, order id, money, operator or internal notes.
-  res.json({ data: { code: s.code, status: s.status, environment: 'simulation', destination: order.deliveryPlan?.provinceName,
+  res.json({ data: { code: s.code, status: s.status, environment: s.environment, carrier: 'Giao Hàng Nhanh', destination: order.deliveryPlan?.provinceName,
     expectedDeliveryTime: s.expectedDeliveryTime, updatedAt: s.updatedAt, events: s.events.map(e => ({ status: e.status, at: e.at })),
     photos: ['carrierPickupProof', 'carrierDeliveryProof'].flatMap(key => (order[key]?.evidenceIds || []).map(id => ({ stage: key === 'carrierPickupProof' ? 'picked' : 'delivered', at: order[key].at, url: `/deliveries/track/${code}/photos/${id}` }))) } });
 });

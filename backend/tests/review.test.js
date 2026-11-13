@@ -59,10 +59,10 @@ describe('Sửa đánh giá sản phẩm', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  test('TC-45: Từ chối số sao ngoài 1-5 và quá 3 ảnh (cả khi viết mới lẫn khi sửa)', async () => {
+  test('TC-45: Từ chối số sao ngoài 1-5 và quá 5 ảnh (cả khi viết mới lẫn khi sửa)', async () => {
     const { product, token, review } = await setup();
     expect((await edit(product, review._id, token, { rating: 6 })).statusCode).toBe(400);
-    expect((await edit(product, review._id, token, { images: [IMG(1), IMG(2), IMG(3), IMG(4)] })).statusCode).toBe(400);
+    expect((await edit(product, review._id, token, { images: [IMG(1), IMG(2), IMG(3), IMG(4), IMG(5), IMG(6)] })).statusCode).toBe(400);
     const other = (await registerUser()).body.accessToken;
     const create = await request(app)
       .post(`/api/products/${product._id}/reviews`)

@@ -12,7 +12,7 @@ const {
   checkPermanentDelete,
   deleteProductPermanently
 } = require('../controllers/productController');
-const { getProductReviews, createReview, updateReview, eligibility } = require('../controllers/reviewController');
+const { getProductReviews, createReview, updateReview, toggleHelpful, eligibility } = require('../controllers/reviewController');
 const { getQuestions, createQuestion, answerQuestion } = require('../controllers/questionController');
 const { protect, authorize, can } = require('../middlewares/authMiddleware');
 const { reviewLimiter, uploadLimiter } = require('../middlewares/rateLimits');
@@ -32,6 +32,7 @@ router.get('/:productId/reviews', getProductReviews);
 router.get('/:productId/review-eligibility', protect, eligibility);
 router.post('/:productId/reviews', protect, reviewLimiter, createReview);
 router.put('/:productId/reviews/:reviewId', protect, reviewLimiter, updateReview);
+router.post('/:productId/reviews/:reviewId/helpful', protect, reviewLimiter, toggleHelpful); // khách bấm "Hữu ích"
 
 router.get('/:productId/questions', getQuestions);
 router.post('/:productId/questions', protect, createQuestion);

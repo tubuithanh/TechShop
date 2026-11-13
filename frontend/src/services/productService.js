@@ -26,6 +26,22 @@ export const productService = {
     const { data } = await api.get(`/products/${productId}/reviews`);
     return data.data;
   },
+  // Danh sách có lọc / sắp xếp + tổng quan nhiều tiêu chí: params { star, withImages, sort, page, limit }
+  async getReviewPage(productId, params = {}) {
+    const { data } = await api.get(`/products/${productId}/reviews`, { params });
+    return data;
+  },
+  // Tiêu chí + thẻ nhận xét nhanh (ít thay đổi -> nhớ trong phiên)
+  getReviewOptions() {
+    if (!this._reviewOptions) {
+      this._reviewOptions = api.get('/reviews/options').then((r) => r.data.data).catch((err) => { this._reviewOptions = null; throw err; });
+    }
+    return this._reviewOptions;
+  },
+  async toggleReviewHelpful(productId, reviewId) {
+    const { data } = await api.post(`/products/${productId}/reviews/${reviewId}/helpful`);
+    return data.data;
+  },
   async createReview(productId, payload) {
     const { data } = await api.post(`/products/${productId}/reviews`, payload);
     return data.data;

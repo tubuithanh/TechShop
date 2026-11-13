@@ -1,14 +1,14 @@
 import { useActivePromotions, promotionPrice, describeExtra } from '../utils/promotionPrice';
 import { Fragment, useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal, ProgressBar } from 'react-bootstrap';
+import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal } from 'react-bootstrap';
 import { GiftFill, Truck, ShieldCheck, ArrowRepeat, ArrowLeftRight, Check2, StarFill, CartPlus, LightningChargeFill } from 'react-bootstrap-icons';
 import RecentlyViewed from '../components/RecentlyViewed';
 import { addRecentlyViewed, COMPARE_KEY, toggleCompare, useLocalList } from '../utils/localLists';
 import { flyToCart } from '../utils/flyToCart';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
-import ReviewForm from '../components/ReviewForm';
+import ProductReviews from '../components/ProductReviews';
 import api from '../services/api';
 import ProductGallery from '../components/ProductGallery';
 import { useCart } from '../store/CartContext';
@@ -230,7 +230,6 @@ export default function ProductDetailPage() {
   // 4 thông số nổi bật đầu tiên (theo mẫu thông số của danh mục) hiện ngay dưới giá
   const highlightSpecs = specGroups.flatMap((g) => g.items).slice(0, 4);
   // Phân bố số sao của các đánh giá (5 -> 1)
-  const starCounts = [5, 4, 3, 2, 1].map((s) => ({ star: s, count: reviews.filter((r) => r.rating === s).length }));
   const discountPercent = displayPrice < originalPrice ? Math.round(100 - (displayPrice / originalPrice) * 100) : 0;
 
   const handleToggleWishlist = async () => {
@@ -545,100 +544,9 @@ export default function ProductDetailPage() {
         )}
 
         {activeTab === 'reviews' && (
-          <div>
-            {reviews.length > 0 && (
-              <div className="rating-summary mb-4">
-                <div className="text-center px-3">
-                  <div className="display-6 fw-bold">{product.ratingAverage}</div>
-                  <div className="text-warning">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <StarFill key={i} className={i <= Math.round(product.ratingAverage) ? '' : 'opacity-25'} />
-                    ))}
-                  </div>
-                  <div className="small text-muted">{reviews.length} đánh giá</div>
-                </div>
-                <div className="flex-grow-1 d-flex flex-column gap-1">
-                  {starCounts.map(({ star, count }) => (
-                    <div key={star} className="d-flex align-items-center gap-2 small">
-                      <span className="text-nowrap" style={{ width: 28 }}>
-                        {star} <StarFill className="text-warning" size={10} />
-                      </span>
-                      <ProgressBar now={(count / reviews.length) * 100} variant="warning" className="flex-grow-1" style={{ height: 8 }} />
-                      <span className="text-muted text-end" style={{ width: 28 }}>
-                        {count}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {isCustomer && !myReview && reviewEligibility?.eligible && (
-              <div className="mb-4">
-                <ReviewForm onSubmit={handleCreateReview} />
-              </div>
-            )}
-            {isCustomer && !myReview && !reviewEligibility?.eligible && <p className="small text-muted">{reviewEligibility ? 'Bạn có thể đánh giá sau khi nhận được sản phẩm trong đơn hàng đã giao thành công.' : 'Đang kiểm tra đơn hàng…'}</p>}
-            {myReview && !editingReviewId && (
-              <div className="small text-muted mb-3">
-                Bạn đã đánh giá sản phẩm này. Có thể sửa lại số sao, nội dung và hình ảnh ngay trong đánh giá của bạn bên dưới.
-              </div>
-            )}
-
-            <div className="d-flex flex-column gap-4">
-              {reviews.map((r) =>
-                editingReviewId === r._id ? (
-                  <div key={r._id} className="border-bottom pb-3">
-                    <div className="small fw-medium mb-2">Sửa đánh giá của bạn</div>
-                    <ReviewForm initial={r} submitLabel="Lưu thay đổi" onSubmit={handleUpdateReview} onCancel={() => setEditingReviewId(null)} />
-                  </div>
-                ) : (
-                <div key={r._id} className="border-bottom pb-3">
-                  <div className="d-flex align-items-center gap-2 flex-wrap">
-                    <span className="fw-medium small">{r.displayName || r.userId?.displayName || 'Ẩn danh'}</span>
-                    <span className="text-warning" style={{ fontSize: '0.75rem' }}>
-                      {'★'.repeat(r.rating)}
-                    </span>
-                    {r.isVerifiedPurchase && (
-                      <Badge bg="success" className="bg-opacity-10 text-success fw-normal" style={{ fontSize: '0.75rem' }}>
-                        Đã mua hàng
-                      </Badge>
-                    )}
-                    {r.editedAt && <span className="text-muted" style={{ fontSize: '0.75rem' }}>(đã chỉnh sửa)</span>}
-                    {myReview?._id === r._id && (
-                      <Button variant="link" size="sm" className="p-0 ms-auto" onClick={() => setEditingReviewId(r._id)}>
-                        ✎ Sửa đánh giá
-                      </Button>
-                    )}
-                  </div>
-                  <p className="small mt-1">{r.message}</p>
-                  {r.images?.length > 0 && (
-                    <div className="d-flex flex-wrap gap-2 mb-2">
-                      {r.images.map((img) => (
-                        <img
-                          key={img}
-                          src={sizedImage(img, 160)}
-                          alt="Ảnh đánh giá"
-                          loading="lazy"
-                          role="button"
-                          onClick={() => setZoomImage(img)}
-                          className="rounded border"
-                          style={{ width: '4.5rem', height: '4.5rem', objectFit: 'cover' }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {r.reply?.content && (
-                    <div className="bg-light rounded p-2 mt-2" style={{ fontSize: '0.75rem' }}>
-                      <span className="fw-medium text-primary">Phản hồi từ TechShop: </span>
-                      {r.reply.content}
-                    </div>
-                  )}
-                </div>
-                )
-              )}
-              {reviews.length === 0 && <div className="small text-muted">Chưa có đánh giá nào</div>}
-            </div>
-          </div>
+          <ProductReviews product={product} isCustomer={isCustomer} user={user} myReview={myReview} eligibility={reviewEligibility}
+            onCreate={handleCreateReview} onUpdate={handleUpdateReview} editingId={editingReviewId} setEditingId={setEditingReviewId}
+            onZoom={setZoomImage} refreshKey={reviews} />
         )}
 
         {activeTab === 'qna' && (
