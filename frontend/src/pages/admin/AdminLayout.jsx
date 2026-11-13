@@ -7,6 +7,9 @@ import {
   Megaphone,
   JournalCheck,
   Trophy,
+  HeartPulse,
+  BarChartLine,
+  PersonLinesFill,
   BoxSeam,
   Boxes,
   ReceiptCutoff,
@@ -26,6 +29,7 @@ import {
   Images,
   Truck,
   Bicycle,
+  LightningCharge,
   List,
   LayoutSidebarInset,
   Search,
@@ -38,6 +42,7 @@ import { useSettings } from '../../store/SettingsContext';
 import { hasPagePermission } from '../../utils/permissions';
 import { orderService } from '../../services/orderService';
 import { chatService } from '../../services/chatService';
+import api from '../../services/api';
 import { applyColorMode } from '../../utils/colorMode';
 import './admin.css';
 
@@ -51,10 +56,13 @@ const SECTIONS = [
     items: [
       { path: '/admin', label: 'Tổng quan', icon: Speedometer2, perm: true },
       { path: '/admin/analytics', label: 'Phân tích', icon: GraphUpArrow, perm: true },
+      { path: '/admin/store-health', label: 'Sức khỏe chi nhánh', icon: HeartPulse, storeManager: true },
       { path: '/admin/orders', label: 'Đơn hàng', icon: ReceiptCutoff, perm: true, badge: 'orders' },
       { path: '/admin/pos', label: 'Bán tại quầy (POS)', icon: Shop, perm: true },
-      { path: '/admin/deliveries', label: 'Phân công giao hàng', icon: Truck, perm: true },
-      { path: '/admin/my-deliveries', label: 'Đơn tôi cần giao', icon: Bicycle, perm: true, staffOnly: true }
+      { path: '/admin/deliveries', label: 'Phân công giao hàng', icon: Truck, perm: true, badge: 'deliveries' },
+      { path: '/admin/express', label: 'Giao hỏa tốc 2 giờ', icon: LightningCharge, perm: true },
+      { path: '/admin/my-deliveries', label: 'Đơn tôi cần giao', icon: Bicycle, perm: true, staffOnly: true },
+      { path: '/admin/my-report', label: 'Báo cáo của tôi', icon: PersonLinesFill, self: true }
     ]
   },
   {
@@ -88,6 +96,7 @@ const SECTIONS = [
     items: [
       { path: '/admin/stores', label: 'Chi nhánh', icon: Shop, admin: true },
       { path: '/admin/staff', label: 'Nhân viên', icon: PersonBadge, admin: true },
+      { path: '/admin/staff-reports', label: 'Báo cáo nhân viên', icon: BarChartLine, manager: true },
       { path: '/admin/staff-performance', label: 'Hiệu suất & thưởng', icon: Trophy, admin: true },
       { path: '/admin/permission-groups', label: 'Nhóm quyền', icon: KeyFill, admin: true },
       { path: '/admin/locations', label: 'Tỉnh thành & phường xã', icon: GeoAltFill, admin: true },
@@ -149,6 +158,11 @@ function WorkingStoreSwitcher({ user }) {
 function canSee(user, item) {
   const isAdmin = user?.role === 'admin';
   if (item.admin) return isAdmin;
+  // Báo cáo nhân viên: admin + quản lý chi nhánh; Báo cáo của tôi: mọi nhân viên
+  if (item.manager) return isAdmin || user?.directReports > 0 || (user?.managedStoreIds || []).length > 0 || /quản lý/i.test(user?.title || '');
+  if (item.self) return user?.role === 'staff';
+  // Sức khỏe chi nhánh: admin + quản lý chi nhánh (không gồm trưởng nhóm chỉ có cấp dưới)
+  if (item.storeManager) return isAdmin || (user?.managedStoreIds || []).length > 0 || /quản lý/i.test(user?.title || '');
   // "Đơn tôi cần giao" chỉ dành cho nhân viên giao hàng - quản trị viên không được phân công giao hàng
   if (item.staffOnly && isAdmin) return false;
   return hasPagePermission(user, item.path);
@@ -156,11 +170,12 @@ function canSee(user, item) {
 
 const isActive = (pathname, path) => (path === '/admin' ? pathname === '/admin' : pathname === path || pathname.startsWith(`${path}/`));
 
-// Số đếm trên menu: đơn chờ xác nhận + hội thoại chat đang chờ. Làm mới mỗi 60s và khi đổi trang.
+// Số đếm trên menu: đơn chờ xác nhận + đơn giao tận nơi chưa phân công + hội thoại chat đang chờ. Làm mới mỗi 60s và khi đổi trang.
 function useMenuBadges(user, pathname) {
   const [badges, setBadges] = useState({});
   const canOrders = hasPagePermission(user, '/admin/orders');
   const canChat = hasPagePermission(user, '/admin/chat');
+  const canDeliveries = hasPagePermission(user, '/admin/deliveries');
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -170,6 +185,12 @@ function useMenuBadges(user, pathname) {
           orderService
             .getAllOrdersAdmin({ status: 'pending', limit: 1 })
             .then((r) => (next.orders = r.total || 0))
+            .catch(() => {}),
+        // Đơn đã xác nhận cần giao tận nơi nhưng chưa phân công shipper / đơn vị vận chuyển (đúng chi nhánh của người xem)
+        canDeliveries &&
+          api
+            .get('/deliveries', { params: { view: 'pending', limit: 1 } })
+            .then((r) => (next.deliveries = r.data.total || 0))
             .catch(() => {}),
         canChat &&
           chatService
@@ -185,7 +206,7 @@ function useMenuBadges(user, pathname) {
       alive = false;
       clearInterval(t);
     };
-  }, [canOrders, canChat, pathname]);
+  }, [canOrders, canChat, canDeliveries, pathname]);
   return badges;
 }
 

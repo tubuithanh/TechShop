@@ -4,6 +4,7 @@ import HandoverModal from '../../components/admin/HandoverModal';
 import OrderReceipt from '../../components/admin/OrderReceipt';
 import { orderLabel } from '../../utils/orderWorkflow';
 import api from '../../services/api';
+import { connectSocket } from '../../services/socket';
 
 // Nhân viên giao hàng (quyền deliveries.perform): đơn được phân công cho mình (UC38), xác nhận lấy hàng, báo kết
 // quả giao (UC39), xem tiền COD đang giữ chờ nộp về chi nhánh (UC40).
@@ -29,10 +30,21 @@ export default function AdminMyDeliveriesPage() {
       setError(err.response?.data?.message || 'Không tải được danh sách');
     }
   }, []);
+  // Đơn HỎA TỐC vừa được tự phân công: báo ngay (socket) + phát âm báo, tải lại danh sách
+  const [expressAlert, setExpressAlert] = useState(null);
   useEffect(() => {
     load();
     const timer = setInterval(load, 15000);
-    return () => clearInterval(timer);
+    let socket = null;
+    try {
+      socket = connectSocket();
+      socket.on('express:assigned', (p) => {
+        setExpressAlert(p);
+        load();
+        try { new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=').play(); } catch { /* trình duyệt chặn âm thanh */ }
+      });
+    } catch { /* chưa đăng nhập socket */ }
+    return () => { clearInterval(timer); socket?.off('express:assigned'); };
   }, [load]);
 
   const run = async (action) => {
@@ -63,6 +75,12 @@ export default function AdminMyDeliveriesPage() {
   return (
     <div>
       <h3 className="mb-3">Đơn tôi cần giao</h3>
+      {expressAlert && (
+        <Alert variant="danger" dismissible onClose={() => setExpressAlert(null)} className="fw-semibold">
+          ⚡ ĐƠN HỎA TỐC MỚI #{expressAlert.orderCode} - giao trước {new Date(expressAlert.deadline).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}.
+          <span className="d-block small fw-normal">Gọi ngay cho khách {expressAlert.address?.fullName} ({expressAlert.address?.phone}) · {[expressAlert.address?.addressLine1, expressAlert.address?.city].filter(Boolean).join(', ')}</span>
+        </Alert>
+      )}
       <p className="text-muted">Chi nhánh đang giao: <strong>{data.branch?.name || 'Chưa được gán chi nhánh'}</strong></p>
       <Nav variant="tabs" activeKey={view} onSelect={setView} className="mb-3"><Nav.Item><Nav.Link eventKey="active">Cần xử lý</Nav.Link></Nav.Item><Nav.Item><Nav.Link eventKey="history">Lịch sử (50 đơn gần nhất)</Nav.Link></Nav.Item></Nav>
       {error && <Alert variant="danger">{error}</Alert>}
@@ -79,7 +97,11 @@ export default function AdminMyDeliveriesPage() {
             <Card.Body>
               <div className="d-flex justify-content-between flex-wrap gap-2">
                 <strong>{o.orderCode}</strong>
-                {o.deliveryPlan?.mode === 'express' && <Badge bg="danger" className="ms-2">Hỏa tốc</Badge>}
+                {o.deliveryPlan?.mode === 'express' && <Badge bg="danger" className="ms-2">⚡ Hỏa tốc</Badge>}
+                {o.express?.deadline && !['delivered', 'cancelled', 'returned'].includes(o.status) && (() => {
+                  const mins = Math.round((new Date(o.express.deadline) - Date.now()) / 60000);
+                  return <Badge bg={mins < 0 ? 'dark' : mins <= 30 ? 'danger' : 'warning'} text={mins > 30 ? 'dark' : undefined} className="ms-1">{mins < 0 ? 'TRỄ ' + -mins + ' phút' : 'Còn ' + Math.floor(mins / 60) + 'h' + String(mins % 60).padStart(2, '0')}</Badge>;
+                })()}
                 <Badge bg={o.status === 'shipping' ? 'primary' : 'secondary'}>{STATUS[o.status] || orderLabel(o)}</Badge>
               </div>
               <div className="mt-2">

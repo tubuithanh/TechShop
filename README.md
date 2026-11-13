@@ -20,7 +20,7 @@ Gói miễn phí của Render tự "ngủ" khi không có truy cập, nên lần
 TechShop/
 ├── backend/            # RESTful API (Node.js + Express + MongoDB)
 │   ├── config/          # Kết nối database
-│   ├── models/          # Mongoose Schema (29 collection - xem mục Cấu trúc Database)
+│   ├── models/          # Mongoose Schema (38 collection - xem mục Cấu trúc Database)
 │   ├── controllers/     # Xử lý nghiệp vụ
 │   ├── routes/          # Định nghĩa API endpoint
 │   ├── middlewares/     # Xác thực JWT, phân quyền, giới hạn tần suất, ghi nhật ký, xử lý lỗi
@@ -62,8 +62,9 @@ Mở file `.env` và chỉnh `MONGO_URI` trỏ đến MongoDB của bạn nếu 
 | Nội dung | Cấu hình trong trang quản trị | Biến môi trường (dự phòng) |
 |---|---|---|
 | Gửi email (OTP, thông báo đơn hàng...) | Tab **Cấu hình gửi email**: SMTP, Resend, Gmail API (OAuth2), có nút gửi thử | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` hoặc `RESEND_API_KEY`, cùng `MAIL_FROM` |
-| Thanh toán VNPay | Tab **Cấu hình thanh toán VNPay**: Terminal ID, Secret Key, có nút kiểm tra kết nối | `VNP_TMN_CODE`, `VNP_HASH_SECRET`, `VNP_URL`, `VNP_RETURN_URL` |
-| Thanh toán MoMo | Tab **Cấu hình thanh toán MoMo**: Partner Code, Access Key, Secret Key, có nút kiểm tra kết nối và nút điền **bộ khóa thử công khai** của MoMo | `MOMO_PARTNER_CODE`, `MOMO_ACCESS_KEY`, `MOMO_SECRET_KEY`, `MOMO_ENDPOINT`, `MOMO_REDIRECT_URL`, `MOMO_IPN_URL` |
+| Thanh toán VNPay | Tab **Thanh toán** (gộp VNPay + MoMo): Terminal ID, Secret Key, kiểm tra kết nối; chọn chế độ **Sandbox** hoặc **Giả lập** | `VNP_TMN_CODE`, `VNP_HASH_SECRET`, `VNP_URL`, `VNP_RETURN_URL` |
+| Thanh toán MoMo | Tab **Thanh toán**: Partner Code, Access Key, Secret Key, kiểm tra kết nối, nút điền **bộ khóa thử công khai**; chế độ **Sandbox** hoặc **Giả lập** | `MOMO_PARTNER_CODE`, `MOMO_ACCESS_KEY`, `MOMO_SECRET_KEY`, `MOMO_ENDPOINT`, `MOMO_REDIRECT_URL`, `MOMO_IPN_URL` |
+| Đơn vị giao hàng (GHN sandbox / giả lập) | Tab **Giao hàng**: chọn đơn vị đang dùng, token, Shop ID, mã cửa hàng của từng chi nhánh; thêm đơn vị mới qua `utils/shippingProviders.js` | `SHIPPING_PROVIDER`, `GHN_TOKEN`, `GHN_SHOP_ID`, `ROUTING_API_URL` (dịch vụ tính đường bộ OSRM) |
 | Lưu ảnh tải lên | — | `CLOUDINARY_URL` (dòng Cloudinary cung cấp trên Dashboard) **hoặc** `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` |
 | Đăng nhập bằng Zalo | — | `ZALO_APP_ID`, `ZALO_APP_SECRET`, `ZALO_REDIRECT_URI`, `HTTPS_PORT` |
 | Khóa mã hóa bí mật (mật khẩu SMTP, API key, Secret Key VNPay) | — | `SETTINGS_SECRET` (bỏ trống thì dùng `JWT_ACCESS_SECRET`) |
@@ -71,6 +72,13 @@ Mở file `.env` và chỉnh `MONGO_URI` trỏ đến MongoDB của bạn nếu 
 | Thời gian chờ thanh toán online (VNPay, MoMo) | — | `VNPAY_PAYMENT_TIMEOUT_MINUTES` (mặc định 30) |
 
 Lưu ý:
+- **MongoDB phải chạy dạng replica set** (Atlas luôn là replica set). Bán tại quầy, điều phối đơn giữa chi nhánh, gộp thẻ thành viên dùng **transaction**; MongoDB standalone sẽ báo "Bán tại quầy cần MongoDB replica set". Bật replica set 1 nút cho MongoDB cài trên Windows: thêm vào `mongod.cfg`
+  ```
+  replication:
+    replSetName: rs0
+  ```
+  khởi động lại dịch vụ MongoDB, rồi chạy một lần `rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: '127.0.0.1:27017' }] })` (mongosh). Dữ liệu cũ giữ nguyên, không cần sửa `MONGO_URI`.
+- **Cổng thanh toán sandbox không kết nối được** (VNPay/MoMo lỗi, bị chặn mạng): chuyển sang chế độ **Giả lập** trong tab Thanh toán để thử trọn luồng thanh toán / IPN / hoàn tiền mà không cần cổng thật.
 - **Chưa cấu hình gửi email** thì chạy chế độ demo: mã OTP hiện ngay trên màn hình. Kiểm tra gửi thật bằng `node scripts/testEmail.js <email-nhận>`.
 - **Chưa cấu hình Cloudinary** thì ảnh lưu vào `backend/uploads`. Trên Render ổ đĩa không bền (**mất khi deploy lại hoặc khởi động lại**), nên production cần Cloudinary.
 - **VNPay:** đăng ký sandbox miễn phí tại https://sandbox.vnpayment.vn/devreg; khai báo IPN URL trên VNPay là `<backend>/api/payments/vnpay/ipn`. Chưa cấu hình thì trang thanh toán tự ẩn lựa chọn VNPay.
@@ -118,7 +126,14 @@ Frontend chạy tại `http://localhost:5173` và tự động chuyển tiếp (
 cd backend
 npm test
 ```
-Có **194 test case** (45 bộ test), bao gồm:
+Có **315 test case** (68 bộ test), bao gồm:
+- đơn hàng: phân trang theo nhóm trạng thái, tìm kiếm, người xác nhận, nhật ký sửa, điều phối chi nhánh, hộp "Việc cần làm" có SLA;
+- giao hàng: giới hạn 20 km, nhân viên theo chi nhánh, GHN sandbox / giả lập, thông báo trạng thái vận đơn, **giao hỏa tốc 2 giờ**;
+- khuyến mãi theo danh mục / sản phẩm / chiến dịch / chi nhánh / hạng, voucher theo phạm vi, **gợi ý top 3 mã có lợi nhất**, ví voucher cá nhân;
+- hoàn tiền qua API VNPay / MoMo, bảo hành điện tử và gói gia hạn;
+- đánh giá nhiều tiêu chí, thống kê đánh giá, xếp hạng nhân viên / đơn vị giao hàng;
+- nhân viên: điều chuyển, quản lý nhiều chi nhánh, tuyến báo cáo, báo cáo hiệu suất;
+- bán tại quầy: chống bán trùng, nhận diện khách theo SĐT, tạo thẻ thành viên, gộp lịch sử mua tại cửa hàng;
 - tài khoản: đăng ký/đăng nhập, quên mật khẩu, đổi mật khẩu (đăng xuất thiết bị khác), đăng xuất xóa đúng cookie, không lộ trạng thái khóa khi sai mật khẩu, đăng nhập Zalo, thêm/đổi email có xác thực;
 - mua hàng: giỏ hàng (cảnh báo ngừng bán/hết hàng), đặt hàng, tồn kho và giá theo phiên bản, tự hủy đơn VNPay quá hạn, số lượng "đã bán" chỉ tính khi giao thành công;
 - thanh toán VNPay và MoMo: chữ ký, sai số tiền, thanh toán lại, hoàn tiền, giới hạn số tiền của MoMo, cấu hình trong trang quản trị;
@@ -138,6 +153,8 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 | `users` | Khách hàng: nhúng địa chỉ, sản phẩm yêu thích, bài viết đã lưu. Email **không bắt buộc** (tài khoản đăng nhập bằng Zalo để trống, ID Zalo lưu ở `zaloId`); email không được trùng nếu có. `tokenVersion` dùng để thu hồi phiên khi đổi mật khẩu |
 | `admins` | Quản trị/nhân viên, **tách riêng khỏi users**; nhân viên có thể gắn với 1 chi nhánh |
 | `permission_groups` | Nhóm quyền (VD: CSKH, Kho, Quản lý cửa hàng); nhân viên có quyền theo các nhóm được gán |
+| `staff_assignments` | Quá trình làm việc: chi nhánh chính theo thời gian, **điều chuyển tạm thời** (VD 6 tháng) |
+| `staff_reviews` | Đánh giá hiệu suất cuối năm + tiền thưởng (chụp lại số liệu lúc chấm) |
 | `otps` | Mã OTP (đăng ký, quên mật khẩu, đổi email) - lưu dạng băm, tự xóa khi hết hạn (TTL index) |
 
 **Sản phẩm & kho**
@@ -156,9 +173,13 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 |---|---|
 | `carts` | Giỏ hàng (mỗi dòng là 1 phiên bản) |
 | `orders` | Đơn hàng (gắn chi nhánh; mỗi dòng hàng ghi rõ phiên bản đã mua; lịch sử trạng thái; thông tin thanh toán online: mã giao dịch từng lần thử, mã giao dịch của cổng, hình thức/ngân hàng, thời điểm thanh toán) |
-| `vouchers` | Mã giảm giá (giới hạn lượt dùng, lượt dùng mỗi khách) |
-| `warranties` | Phiếu bảo hành |
-| `reviews`, `questions` | Đánh giá (có ảnh, nhãn "Đã mua hàng", phản hồi của shop); hỏi đáp sản phẩm |
+| `vouchers` | Mã giảm giá (giới hạn lượt dùng, lượt dùng mỗi khách; phạm vi: danh mục, sản phẩm, chi nhánh, hạng thành viên) |
+| `promotions` | Chương trình khuyến mãi tự động (theo danh mục / thương hiệu / sản phẩm / chiến dịch marketing / chi nhánh / hạng khách) |
+| `order_transfers` | Yêu cầu điều phối đơn sang chi nhánh khác |
+| `express_windows` | **Khung giờ giao hỏa tốc**: chi nhánh, danh sách sản phẩm, bán kính, phụ phí, cam kết thời gian, số suất |
+| `warranties` | Phiếu bảo hành / sửa chữa (tiến trình, kỹ thuật viên, đánh giá của khách) |
+| `warranty_cards`, `warranty_plans` | **Sổ bảo hành điện tử** (tạo khi giao hàng, 12 tháng từ ngày mua hoặc ngày kích hoạt, hãng quản lý) và các **gói gia hạn** bán thêm |
+| `reviews`, `questions` | Đánh giá **nhiều tiêu chí** (5 tiêu chí, thẻ nhận xét, ảnh, ẩn danh, phân loại đã mua, lượt "Hữu ích", phản hồi của shop); hỏi đáp sản phẩm |
 
 **Nội dung & tương tác**
 
@@ -181,7 +202,8 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 |---|---|
 | `settings` | Cấu hình chung (1 bản ghi): thông tin website, liên hệ, phân trang, phí vận chuyển, SEO, bảo trì, **màu sắc giao diện** (`theme`), **chân trang** (`footer`), số ngày lưu nhật ký. Trạng thái và số lần giới hạn tần suất (`rateLimitEnabled`, `rateLimits`) **không trả về ở API công khai** |
 | `mail_configs` | Cấu hình gửi email; mật khẩu SMTP, API key, Gmail OAuth lưu **đã mã hóa** (AES-256-GCM) |
-| `payment_configs` | Cấu hình VNPay và MoMo (1 bản ghi, 2 tab riêng); Secret Key của cả 2 cổng lưu **đã mã hóa** |
+| `payment_configs` | Cấu hình VNPay và MoMo (chế độ sandbox / giả lập); Secret Key của cả 2 cổng lưu **đã mã hóa** |
+| `shipping_configs` | Cấu hình đơn vị giao hàng (GHN sandbox / giả lập), mã cửa hàng của từng chi nhánh, dịch vụ tính đường bộ |
 | `slides` | Slide (banner lớn) đầu trang chủ: nội dung, nút bấm, nền (màu giao diện / dải màu / ảnh), thứ tự, bật/tắt, thời gian hiển thị |
 | `theme_templates` | Template màu sắc giao diện (có sẵn: Mặc định, Giáng sinh, Tết, Mùa thu; admin lưu thêm) |
 | `audit_logs` | Nhật ký thao tác quản trị (dữ liệu nhạy cảm như mật khẩu, token được che trước khi ghi) |
@@ -227,7 +249,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
     - hủy đơn đã thanh toán thì chuyển "đã hoàn tiền" (mô phỏng);
     - cổng nào chưa cấu hình thì trang thanh toán tự ẩn lựa chọn đó; đơn ngoài giới hạn 1.000đ – 50.000.000đ không chọn được MoMo.
 - Sổ địa chỉ, danh sách yêu thích — mục 1.1.7
-- Đánh giá sản phẩm **sau khi nhận hàng**: chỉ khách có đơn đã giao thành công chứa sản phẩm mới được đánh giá. Có nút đánh giá trong chi tiết đơn; mỗi khách một đánh giá/sản phẩm, được sửa số sao, nội dung và tối đa 3 ảnh. Hỏi đáp (Q&A) sản phẩm — mục 1.1.8
+- Đánh giá sản phẩm **sau khi nhận hàng**: chỉ khách có đơn đã giao thành công chứa sản phẩm mới được đánh giá. Có nút đánh giá trong chi tiết đơn; mỗi khách một đánh giá/sản phẩm, chấm **5 tiêu chí**, chọn thẻ nhận xét, tối đa 5 ảnh, ẩn danh, được sửa lại (xem mục 6 phần Cập nhật tháng 11/2026). Hỏi đáp (Q&A) sản phẩm — mục 1.1.8
 - **Trang khuyến mãi** công khai (sao chép mã) — mục 1.1.9
 - **Tin tức & Cẩm nang công nghệ**: nội dung có thể chèn ảnh giữa bài (dòng `![mô tả](https://...)`) — mục 1.1.10
 - **Hệ thống cửa hàng**: tra cứu theo tỉnh/thành, chỉ đường Google Maps — mục 1.1.11
@@ -252,7 +274,7 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
   - phân quyền chi tiết theo từng chức năng;
   - tài khoản gắn chi nhánh chỉ thao tác được trên chi nhánh của mình: tồn kho, đơn hàng (xem, xử lý) và thống kê đơn hàng/doanh thu;
   - nhóm quyền mẫu **"Quản lý cửa hàng"**: tồn kho, đơn hàng, thống kê, xem khuyến mãi.
-- **Khuyến mãi/voucher**: tạo, xem, vô hiệu hóa, giới hạn số lần dùng mỗi khách — mục 1.2.5
+- **Khuyến mãi/voucher**: tạo, xem, vô hiệu hóa, giới hạn số lần dùng mỗi khách; phạm vi theo danh mục / sản phẩm / chi nhánh / hạng; chương trình khuyến mãi tự động theo chiến dịch — mục 1.2.5
 - **Tin tức (CMS)** — mục 1.2.6:
   - viết/sửa bài, 4 chuyên mục;
   - **nhập nhanh từ link tinhte.vn**: tự điền tiêu đề, tóm tắt, ảnh bìa, nội dung kèm ảnh trong bài (dùng link ảnh gốc), cuối bài ghi nguồn;
@@ -329,6 +351,175 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 
 `backend/tests/orderUpgrade.test.js` kiểm tra phân trang, quyền truy cập, snapshot người xác nhận, nhật ký sửa, tìm kiếm sau sửa, điều phối đồng thời, hoàn tác kho và các ràng buộc trên. Chạy bằng `npm test -- --runTestsByPath tests/orderUpgrade.test.js --silent` từ thư mục backend.
 
+## Cập nhật chức năng — tháng 11/2026 (theo ghi chú yêu cầu ngày 09/11/2026)
+
+### 1. Đơn hàng
+- **Đơn hàng của tôi** (khách):
+  - gom 11 trạng thái thành 5 tab dễ hiểu (Tất cả · Chờ xử lý · Đang giao · Đã nhận · Hủy/Trả hàng), tab trống hiện mờ, tab cần chú ý có chấm đỏ;
+  - phân trang, tìm theo mã đơn / tên sản phẩm;
+  - khối **"Cần bạn làm"**: đơn chưa thanh toán, đơn đang giao, sản phẩm chờ đánh giá;
+  - thẻ đơn có ảnh sản phẩm, thanh tiến trình 4 bước, câu gợi ý tình trạng, nút theo trạng thái (Thanh toán, Hủy đơn, Theo dõi vận chuyển, Đánh giá, Bảo hành, **Mua lại**);
+  - ô **"Thêm đơn mua tại cửa hàng"** (xem mục Bán tại quầy).
+- **Quản trị**:
+  - hộp **"Việc cần làm"** chia nhóm theo việc tiếp theo, có ngưỡng **SLA** (admin chỉnh) và cảnh báo quá hạn;
+  - bộ lọc trạng thái hoàn tiền;
+  - **xuất CSV** danh sách đơn.
+- **Người xác nhận và nhật ký:** mỗi lần xác nhận / đổi trạng thái / sửa thông tin đều lưu người làm, thời gian, chi nhánh, giá trị trước/sau.
+- **Ai thêm / sửa / xóa trên toàn trang quản trị:** mọi bản ghi admin tạo hoặc sửa đều có dấu **"người thao tác cuối"** (trường `audit`, ghi tự động bằng plugin Mongoose). Nhật ký thao tác lưu chi tiết từng lần.
+- **Điều phối đơn** sang chi nhánh khác: chi nhánh nhận chấp nhận / từ chối, chuyển kho trong transaction (xem mục "Cập nhật đơn hàng — 10/11/2026").
+
+### 2. Giao hàng
+- **Theo chi nhánh:** nhân viên giao hàng gắn chi nhánh; phân công chỉ chọn shipper của đúng chi nhánh.
+- **Nhật ký phân công:** ai phân công / đổi người / gửi đơn vị ngoài.
+- **Trang phân công thông minh:** theo từng giai đoạn, có đếm số đơn; riêng mục "giao thất bại" để liên hệ lại khách.
+- **Giới hạn 20 km đường bộ** (OSRM): trong 20 km cùng tỉnh thì nhân viên chi nhánh giao. **Quá 20 km hoặc khác tỉnh** thì gửi **đơn vị thứ 3** (GHN sandbox hoặc GHN giả lập), lưu **mã vận đơn**.
+- **Khách theo dõi vận chuyển:**
+  - trang theo dõi có dòng thời gian trạng thái vận đơn;
+  - email tự động khi vận đơn đổi trạng thái (đã lấy hàng, đang giao, giao thất bại, đã giao), có link theo dõi.
+- **Cấu hình giao hàng** trong Admin → Cấu hình hệ thống → **Giao hàng**: chọn đơn vị, nhập khóa, mã cửa hàng của từng chi nhánh. Thêm đơn vị mới chỉ cần khai báo trong `utils/shippingProviders.js`.
+- **Giao hỏa tốc 2 giờ** (Admin → **Giao hỏa tốc 2 giờ**):
+  - **Quản lý mở khung giờ:** thời gian, **danh sách sản phẩm**, **bán kính** (≤ 20 km), **phụ phí**, **cam kết thời gian** (60 / 90 / 120 / 180 phút), **số suất**. Theo dõi số đơn, đã giao, **trễ hạn**, doanh thu; có nút kết thúc sớm.
+  - **Trang sản phẩm:** sản phẩm đang trong khung hiện "⚡ Giao hỏa tốc 2 giờ từ <chi nhánh>, bán kính, đặt trước <giờ>, còn N suất".
+  - **Trang thanh toán:** khách bấm **Kiểm tra vị trí** (GPS trình duyệt). Hệ thống kiểm tra đủ 4 điều kiện:
+    - đúng sản phẩm trong khung;
+    - chi nhánh còn hàng;
+    - khoảng cách đường bộ trong bán kính;
+    - khung còn suất.
+    
+    Đạt thì khách bật **"Chọn giao hỏa tốc"**: tổng tiền cộng phụ phí, hiện giờ nhận hàng dự kiến. Không đạt thì hiện lý do cụ thể.
+  - **Ngay khi đặt:**
+    - kiểm tra lại toàn bộ và giữ suất (không vượt số suất khi nhiều khách đặt cùng lúc);
+    - **tự xác nhận** (COD / chuyển khoản);
+    - **tự phân công shipper rảnh nhất** của chi nhánh;
+    - **báo ngay qua Socket.io**: băng đỏ "⚡ ĐƠN HỎA TỐC MỚI" kèm SĐT, địa chỉ khách và âm báo.
+  - **Theo dõi hạn giao:** trang shipper có **đồng hồ đếm ngược** (Còn 1h25 → đỏ khi dưới 30 phút → "TRỄ n phút"). Trang chi tiết đơn của khách hiện cam kết giao trước mấy giờ. Hệ thống ghi giờ giao xong để tính đúng hạn hay trễ.
+
+### 3. Doanh thu & thống kê
+- **Dashboard:**
+  - doanh thu **theo tháng** (chọn năm, so sánh năm trước);
+  - doanh thu **theo chi nhánh** (lọc năm / tháng).
+- **Trang Phân tích:**
+  - sản phẩm bán chạy, cơ cấu danh mục, phương thức thanh toán;
+  - tỷ lệ hủy / trả, khách hàng mới / quay lại, khung giờ đặt hàng;
+  - **hiệu quả từng chiến dịch khuyến mãi**.
+
+### 4. VAT
+- **Ẩn VAT phí ship:** hóa đơn, trang thanh toán và email chỉ hiện **VAT hàng hóa** (đã bao gồm). VAT phí ship vẫn được tính và lưu để xuất hóa đơn điện tử.
+
+### 5. Khuyến mãi / Giảm giá
+- **Chương trình khuyến mãi tự động** (Admin → Chương trình khuyến mãi):
+  - **áp dụng theo:** danh mục, thương hiệu, từng sản phẩm, **chiến dịch marketing** (tên + kênh), chi nhánh, **hạng khách hàng**;
+  - **hình thức giảm:** theo % hoặc số tiền, có giảm tối đa;
+  - **giới hạn:** thời gian và số lượng.
+  
+  Trang chi tiết sản phẩm hiện giá sau khuyến mãi và **danh sách khuyến mãi đang áp dụng**.
+- **Voucher theo phạm vi:** danh mục, sản phẩm, chi nhánh, hạng thành viên. Mã chỉ giảm trên phần tiền của sản phẩm thuộc phạm vi.
+- **Gợi ý mã có lợi nhất** (POS và trang Thanh toán):
+  - tự tính số tiền giảm của từng mã cho đúng giỏ hàng, **chỉ hiện 3 mã có lợi nhất** và **tự áp mã tốt nhất**;
+  - gợi ý **"Mua thêm X để dùng mã…"** khi mã đó lợi hơn mã hiện tại;
+  - tự loại mã hết hạn, hết lượt, khách đã dùng hết lượt, sai chi nhánh / hạng.
+- **Ví voucher cá nhân** (Tài khoản → **Mã giảm giá của tôi**):
+  - 5 tab: Dùng được ngay · Sắp hết hạn · Sắp diễn ra · Mở khóa khi lên hạng · Đã dùng;
+  - số lượt khách còn được dùng, **tổng tiền đã tiết kiệm nhờ mã**;
+  - nút Sao chép, nút Dùng ngay (tới đúng danh mục / sản phẩm của mã).
+
+### 6. Đánh giá sản phẩm
+- **Đánh giá nhiều tiêu chí sau khi nhận hàng:**
+  - điểm chung + 5 tiêu chí: chất lượng, đúng mô tả, đóng gói, tốc độ giao hàng, thái độ phục vụ;
+  - thẻ nhận xét nhanh (khen / chê), tối đa 5 ảnh, **ẩn danh** (tên dạng N***n);
+  - tự ghi **phân loại đã mua**.
+- **Trang sản phẩm:**
+  - tổng quan điểm, phân bố sao, điểm từng tiêu chí, thẻ nhận xét phổ biến;
+  - lọc theo sao / có ảnh, sắp xếp (mới nhất, hữu ích nhất, điểm cao / thấp);
+  - nút **"Hữu ích"**.
+- **Admin → Đánh giá, tab "Tổng quan & biểu đồ":**
+  - **KPI:** tổng số, điểm TB, % hài lòng, chưa phản hồi, có thẻ chê, có ảnh;
+  - **biểu đồ:** theo tháng, phân bố sao, điểm theo tiêu chí, thẻ khen / chê;
+  - **xếp hạng:** sản phẩm cần chú ý / được khen; điểm theo chi nhánh;
+  - **xếp hạng giao hàng:** nhân viên được đánh giá cao / thấp, **đơn vị giao hàng**.
+  
+  Bấm vào số liệu để mở danh sách đã lọc sẵn. Tab danh sách hiện đủ tiêu chí, thẻ, ảnh, mã đơn, chi nhánh.
+- **Bỏ chức năng ẩn đánh giá** (đánh giá từng bị ẩn được hiện lại khi khởi động).
+
+### 7. Hoàn hàng / Hoàn tiền
+- **Quy trình:** trả hàng → chi nhánh nhận lại hàng (hoàn kho) → **xác nhận hoàn tiền**.
+- **Đơn VNPay / MoMo:** gọi **API hoàn tiền sandbox** của cổng:
+  - VNPay `merchant_webapi`, ký HMAC-SHA512;
+  - MoMo `/v2/gateway/api/refund`, ký HMAC-SHA256;
+  - hoàn về **đúng tài khoản / thẻ khách đã dùng**.
+- **Trạng thái hoàn tiền:** chờ → đang xử lý → đã hoàn. Đơn COD / chuyển khoản thì hoàn thủ công, có ghi chú.
+- **Khách thấy thông báo** "tiền sẽ được hoàn về tài khoản đã thanh toán" và thời điểm đã hoàn. Chế độ **giả lập** cũng chạy được trọn luồng hoàn tiền.
+
+### 8. Bảo hành
+- **Sổ bảo hành điện tử** tạo tự động khi giao hàng (cả bán tại quầy):
+  - **12 tháng** tính từ **ngày mua** hoặc **ngày kích hoạt** (cấu hình theo sản phẩm);
+  - bảo hành **tại cửa hàng** hoặc **do hãng quản lý** (thông tin trung tâm bảo hành của nhãn hàng).
+- **Kiểm tra còn bảo hành:**
+  - khách: Tài khoản → Bảo hành, chia tab;
+  - admin / nhân viên: tra theo số serial, mã đơn hoặc SĐT; hệ thống tự xác định còn bảo hành / do hãng / hết hạn (sửa tính phí).
+- **Mua thêm thời gian bảo hành:** gói gia hạn do admin cấu hình; nhân viên xác nhận thu tiền.
+
+### 9. Nhân viên & quản lý
+- **Điều chuyển tạm thời** giữa chi nhánh (VD 6 tháng), tự hết hạn; ghi **quá trình làm việc** theo thời gian.
+- **Một quản lý nhiều chi nhánh** (`managedStoreIds`); quản lý chọn "chi nhánh đang làm việc" trên thanh trên cùng.
+- **Một chi nhánh nhiều nhân viên, một nhân viên nhiều chi nhánh:** màn hình nhân sự của từng chi nhánh.
+- **Thêm chi nhánh mới** ngay trong admin:
+  - kiểm tra dữ liệu, tọa độ, thống kê từng chi nhánh;
+  - chặn ngưng hoạt động khi còn đơn / tồn kho / nhân viên.
+- **Tuyến báo cáo:** mỗi nhân viên có **quản lý trực tiếp**. Hệ thống chặn vòng báo cáo; khi xóa quản lý, cấp dưới tự chuyển lên cấp trên.
+- **Hiệu suất & thưởng cuối năm:** số liệu 12 tháng, đánh giá 1–5 sao, tiền thưởng, điểm mạnh / cần cải thiện.
+- **Báo cáo nhân viên** (Admin → Báo cáo nhân viên; admin, quản lý chi nhánh hoặc người có cấp dưới):
+  - **chọn kỳ:** tháng này, tháng trước, quý, năm, tùy chọn; **so sánh kỳ trước**; lọc chi nhánh;
+  - **phạm vi:** "Báo cáo trực tiếp cho tôi" hoặc tất cả trong phạm vi;
+  - **tab Tổng quan:**
+    - KPI cả đội;
+    - vinh danh: bán hàng giỏi nhất, giao hàng xuất sắc, kỹ thuật viên tiêu biểu;
+    - biểu đồ sản lượng, cơ cấu nhân sự;
+    - danh sách **"Cần quản lý chú ý"**;
+  - **tab Bán hàng / Giao hàng / Bảo hành:** biểu đồ từng người + **bảng xếp hạng** (sắp xếp theo cột);
+  - **số liệu theo vai trò:**
+    - **bán hàng:** doanh thu, đơn, sản phẩm, TB / đơn, đánh giá;
+    - **giao hàng:** thành công / thất bại, tỷ lệ, thời gian giao TB, COD, điểm giao hàng, khen / chê;
+    - **bảo hành:** phiếu tiếp nhận / hoàn tất, thời gian xử lý, doanh thu sửa chữa + gia hạn, điểm khách chấm.
+- **Báo cáo của tôi** (mọi nhân viên):
+  - số liệu của chính mình, so với kỳ trước và trung bình chi nhánh;
+  - **hạng trong chi nhánh / toàn hệ thống**;
+  - sản phẩm bán chạy của mình, nhận xét của khách.
+
+### 10. Bán hàng tại quầy (POS)
+- **Bố cục:** lưới sản phẩm (ảnh, giá, giá gốc, tồn, nhãn bán chạy, lọc danh mục) + giỏ hàng cố định bên phải.
+- **Hỗ trợ máy quét mã vạch:** gõ hoặc quét rồi Enter là thêm kết quả đầu tiên.
+- **Tự tính tiền:** khuyến mãi, voucher, VAT; ô **"Khách đưa"** + mệnh giá gợi ý + **tiền thừa**.
+- **Thanh toán 1 lần bấm** (F9). Khách lẻ không cần tên / SĐT (ghi "Khách lẻ").
+- **Lưu tạm đơn** (đơn chờ), **ca bán hôm nay** (số đơn, doanh thu, tiền mặt trong két), đơn vừa bán.
+- **Phím tắt:** F2 tìm hàng · F4 tìm khách · F8 lưu tạm · F9 thanh toán.
+- **Khách mua lần đầu:**
+  - nhập SĐT là **tự nhận diện** thành viên / khách cũ chưa có tài khoản / khách mới;
+  - **tạo thẻ thành viên ngay tại quầy** (phải xác nhận đã hỏi ý khách) để **tích điểm + sổ bảo hành theo tài khoản** từ đơn đầu tiên;
+  - **tự gộp các đơn cũ cùng SĐT**; có email thì gửi email chào mừng hướng dẫn đặt mật khẩu.
+- **Khách tự gộp lịch sử online:** nhập **mã đơn trên hóa đơn**, SĐT phải trùng SĐT tài khoản. Thẻ tại quầy chưa từng đăng nhập được gộp hẳn vào tài khoản thật.
+- **Đơn tại quầy của khách có tài khoản** được **cộng điểm thưởng** ngay.
+- **Chống lỗi:** bấm 2 lần / mạng chập chờn không tạo 2 đơn, không bán vượt tồn kho (transaction).
+
+### 11. Thanh toán
+- **Cấu hình gộp** trong tab **Thanh toán**.
+- **Chế độ giả lập VNPay / MoMo:** trang thanh toán giả lập ký khóa thật, có IPN và hoàn tiền. Dùng khi môi trường sandbox của cổng không truy cập được.
+
+### 12. Sức khỏe chi nhánh / Sức khỏe TechShop
+- Admin → **Sức khỏe chi nhánh** (admin và quản lý chi nhánh). Xem 1 chi nhánh thì ra báo cáo của chi nhánh đó; xem nhiều chi nhánh thì ra **Sức khỏe TechShop** (gộp) kèm **xếp hạng từng chi nhánh**. Quản lý chỉ thấy chi nhánh mình quản lý.
+- **Điểm 0–100** có trọng số theo 6 nhóm, xếp mức 🟢 Khỏe (≥75) / 🟡 Cần theo dõi (55–74) / 🔴 Báo động (<55):
+  - **Doanh thu 25%:** tăng trưởng so với kỳ trước, tỷ lệ giảm giá;
+  - **Khách hàng 25%:** điểm đánh giá, tỷ lệ phàn nàn, khách quay lại, điểm giao hàng;
+  - **Vận hành 20%:** xác nhận đơn trong 2 giờ, tỷ lệ hủy / trả, giao thành công lần đầu, hỏa tốc đúng hạn, bảo hành tồn quá 7 ngày;
+  - **Tồn kho 15%:** tỷ lệ còn hàng, hàng tồn không bán được, **sản phẩm bán chạy đang hết hàng**;
+  - **Con người 10%:** đủ vai trò (quản lý / bán hàng / giao hàng / kỹ thuật viên), doanh thu mỗi nhân viên;
+  - **Rủi ro 5%:** COD shipper giữ quá 2 ngày, đơn chờ hoàn tiền, đánh giá xấu chưa phản hồi.
+- **Danh sách vấn đề cần xử lý:** sắp theo mức nghiêm trọng, mỗi dòng kèm **gợi ý hành động**. Có thêm **điểm mạnh** của chi nhánh, 12 chỉ số chính so với kỳ trước.
+- **Biểu đồ:** biểu đồ mạng nhện so sánh 6 nhóm giữa các chi nhánh, doanh thu từng chi nhánh theo ngày / tháng.
+
+### Tài khoản demo nhân viên
+Trang đăng nhập có sẵn danh sách tài khoản demo theo vai trò (quản lý, bán hàng, kho, giao hàng, kỹ thuật viên) của từng chi nhánh. Mật khẩu demo của nhóm tài khoản nhân viên mẫu: `nhanvien123`. Sinh thêm nhân viên mẫu: `node seed/generateStaff.js --staff-only` (`--random-passwords --out=<file>` để tạo mật khẩu ngẫu nhiên và xuất ra file).
+
 ## Script cập nhật dữ liệu (không xóa dữ liệu, chạy lại nhiều lần vẫn an toàn)
 
 Khi khởi động phiên bản mới, `migrateProductReviews` tự hiển thị lại các đánh giá cũ từng bị ẩn, tính lại số sao/số lượng đánh giá và lưu dấu mốc chuyển đổi để không chạy lại. Giữ nguyên nội dung đánh giá cũ; không tự gắn nhãn đã mua hàng cho dữ liệu chưa được xác minh. Các đánh giá mới được kiểm tra đơn đã giao và chặn gửi trùng ở API/database.
@@ -353,6 +544,19 @@ MONGO_URI="<chuỗi-kết-nối>" node seed/<tên-script>.js    # database khác
 | `backfillSearchTokens.js` | Tạo dữ liệu tìm kiếm không dấu (`searchTokens` + index) cho sản phẩm, khách hàng, đơn hàng, bảo hành, đánh giá, voucher, bài viết đang có |
 | `fixSlugs.js` | Sửa đường dẫn (slug) chứa ký tự không hợp lệ như "/" cho bài viết, sản phẩm, danh mục, thương hiệu |
 | `fixProductImages.js` | Cập nhật ảnh sản phẩm theo đúng loại sản phẩm, đồng bộ ảnh phiên bản và ảnh đánh giá |
+| `generateStaff.js --staff-only` | Sinh quản lý / nhân viên bán hàng / kho / giao hàng / kỹ thuật viên cho từng chi nhánh, nhóm quyền, ngày vào làm, đơn bán tại quầy 12 tháng |
+| `generateDeliveryReviews.js [--orders=200] [--days=60]` | Đơn giao tận nơi đã giao (do nhân viên hoặc GHN giả lập) + đánh giá nhiều tiêu chí, để xem xếp hạng giao hàng |
+| `generateStaffReportData.js` | Gán tuyến báo cáo (nhân viên → quản lý chi nhánh → admin), lấp doanh số tại quầy 12 tháng (có mùa cao điểm), phiếu bảo hành cho kỹ thuật viên |
+| `generateVouchers.js` | 27 voucher đa dạng: toàn shop, theo danh mục / sản phẩm / chi nhánh / hạng, giới hạn lượt, sắp hết hạn, sắp diễn ra, đã hết hạn, đang tắt |
+| `generateExpressWindows.js` | Khung giờ hỏa tốc cho mỗi chi nhánh (đang mở, sắp mở, đã kết thúc) với sản phẩm bán chạy còn hàng; gán tọa độ cho chi nhánh chưa có |
+
+Các script `generate*.js` mặc định **chỉ chạy trên MongoDB local**. Muốn ghi lên database online phải đặt `MONGO_URI` và thêm cờ `--allow-remote` (chỉ thêm dữ liệu, không xóa):
+```
+MONGO_URI="<chuỗi-kết-nối-Atlas>" node seed/generateVouchers.js --allow-remote
+```
+Không ghi chuỗi kết nối có mật khẩu vào mã nguồn hay README (repo công khai).
+
+**Thử giao hỏa tốc trên máy tính:** Chrome → F12 → ⋮ → More tools → **Sensors** → Location → nhập tọa độ gần chi nhánh (VD Quận 1: `10.7800, 106.6950`; Cầu Giấy: `21.0330, 105.7950`; Hải Châu: `16.0600, 108.2150`), thêm sản phẩm có nhãn "⚡ Giao hỏa tốc" vào giỏ rồi bấm **Kiểm tra vị trí** ở trang Thanh toán.
 
 Các việc sau **không cần chạy script** - máy chủ tự làm khi khởi động: nạp tỉnh/thành - phường/xã (khi chưa có), nạp template màu (khi admin mở tab Màu sắc lần đầu), xóa email tạm `zalo…@zalo.techshop.local` của tài khoản Zalo cũ và đổi chỉ số email.
 
@@ -362,13 +566,15 @@ Các việc sau **không cần chạy script** - máy chủ tự làm khi khởi
 
 ## Còn thiếu so với tài liệu phân tích đầy đủ (chưa triển khai trong bản demo này)
 
-- Gọi API hoàn tiền thật của VNPay / MoMo (hiện chỉ chuyển trạng thái "đã hoàn tiền")
+- Hoàn tiền qua cổng **môi trường thật** (production) của VNPay / MoMo: hiện gọi API hoàn tiền **sandbox** / giả lập; quy trình thật cần làm việc với ngân hàng
+- Gọi API thật của các đơn vị vận chuyển khác ngoài GHN (Shopee Express, GHTK...): đã có khung khai báo trong `utils/shippingProviders.js`
+- Chấm công, ca làm việc, nghỉ phép, bảng lương (đã có báo cáo hiệu suất và thưởng cuối năm)
 - Tải ảnh lên cho yêu cầu bảo hành (vẫn lưu ảnh dạng base64 trong dữ liệu)
 - Chatbot tư vấn sản phẩm tự động (mục 1.1.22)
 - Gamification / vòng quay may mắn (mục 1.1.19)
 - Cache Redis, unit test Frontend (React Testing Library)
 - Xác thực hai yếu tố 2FA, quản lý phiên đăng nhập nhiều thiết bị (mục 1.1.21 — nâng cao)
-- Header bảo mật (helmet), lọc NoSQL injection tập trung
+- Lọc NoSQL injection tập trung (hiện kiểm tra kiểu dữ liệu ở từng API; header bảo mật đã dùng helmet)
 
 **Thanh toán thử MoMo (sandbox):** dùng bộ khóa thử công khai (tab MoMo → "bộ khóa thử công khai của MoMo"). Trên trang MoMo có thể chọn Ví MoMo (quét QR bằng **ứng dụng MoMo bản thử nghiệm** tải từ developers.momo.vn - app MoMo thật không thanh toán được đơn thử), thẻ ATM hoặc thẻ quốc tế với thẻ test trong tài liệu MoMo.
 

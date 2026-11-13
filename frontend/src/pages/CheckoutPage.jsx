@@ -12,6 +12,9 @@ import LocationFields from '../components/LocationFields';
 import VatBreakdown from '../components/VatBreakdown';
 import { orderVat } from '../utils/vat';
 import CheckoutSteps from '../components/CheckoutSteps';
+import VoucherSuggestions from '../components/VoucherSuggestions';
+import ExpressCheckout from '../components/ExpressCheckout';
+import { voucherService } from '../services/voucherService';
 
 // Mã số thuế: 10 số, 10 số-3 số (chi nhánh) hoặc 12 số (CCCD) - khớp kiểm tra ở backend (orderController)
 const TAX_CODE_RE = /^(\d{10}(-\d{3})?|\d{12})$/;
@@ -63,6 +66,8 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
   const [deliveryMethod, setDeliveryMethod] = useState('home_delivery');
+  // Giao hỏa tốc đang chọn: { windowId, lat, lng, fee, store } (null = giao thường)
+  const [express, setExpress] = useState(null);
   const [paymentMode, setPaymentMode] = useState('cod');
   const [wantInvoice, setWantInvoice] = useState(false);
   const [invoice, setInvoice] = useState({ companyName: '', taxCode: '', address: '', email: '' });
@@ -106,7 +111,8 @@ export default function CheckoutPage() {
 
   // Tính lại tổng tiền ở backend mỗi khi giỏ / chi nhánh / hình thức nhận hàng / mã thay đổi - khuyến mãi
   // có thể phụ thuộc chi nhánh và hạng thành viên nên không tự tính ở trình duyệt được.
-  const quoteRequest = (code) => orderService.quote({ storeId: selectedStoreId || undefined, deliveryMethod, voucherCode: code || undefined });
+  const useExpress = express && deliveryMethod === 'home_delivery';
+  const quoteRequest = (code) => orderService.quote({ storeId: (useExpress ? express.store._id : selectedStoreId) || undefined, deliveryMethod, voucherCode: code || undefined, expressWindowId: useExpress ? express.windowId : undefined });
   useEffect(() => {
     if (!cartKey) return undefined;
     let alive = true;
@@ -124,7 +130,7 @@ export default function CheckoutPage() {
       });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartKey, selectedStoreId, deliveryMethod, appliedCode]);
+  }, [cartKey, selectedStoreId, deliveryMethod, appliedCode, express?.windowId]);
 
   const shippingFee = quote ? quote.shippingFee : localShippingFee;
   const promotionDiscount = quote?.promotionDiscount || 0;
@@ -140,7 +146,32 @@ export default function CheckoutPage() {
     }
   }, [paymentMode, methods, momoAllowed]);
 
+  // Gợi ý 3 mã có lợi nhất cho giỏ + chi nhánh hiện tại; tự áp mã tốt nhất nếu khách chưa tự chọn / nhập mã
+  const [offers, setOffers] = useState(null);
+  const [manualVoucher, setManualVoucher] = useState(false);
+  useEffect(() => {
+    if (!cartKey || user?.role !== 'customer') return undefined;
+    let alive = true;
+    const t = setTimeout(() => voucherService.suggest(selectedStoreId).then((d) => {
+      if (!alive) return;
+      setOffers(d);
+      const best = d.eligible[0];
+      if (best && !manualVoucher && appliedCode !== best.code) {
+        setVoucherCode(best.code); setAppliedCode(best.code);
+        setVoucherMsg(`Đã tự áp mã có lợi nhất ${best.code}: giảm ${formatVND(best.amount)}`);
+      }
+    }).catch(() => alive && setOffers(null)), 300);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartKey, selectedStoreId, user?.role]);
+  const pickOffer = (code) => {
+    setManualVoucher(true);
+    setVoucherCode(code); setAppliedCode(code);
+    setVoucherMsg(code ? `Đã áp dụng mã ${code}` : 'Đã bỏ mã giảm giá');
+  };
+
   const handleVoucherCodeChange = (value) => {
+    setManualVoucher(true);
     setVoucherCode(value);
     // Sửa / xóa mã đang áp dụng thì bỏ luôn phần giảm của mã cũ
     if (appliedCode && value.trim().toUpperCase() !== appliedCode) setAppliedCode('');
@@ -192,8 +223,9 @@ export default function CheckoutPage() {
     setSubmitting(true);
     try {
       const order = await orderService.createOrder({
-        storeId: selectedStoreId,
+        storeId: useExpress ? express.store._id : selectedStoreId,
         deliveryAddress: address,
+        express: useExpress ? { windowId: express.windowId, lat: express.lat, lng: express.lng } : undefined,
         deliveryMethod,
         paymentMode,
         voucherCode: appliedCode || undefined,
@@ -358,6 +390,7 @@ export default function CheckoutPage() {
               onChange={() => setDeliveryMethod('store_pickup')}
             />
           </div>
+          {deliveryMethod === 'home_delivery' && <div className="mt-2"><ExpressCheckout cartKey={cartKey} value={express} onChange={setExpress} /></div>}
 
           <h2 className="fw-medium mt-4 mb-3 fs-6">Phương thức thanh toán</h2>
           <div className="d-flex flex-column gap-2 small">
@@ -474,6 +507,7 @@ export default function CheckoutPage() {
             </Button>
           </div>
           {voucherMsg && <div className="small text-muted mb-3">{voucherMsg}</div>}
+          <VoucherSuggestions offers={offers} applied={appliedCode} onPick={pickOffer} />
 
           <Card>
             <Card.Body className="d-flex flex-column gap-2 small">

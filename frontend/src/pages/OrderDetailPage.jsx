@@ -154,6 +154,17 @@ export default function OrderDetailPage() {
       <p>{orderMethod(order)}</p>
       {order.status === 'ready_for_pickup' && <Alert variant="info">Hàng đã sẵn sàng. Vui lòng mang mã đơn đến cửa hàng để nhận.</Alert>}
       {order.status === 'returning' && <Alert variant="warning">Đơn đang chờ cửa hàng nhận lại hàng.</Alert>}
+      {order.express?.deadline && !['cancelled', 'returned'].includes(order.status) && (
+        <Alert variant={order.status === 'delivered' ? 'success' : 'warning'} className="d-flex align-items-center gap-2">
+          <span className="fs-4">⚡</span>
+          <span>
+            <b>Đơn giao hỏa tốc</b> (phụ phí {(order.express.fee || 0).toLocaleString('vi-VN')}đ) ·{' '}
+            {order.status === 'delivered'
+              ? 'Đã giao lúc ' + new Date(order.express.deliveredAt || order.updatedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+              : 'Cam kết giao trước ' + new Date(order.express.deadline).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' hôm nay. Shipper sẽ gọi cho bạn trước khi tới.'}
+          </span>
+        </Alert>
+      )}
       {order.refundStatus === 'pending' && <Alert variant="warning">Đang chờ hoàn tiền. Cửa hàng sẽ cập nhật sau khi hoàn tiền thực tế.</Alert>}
       <p className="small text-muted mb-1">Đặt ngày {new Date(order.createdAt).toLocaleString('vi-VN')}</p>
       <p className="small text-muted mb-4">

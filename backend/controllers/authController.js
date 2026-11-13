@@ -214,7 +214,7 @@ const login = asyncHandler(async (req, res) => {
       await admin.populate('storeId', 'name city');
       await admin.populate('managedStoreIds', 'name city isActive');
       const scope = admin.role === 'staff' ? await require('../utils/staffScope').computeStoreScope(admin, req.headers['x-store-id']) : null;
-      return res.json({ message: 'Đăng nhập thành công', user: withStoreScope(admin.toSafeObject(), scope), accessToken });
+      return res.json({ message: 'Đăng nhập thành công', user: { ...withStoreScope(admin.toSafeObject(), scope), directReports: await Admin.countDocuments({ managerId: admin._id }) }, accessToken });
     }
   }
 
@@ -394,7 +394,9 @@ function withStoreScope(obj, scope) {
 }
 
 const getMe = asyncHandler(async (req, res) => {
-  res.json({ user: withStoreScope(req.account.toSafeObject(), req.storeScope) });
+  // directReports: số người báo cáo trực tiếp (hiện menu Báo cáo nhân viên cho quản lý)
+  const directReports = req.accountRole === 'customer' ? undefined : await Admin.countDocuments({ managerId: req.account._id });
+  res.json({ user: { ...withStoreScope(req.account.toSafeObject(), req.storeScope), directReports } });
 });
 
 const changePassword = asyncHandler(async (req, res) => {

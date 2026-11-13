@@ -6,6 +6,7 @@ import { orderService } from '../services/orderService';
 import { useCart } from '../store/CartContext';
 import { orderLabel, orderMethod, money } from '../utils/orderWorkflow';
 import { placeholderImage } from '../utils/placeholderImage';
+import ClaimPosOrder from '../components/ClaimPosOrder';
 
 // Tab theo góc nhìn khách (gom các trạng thái kỹ thuật - khớp MY_ORDER_GROUPS ở backend)
 const TABS = [
@@ -122,6 +123,7 @@ export default function MyOrdersPage() {
   return (
     <div style={{ maxWidth: '52rem' }}>
       <h1 className="fs-4 fw-bold mb-3">Đơn hàng của tôi</h1>
+      <ClaimPosOrder onClaimed={() => setReload((n) => n + 1)} />
 
       {/* Cần bạn làm */}
       {todoCards.length > 0 && (

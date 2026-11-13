@@ -5,6 +5,11 @@ export const voucherService = {
     const { data } = await api.post('/vouchers/validate', { code, orderValue });
     return data.data;
   },
+  // Top 3 mã có lợi nhất cho giỏ hàng của khách (đã tính số tiền giảm)
+  async suggest(storeId) {
+    const { data } = await api.get('/vouchers/suggest', { params: { storeId: storeId || undefined } });
+    return data.data;
+  },
   // Admin
   async getAll(params = {}) {
     const { data } = await api.get('/vouchers', { params });

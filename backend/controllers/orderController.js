@@ -216,7 +216,8 @@ async function placeOrder(userId, input, session) {
     const shippingFeeConfig = settings?.defaultShippingFee ?? SHIPPING_FEE_DEFAULT;
     const freeShippingThreshold = settings?.freeShippingThreshold ?? 0;
     const qualifiesFreeShipping = freeShippingThreshold > 0 && itemsTotal >= freeShippingThreshold;
-    const shippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
+    // Phụ phí hỏa tốc cộng thêm vào phí ship (không được miễn theo ngưỡng miễn phí ship)
+    const shippingFee = (deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig) + (deliveryMethod === 'home_delivery' && input.expressFee > 0 ? input.expressFee : 0);
 
     // ----- Khuyến mãi tự động (theo danh mục / thương hiệu / sản phẩm / chiến dịch / chi nhánh / hạng khách)
     const tier = await customerTier(userId, session);
@@ -342,6 +343,10 @@ async function placeOrder(userId, input, session) {
 const quoteOrder = asyncHandler(async (req, res) => {
   if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ tài khoản khách hàng' });
   const { storeId, deliveryMethod = 'home_delivery', voucherCode } = req.body;
+  let expressFee = 0;
+  if (req.body.expressWindowId && mongoose.isValidObjectId(req.body.expressWindowId) && deliveryMethod === 'home_delivery') {
+    expressFee = (await require('../models/ExpressWindow').findById(req.body.expressWindowId).select('fee').lean())?.fee || 0;
+  }
   if (storeId && !mongoose.isValidObjectId(storeId)) return res.status(400).json({ message: 'Cửa hàng không hợp lệ' });
   if (!DELIVERY_METHODS.includes(deliveryMethod)) return res.status(400).json({ message: 'Hình thức nhận hàng không hợp lệ' });
   const cart = await Cart.findOne({ userId: req.account._id }).lean();
@@ -349,7 +354,7 @@ const quoteOrder = asyncHandler(async (req, res) => {
   try {
     const quote = await placeOrder(req.account._id, {
       storeId: storeId || null, deliveryMethod, voucherCode: typeof voucherCode === 'string' && voucherCode.trim() ? voucherCode.trim() : undefined,
-      posItems: cart.items, quote: true
+      posItems: cart.items, quote: true, expressFee
     }, null);
     res.json({ data: quote });
   } catch (err) {
@@ -361,8 +366,9 @@ const quoteOrder = asyncHandler(async (req, res) => {
 // @route POST /api/orders
 // @desc  Tạo đơn hàng từ giỏ hàng hiện tại - BẮT BUỘC chọn storeId (mô hình multi-store)
 const createOrder = asyncHandler(async (req, res) => {
-  const { storeId, deliveryAddress, deliveryMethod = 'home_delivery', paymentMode = 'cod', voucherCode, note } =
+  const { deliveryAddress, deliveryMethod = 'home_delivery', paymentMode = 'cod', voucherCode, note } =
     req.body;
+  let storeId = req.body.storeId;
   const expectedTotal = req.body.expectedTotal === undefined || req.body.expectedTotal === null ? undefined : Number(req.body.expectedTotal);
   if (expectedTotal !== undefined && !Number.isFinite(expectedTotal)) return res.status(400).json({ message: 'Tổng tiền không hợp lệ' });
   const { error: invoiceError, value: invoiceInfo } = validateInvoiceInfo(req.body.invoiceInfo);
@@ -370,6 +376,20 @@ const createOrder = asyncHandler(async (req, res) => {
 
   if (req.accountRole !== 'customer') {
     return res.status(403).json({ message: 'Chỉ tài khoản khách hàng mới đặt hàng được' });
+  }
+  // ĐƠN HỎA TỐC: kiểm tra lại (khung giờ còn mở, đúng sản phẩm, còn hàng, trong bán kính) -> chi nhánh của khung giờ xử lý đơn
+  let express = null;
+  if (req.body.express && req.accountRole === 'customer') {
+    if (deliveryMethod !== 'home_delivery') return res.status(400).json({ message: 'Giao hỏa tốc chỉ áp dụng giao tận nơi' });
+    const cart = await Cart.findOne({ userId: req.account._id }).lean();
+    const items = (cart?.items || []).map((i) => ({ productId: i.productId, variantId: i.variantId, quantity: i.quantity }));
+    const ex = require('../utils/express');
+    express = await ex.checkExpress({ items, point: req.body.express, windowId: req.body.express.windowId });
+    if (!express.ok) return res.status(400).json({ message: 'Không giao hỏa tốc được: ' + express.reason });
+    storeId = String(express.store._id);
+    // Giữ suất (khung giới hạn số đơn): cập nhật có điều kiện, nhiều khách đặt cùng lúc không vượt maxOrders
+    const slot = await require('../models/ExpressWindow').updateOne({ _id: express.window._id, ...ex.openFilter() }, { $inc: { ordersCount: 1 } });
+    if (!slot.modifiedCount) return res.status(409).json({ message: 'Khung giờ hỏa tốc vừa hết suất, vui lòng chọn giao thường' });
   }
   if (!storeId) {
     return res.status(400).json({ message: 'Vui lòng chọn cửa hàng xử lý đơn hàng (mô hình đa chi nhánh)' });
@@ -391,9 +411,10 @@ const createOrder = asyncHandler(async (req, res) => {
   let order;
   try {
     order = await withTransaction((session) =>
-      placeOrder(req.account._id, { actorName: req.account.displayName, storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo, expectedTotal }, session)
+      placeOrder(req.account._id, { actorName: req.account.displayName, storeId, deliveryAddress, deliveryMethod, paymentMode, voucherCode, note, invoiceInfo, expectedTotal, expressFee: express ? express.window.fee : 0 }, session)
     );
   } catch (err) {
+    if (express) await require('../models/ExpressWindow').updateOne({ _id: express.window._id }, { $inc: { ordersCount: -1 } }); // trả suất
     if (err instanceof BusinessError) return res.status(err.status).json({ message: err.message });
     throw err;
   }
@@ -410,12 +431,45 @@ const createOrder = asyncHandler(async (req, res) => {
   });
 
   emailOrderPlaced(order); // email xác nhận đơn (chạy nền)
+  if (express) order = await startExpressOrder(req, order, express);
 
   const io = req.app.get('io');
   if (io) io.to(`user_${req.account._id}`).emit('order:created', { orderId: order._id, orderCode: order.orderCode });
 
   res.status(201).json({ data: order });
 });
+
+// Đơn hỏa tốc vừa đặt: gắn phương án giao 'express', tự xác nhận (COD / chuyển khoản), phân công shipper rảnh nhất
+// của chi nhánh và báo ngay cho shipper qua socket. Thanh toán online: chờ thanh toán xong, shipper vẫn được giữ trước.
+async function startExpressOrder(req, order, express) {
+  const { addressKey } = require('../utils/deliveryRouting');
+  const { pickShipper } = require('../utils/express');
+  const now = new Date();
+  const shipper = await pickShipper(express.store._id);
+  const base = order.toObject ? order.toObject() : order;
+  const plan = {
+    storeId: express.store._id, addressKey: addressKey({ ...base, storeId: express.store._id }), sameProvince: true,
+    lat: Number(req.body.express.lat), lng: Number(req.body.express.lng), distanceMeters: express.distanceMeters, durationSeconds: express.durationSeconds,
+    routingProvider: express.provider, calculatedAt: now, mode: 'express', verifiedAt: now
+  };
+  const deadlineText = express.deadline.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
+  const sys = { account: { name: 'Hệ thống' }, accountRole: 'system' };
+  const set = { deliveryPlan: plan, express: { windowId: express.window._id, fee: express.window.fee, deadline: express.deadline, distanceMeters: express.distanceMeters, assignedAt: shipper ? now : undefined } };
+  const history = [historyEntry(sys, order.status, 'Đơn HỎA TỐC: giao trước ' + deadlineText + ' (' + (express.distanceMeters / 1000).toFixed(1) + ' km)', undefined, express.store.name, 'activity', express.store._id)];
+  if (['cod', 'bank_transfer'].includes(order.paymentMode) && order.status === 'pending') {
+    set.status = 'confirmed';
+    history.push(historyEntry(sys, 'confirmed', 'Tự xác nhận đơn hỏa tốc', undefined, express.store.name, 'status', express.store._id));
+  }
+  const push = { statusHistory: { $each: history } };
+  if (shipper) {
+    Object.assign(set, { shipperId: shipper._id, assignedAt: now, assignedByName: 'Hệ thống (hỏa tốc)' });
+    push.assignmentLog = { action: 'assign', method: 'internal', shipperId: shipper._id, shipperName: shipper.name, byName: 'Hệ thống (hỏa tốc)', at: now, note: 'Tự phân công đơn hỏa tốc' };
+  }
+  const updated = await Order.findOneAndUpdate({ _id: order._id }, { $set: set, $push: push }, { new: true });
+  const io = req.app.get('io');
+  if (io && shipper) io.to('user_' + shipper._id).emit('express:assigned', { orderId: order._id, orderCode: order.orderCode, deadline: express.deadline, address: order.deliveryAddress });
+  return updated || order;
+}
 
 // @route GET /api/orders
 const getMyOrders = asyncHandler(async (req, res) => {

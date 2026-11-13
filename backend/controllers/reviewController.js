@@ -208,6 +208,10 @@ const replyReview = asyncHandler(async (req, res) => {
 const getAllReviewsAdmin = asyncHandler(async (req, res) => {
   const { rating, replied, q, page = 1, limit = 20 } = req.query;
   const filter = {};
+  // Lọc thêm: có thẻ chê (khiếu nại) / có ảnh / theo sản phẩm
+  if (req.query.negative === 'true') filter.tags = { $in: TAGS.negative };
+  if (req.query.hasImages === 'true') filter['images.0'] = { $exists: true };
+  if (req.query.productId && mongoose.isValidObjectId(req.query.productId)) filter.productId = req.query.productId;
   if (rating && Number(rating) >= 1 && Number(rating) <= 5) filter.rating = Number(rating);
   if (replied === 'true') filter['reply.content'] = { $exists: true, $ne: '' };
   if (replied === 'false') filter.$or = [{ 'reply.content': { $exists: false } }, { 'reply.content': '' }];
@@ -215,6 +219,7 @@ const getAllReviewsAdmin = asyncHandler(async (req, res) => {
   const reviews = await Review.find(filter)
     .populate('userId', 'displayName email avatar')
     .populate('productId', 'title slug featuredImage')
+    .populate({ path: 'orderId', select: 'orderCode storeId', populate: { path: 'storeId', select: 'name' } })
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(Number(limit));

@@ -44,7 +44,12 @@ const userSchema = new mongoose.Schema(
     termsAcceptedAt: { type: Date, default: null },
     // Điểm tích lũy (utils/loyalty.js): cộng khi đơn giao thành công, trừ khi đơn đã giao bị trả hàng
     loyaltyPoints: { type: Number, default: 0, min: 0 },
-    lastLoginAt: Date
+    lastLoginAt: Date,
+    // Nguồn tạo tài khoản: 'pos' = thu ngân tạo thẻ thành viên tại quầy (utils/posCustomer.js)
+    source: { type: String, enum: ['web', 'pos'], default: 'web' },
+    createdByStaff: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+    // Thẻ tại quầy đã được khách gộp vào tài khoản thật
+    mergedInto: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
   { timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'users' }
 );

@@ -7,6 +7,7 @@ const Store = require('../models/Store');
 const asyncHandler = require('../utils/asyncHandler');
 const { disconnectAccount } = require('../utils/socketAuth');
 const { recordStoreChanges } = require('./staffWorkController');
+const { validateManager } = require('../utils/reportingLine');
 
 // Danh sách chi nhánh quản lý thêm: id hợp lệ, không trùng, tồn tại, không trùng chi nhánh chính
 async function parseManagedStores(list, homeStoreId) {
@@ -25,6 +26,7 @@ const getStaffList = asyncHandler(async (req, res) => {
     .populate('groupIds', 'name')
     .populate('storeId', 'name city')
     .populate('managedStoreIds', 'name city')
+    .populate('managerId', 'name title')
     .sort({ createdAt: -1 });
   res.json({ data: staff });
 });
@@ -36,7 +38,7 @@ async function assertStoreExists(storeId) {
 }
 
 const createStaff = asyncHandler(async (req, res) => {
-  const { name, email, password, role, groupIds, storeId, managedStoreIds, title } = req.body;
+  const { name, email, password, role, groupIds, storeId, managedStoreIds, title, managerId } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Vui lòng nhập đầy đủ họ tên, email, mật khẩu' });
   }
@@ -55,8 +57,11 @@ const createStaff = asyncHandler(async (req, res) => {
 
   const managed = role === 'admin' ? { value: [] } : await parseManagedStores(managedStoreIds ?? [], storeId);
   if (managed.error) return res.status(400).json({ message: managed.error });
+  const mgr = await validateManager(null, managerId);
+  if (mgr.error) return res.status(400).json({ message: mgr.error });
 
   const staff = await Admin.create({
+    managerId: mgr.value,
     name,
     email: email.toLowerCase(),
     password,
@@ -75,7 +80,7 @@ const updateStaff = asyncHandler(async (req, res) => {
   const target = await Admin.findById(req.params.id);
   if (!target) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
 
-  const { name, email, role, groupIds, storeId, isActive, newPassword, managedStoreIds, title } = req.body;
+  const { name, email, role, groupIds, storeId, isActive, newPassword, managedStoreIds, title, managerId } = req.body;
   const before = { storeId: target.storeId, managedStoreIds: [...(target.managedStoreIds || [])] };
   const isSelf = target._id.toString() === req.account._id.toString();
 
@@ -121,6 +126,11 @@ const updateStaff = asyncHandler(async (req, res) => {
     target.storeId = storeId || null;
   }
   if (title !== undefined) target.title = String(title || '').trim().slice(0, 80);
+  if (managerId !== undefined) {
+    const mgr = await validateManager(target._id, managerId);
+    if (mgr.error) return res.status(400).json({ message: mgr.error });
+    target.managerId = mgr.value;
+  }
   if (managedStoreIds !== undefined && target.role === 'staff') {
     const managed = await parseManagedStores(managedStoreIds, target.storeId);
     if (managed.error) return res.status(400).json({ message: managed.error });
@@ -147,6 +157,8 @@ const deleteStaff = asyncHandler(async (req, res) => {
   if (target._id.toString() === req.account._id.toString()) {
     return res.status(400).json({ message: 'Không thể tự xóa tài khoản của chính mình' });
   }
+  // Cấp dưới của người bị xóa chuyển sang báo cáo cho quản lý của người đó (không bị mất tuyến báo cáo)
+  await Admin.updateMany({ managerId: target._id }, { $set: { managerId: target.managerId || null } });
   await target.deleteOne();
   disconnectAccount(req, target._id);
   res.json({ message: 'Đã xóa tài khoản' });

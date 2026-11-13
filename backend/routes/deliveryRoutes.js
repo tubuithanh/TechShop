@@ -47,6 +47,7 @@ router.post('/:orderId/result', can('deliveries.perform'), reportResult);
 // Quản lý chi nhánh
 router.get('/', can('deliveries.manage'), getDeliveries);
 router.get('/shippers', can('deliveries.manage'), getShippers);
+router.get('/board', can('deliveries.manage'), require('../controllers/deliveryController').getBoard);
 router.post('/:orderId/receive-return', can('deliveries.manage'), (req, res, next) => { req.params.id = req.params.orderId; next(); }, require('../controllers/fulfillmentController').receiveReturn);
 router.put('/:orderId/assign', can('deliveries.manage'), assignShipper);
 router.post('/:orderId/settle-cod', can('deliveries.manage'), settleCod);

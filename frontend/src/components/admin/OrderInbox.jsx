@@ -31,7 +31,7 @@ const CATEGORY_COLOR = {
 
 // Việc cần làm: đơn đang chờ nhân viên xử lý, gấp nhất lên đầu. renderActions(o) = đúng các nút thao tác của danh sách
 // thường (dùng chung, không viết lại). reloadKey đổi -> tải lại (sau mỗi thao tác).
-export default function OrderInbox({ renderActions, onDetails, reloadKey, isAdmin }) {
+export default function OrderInbox({ renderActions, onDetails, onOpen, reloadKey, isAdmin }) {
   const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
   const [res, setRes] = useState(null);
@@ -110,7 +110,7 @@ export default function OrderInbox({ renderActions, onDetails, reloadKey, isAdmi
               {res?.data.map((o) => {
                 const u = urgency(o.inbox);
                 return (
-                  <tr key={o._id} className={o.inbox.overdue ? 'inbox-row-overdue' : ''}>
+                  <tr key={o._id} className={`order-row-click ${o.inbox.overdue ? 'inbox-row-overdue' : ''}`} onClick={(e) => { if (!e.target.closest('button, a, input, .dropdown, .dropdown-menu')) onOpen?.(o, res.data); }}>
                     <td className="p-3" style={{ minWidth: 190 }}>
                       <Badge bg={CATEGORY_COLOR[o.inbox.category]} className="fw-normal">{o.inbox.label}</Badge>
                       <div className="mt-1">

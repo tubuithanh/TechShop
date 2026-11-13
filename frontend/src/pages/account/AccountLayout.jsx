@@ -8,6 +8,7 @@ const menu = [
   { path: '/account/addresses', label: 'Sổ địa chỉ' },
   { path: '/account/wishlist', label: 'Sản phẩm yêu thích' },
   { path: '/account/orders', label: 'Đơn hàng của tôi' },
+  { path: '/account/vouchers', label: 'Mã giảm giá của tôi' },
   { path: '/account/warranties', label: 'Bảo hành' },
   { path: '/account/notifications', label: 'Thông báo' }
 ];

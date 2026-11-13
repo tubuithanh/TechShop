@@ -57,6 +57,7 @@ const getDeliveries = asyncHandler(async (req, res) => {
   ] });
   else filter.status = { $in: [...ASSIGNABLE, 'shipping'] };
   Object.assign(filter, searchFilter(req.query.q));
+  if (isId(req.query.shipperId)) filter.shipperId = req.query.shipperId; // lọc theo nhân viên giao hàng (bảng điều phối)
   const page = Math.min(1000000, Math.max(1, Math.floor(Number(req.query.page) || 1)));
   const limit = Math.min(100, Math.max(1, Math.floor(Number(req.query.limit) || 25)));
   const [orders, total, cod] = await Promise.all([
@@ -78,6 +79,84 @@ const getDeliveries = asyncHandler(async (req, res) => {
     stages = { pending, ready, shipping, failed };
   }
   res.json({ data: orders, total, page, totalPages: Math.ceil(total / limit), codTotal: cod[0]?.total || 0, stages });
+});
+
+// Khu vực giao của đơn: phường/xã (addressLine2) + tỉnh/thành -> gom đơn cùng khu cho 1 shipper
+const areaOf = (o) => [o.deliveryAddress?.addressLine2, o.deliveryAddress?.city].map((x) => String(x || '').trim()).filter(Boolean).join(', ') || 'Chưa rõ khu vực';
+const SHIPPER_CAP = 8; // số đơn đang giữ coi là "quá tải"
+
+// @route GET /api/deliveries/board?storeId= - BẢNG ĐIỀU PHỐI: tình trạng từng shipper + chỉ số hôm nay + khu vực đang chờ
+const getBoard = asyncHandler(async (req, res) => {
+  const { storeId } = storeFilter(req);
+  const shippers = await findShippers(storeId);
+  const ids = shippers.map((s) => s._id);
+  const vn = new Date(Date.now() + 7 * 3600000);
+  const today = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) - 7 * 3600000);
+  const since30 = new Date(Date.now() - 30 * 86400000);
+  const now = new Date();
+  const scope = { deliveryMethod: 'home_delivery', ...(storeId ? { storeId: new mongoose.Types.ObjectId(String(storeId)) } : {}) };
+  const ACTIVE = ['creating', 'unknown', 'active'];
+  const [active, todayStats, cod, ratings, pending] = await Promise.all([
+    Order.find({ shipperId: { $in: ids }, status: { $in: [...ASSIGNABLE, 'shipping'] } }).select('shipperId status deliveryAddress express').lean(),
+    Order.aggregate([
+      { $match: { shipperId: { $in: ids }, 'deliveryAttempts.at': { $gte: today } } },
+      { $unwind: '$deliveryAttempts' },
+      { $match: { 'deliveryAttempts.at': { $gte: today } } },
+      { $group: { _id: '$shipperId', done: { $sum: { $cond: [{ $eq: ['$deliveryAttempts.result', 'success'] }, 1, 0] } }, failed: { $sum: { $cond: [{ $eq: ['$deliveryAttempts.result', 'failed'] }, 1, 0] } } } }
+    ]),
+    Order.aggregate([
+      { $match: { shipperId: { $in: ids }, paymentMode: 'cod', codCollectedAt: { $ne: null }, codSettledAt: null } },
+      { $group: { _id: '$shipperId', n: { $sum: 1 }, amount: { $sum: '$grandTotal' }, oldest: { $min: '$codCollectedAt' } } }
+    ]),
+    Order.aggregate([
+      { $match: { shipperId: { $in: ids }, status: 'delivered', updatedAt: { $gte: since30 } } },
+      { $lookup: { from: 'reviews', localField: '_id', foreignField: 'orderId', as: 'rv', pipeline: [{ $project: { rating: 1, 'criteria.delivery': 1 } }] } },
+      { $unwind: '$rv' },
+      { $group: { _id: '$shipperId', score: { $avg: { $ifNull: ['$rv.criteria.delivery', '$rv.rating'] } }, n: { $sum: 1 } } }
+    ]),
+    Order.find({ ...scope, status: { $in: ASSIGNABLE }, shipperId: null, 'shipment.phase': { $nin: ACTIVE }, activeTransferId: null }).select('createdAt deliveryAddress express statusHistory').lean()
+  ]);
+  const by = (rows) => new Map(rows.map((r) => [String(r._id), r]));
+  const T = by(todayStats); const C = by(cod); const R = by(ratings);
+  const board = shippers.map((s) => {
+    const mine = active.filter((o) => String(o.shipperId) === String(s._id));
+    const load = mine.length;
+    const areas = {};
+    for (const o of mine) { const a = areaOf(o); areas[a] = (areas[a] || 0) + 1; }
+    const lateExpress = mine.filter((o) => o.express?.deadline && new Date(o.express.deadline) < now).length;
+    return {
+      _id: s._id, name: s.name, avatar: s.avatar, store: s.effectiveStore?.name, storeId: idOf(s.effectiveStore),
+      load, waiting: mine.filter((o) => ASSIGNABLE.includes(o.status)).length, shipping: mine.filter((o) => o.status === 'shipping').length,
+      express: mine.filter((o) => o.express?.deadline).length, lateExpress,
+      status: load === 0 ? 'free' : load >= SHIPPER_CAP ? 'overloaded' : 'busy',
+      areas: Object.entries(areas).sort((a, b) => b[1] - a[1]).map(([area, n]) => ({ area, n })),
+      deliveredToday: T.get(String(s._id))?.done || 0, failedToday: T.get(String(s._id))?.failed || 0,
+      codHeld: C.get(String(s._id))?.n || 0, codHeldAmount: C.get(String(s._id))?.amount || 0, codOldest: C.get(String(s._id))?.oldest || null,
+      rating: R.get(String(s._id))?.score ? Math.round(R.get(String(s._id)).score * 10) / 10 : null, ratingCount: R.get(String(s._id))?.n || 0
+    };
+  }).sort((a, b) => a.load - b.load || (b.rating || 0) - (a.rating || 0));
+  const pendingAreas = {};
+  for (const o of pending) { const a = areaOf(o); pendingAreas[a] = (pendingAreas[a] || 0) + 1; }
+  const oldest = pending.reduce((m, o) => Math.min(m, new Date(o.createdAt).getTime()), Infinity);
+  res.json({
+    data: {
+      cap: SHIPPER_CAP,
+      shippers: board,
+      summary: {
+        pending: pending.length,
+        oldestPendingMinutes: Number.isFinite(oldest) ? Math.round((Date.now() - oldest) / 60000) : 0,
+        expressPending: pending.filter((o) => o.express?.deadline).length,
+        lateExpress: board.reduce((n, s) => n + s.lateExpress, 0),
+        shipping: board.reduce((n, s) => n + s.shipping, 0),
+        deliveredToday: board.reduce((n, s) => n + s.deliveredToday, 0),
+        failedToday: board.reduce((n, s) => n + s.failedToday, 0),
+        codHeldAmount: board.reduce((n, s) => n + s.codHeldAmount, 0),
+        free: board.filter((s) => s.status === 'free').length,
+        overloaded: board.filter((s) => s.status === 'overloaded').length
+      },
+      pendingAreas: Object.entries(pendingAreas).sort((a, b) => b[1] - a[1]).map(([area, n]) => ({ area, n }))
+    }
+  });
 });
 
 // @route GET /api/deliveries/shippers?storeId= - quản lý: nhân viên giao hàng chọn được
@@ -178,7 +257,7 @@ const reportResult = asyncHandler(async (req, res) => {
       action: 'deliverySuccess',
       note: 'Giao hàng thành công',
       // Đơn COD: tiền đã thu, nhân viên đang giữ cho tới khi nộp chi nhánh (UC40)
-      extraSet: { handover: checked.handover, ...(order.paymentMode === 'cod' ? { codCollectedAt: new Date(), receipt: { amount: order.grandTotal, at: new Date(), by: req.account._id, channel: 'shipper' } } : {}) },
+      extraSet: { handover: checked.handover, ...(order.express?.windowId ? { 'express.deliveredAt': new Date() } : {}), ...(order.paymentMode === 'cod' ? { codCollectedAt: new Date(), receipt: { amount: order.grandTotal, at: new Date(), by: req.account._id, channel: 'shipper' } } : {}) },
       extraPush: { deliveryAttempts: attempt }
     });
     if (done.error) return res.status(done.error.status).json({ message: done.error.message });
@@ -229,4 +308,4 @@ const settleCod = asyncHandler(async (req, res) => {
   res.json({ data: updated });
 });
 
-module.exports = { getDeliveries, getShippers, assignShipper, getMyDeliveries, pickUp, reportResult, settleCod, findShippers };
+module.exports = { getBoard, getDeliveries, getShippers, assignShipper, getMyDeliveries, pickUp, reportResult, settleCod, findShippers };

@@ -151,6 +151,11 @@ const orderSchema = new mongoose.Schema(
         note: String
       }
     ],
+    // Giao hỏa tốc (khung giờ do quản lý mở - models/ExpressWindow.js): phụ phí, hạn giao, thời điểm giao xong
+    express: {
+      windowId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExpressWindow' },
+      fee: Number, deadline: Date, distanceMeters: Number, assignedAt: Date, deliveredAt: Date
+    },
     deliveryPlan: {
       storeId: mongoose.Schema.Types.ObjectId, addressKey: String,
       provinceId: Number, districtId: Number, wardCode: String,

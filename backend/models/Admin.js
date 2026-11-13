@@ -24,6 +24,8 @@ const adminSchema = new mongoose.Schema(
     // = chi nhánh đang làm việc (storeId hoặc chi nhánh điều chuyển tạm thời) + các chi nhánh này; quản lý chọn
     // "chi nhánh đang làm việc" trên thanh trên cùng của trang quản trị (xem utils/staffScope.js).
     managedStoreIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Store' }],
+    // Quản lý trực tiếp (tuyến báo cáo): người này xem được báo cáo hiệu suất của nhân viên
+    managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
     title: { type: String, trim: true, default: '' }, // chức danh: "Nhân viên bán hàng", "Quản lý chi nhánh"...
     isActive: { type: Boolean, default: true },
     // Tăng lên khi đổi/đặt lại mật khẩu -> mọi token cấp trước đó (trên các thiết bị khác) hết hiệu lực
@@ -49,5 +51,7 @@ adminSchema.methods.toSafeObject = function () {
   delete obj.password;
   return obj;
 };
+
+adminSchema.index({ managerId: 1 });
 
 module.exports = mongoose.model('Admin', adminSchema);

@@ -41,6 +41,7 @@ import WishlistPage from './pages/account/WishlistPage';
 import LoyaltyPage from './pages/account/LoyaltyPage';
 import MyOrdersPage from './pages/MyOrdersPage';
 import MyWarrantiesPage from './pages/MyWarrantiesPage';
+import MyVouchersPage from './pages/account/MyVouchersPage';
 import NotificationsPage from './pages/account/NotificationsPage';
 
 import AdminLayout from './pages/admin/AdminLayout';
@@ -51,6 +52,10 @@ import AdminWarrantyCardsPage from './pages/admin/AdminWarrantyCardsPage';
 import AdminStaffDetailPage from './pages/admin/AdminStaffDetailPage';
 import AdminStoresPage from './pages/admin/AdminStoresPage';
 import AdminStaffPerformancePage from './pages/admin/AdminStaffPerformancePage';
+import AdminStaffReportsPage from './pages/admin/AdminStaffReportsPage';
+import AdminExpressPage from './pages/admin/AdminExpressPage';
+import AdminStoreHealthPage from './pages/admin/AdminStoreHealthPage';
+import { MyReportPage, StaffReportDetailPage } from './pages/admin/StaffReportPages';
 import AdminProductsPage from './pages/admin/AdminProductsPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminWarrantiesPage from './pages/admin/AdminWarrantiesPage';
@@ -170,6 +175,7 @@ export default function App() {
                   <Route path="loyalty" element={<LoyaltyPage />} />
                   <Route path="orders" element={<MyOrdersPage />} />
                   <Route path="warranties" element={<MyWarrantiesPage />} />
+                  <Route path="vouchers" element={<MyVouchersPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
                 <Route
@@ -227,6 +233,12 @@ export default function App() {
                   />
                   <Route path="stores" element={<PrivateRoute roles={['admin']}><AdminStoresPage /></PrivateRoute>} />
                   <Route path="staff/:id" element={<PrivateRoute roles={['admin']}><AdminStaffDetailPage /></PrivateRoute>} />
+                  {/* Báo cáo nhân viên: backend tự chặn theo phạm vi (admin / quản lý chi nhánh / chính mình) */}
+                  <Route path="store-health" element={<PrivateRoute roles={['admin', 'staff']}><AdminStoreHealthPage /></PrivateRoute>} />
+                  <Route path="express" element={<PrivateRoute permissionPath="/admin/express"><AdminExpressPage /></PrivateRoute>} />
+                  <Route path="staff-reports" element={<PrivateRoute roles={['admin', 'staff']}><AdminStaffReportsPage /></PrivateRoute>} />
+                  <Route path="staff-reports/:id" element={<PrivateRoute roles={['admin', 'staff']}><StaffReportDetailPage /></PrivateRoute>} />
+                  <Route path="my-report" element={<PrivateRoute roles={['staff']}><MyReportPage /></PrivateRoute>} />
                   <Route path="staff-performance" element={<PrivateRoute roles={['admin']}><AdminStaffPerformancePage /></PrivateRoute>} />
                   <Route
                     path="permission-groups"

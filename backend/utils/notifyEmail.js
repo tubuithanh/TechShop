@@ -260,7 +260,29 @@ async function sendChangeEmailCode(email, code, { expiresMinutes }) {
   });
 }
 
+// Chào mừng thành viên mới tạo tại quầy: hướng dẫn tự đặt mật khẩu (thu ngân không biết mật khẩu)
+function emailCounterWelcome(user, order) {
+  runInBackground(`chào mừng thành viên ${user.email}`, async () => {
+    const shop = await shopInfo();
+    const url = `${clientUrl()}/forgot-password`;
+    await sendMail({
+      to: user.email,
+      subject: `Chào mừng bạn trở thành thành viên ${shop.name}`,
+      html: layout({
+        shop,
+        title: 'Chào mừng thành viên mới',
+        intro: `Xin chào ${esc(user.displayName || 'bạn')}, cửa hàng đã tạo tài khoản thành viên cho bạn khi mua đơn <strong>${esc(order.orderCode)}</strong>.`,
+        body: `<p style="margin:0 0 12px;font-size:14px">Đơn hàng, điểm thưởng và sổ bảo hành điện tử đã được lưu trong tài khoản.</p>
+          <p style="margin:0 0 16px;font-size:14px">Để đăng nhập, hãy đặt mật khẩu bằng chức năng <strong>Quên mật khẩu</strong> với email này:</p>
+          <p style="text-align:center;margin:0 0 16px"><a href="${url}" style="background:#d70018;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Đặt mật khẩu</a></p>`
+      }),
+      text: plain(`Cửa hàng đã tạo tài khoản thành viên cho bạn (đơn ${order.orderCode}).`, `Đặt mật khẩu tại: ${url}`)
+    });
+  });
+}
+
 module.exports = {
+  emailCounterWelcome,
   emailShipmentEvent,
   trackingInfo,
   emailOrderPlaced,

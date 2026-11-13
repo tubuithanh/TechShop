@@ -650,3 +650,106 @@
 
 /* Dòng quá hạn: vạch đỏ bên trái */
 .inbox-row-overdue > td:first-child { box-shadow: inset 3px 0 0 var(--bs-danger); }
+
+/* ===== Bán hàng tại quầy (POS) ===== */
+.pos-layout { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 992px) { .pos-layout { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; } }
+@media (min-width: 1400px) { .pos-layout { grid-template-columns: minmax(0, 1fr) 420px; } }
+.pos-chips { display: flex; gap: .35rem; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
+.pos-chips .btn { flex-shrink: 0; }
+.pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; max-height: calc(100vh - 230px); overflow-y: auto; padding: 2px; }
+.pos-card { position: relative; display: flex; flex-direction: column; align-items: stretch; text-align: left; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .6rem; padding: .5rem; transition: transform .08s, box-shadow .15s, border-color .15s; }
+.pos-card:hover:not(:disabled) { border-color: var(--bs-primary); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.pos-card:active:not(:disabled) { transform: scale(.97); }
+.pos-card:disabled { opacity: .45; }
+.pos-card.in-cart { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle); }
+.pos-card img { width: 100%; height: 96px; object-fit: contain; margin-bottom: .35rem; }
+.pos-card-title { font-size: .8rem; font-weight: 600; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.4em; }
+.pos-card-variant { font-size: .72rem; color: var(--bs-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pos-card-price { font-size: .85rem; font-weight: 700; color: var(--bs-danger); margin-top: .15rem; }
+.pos-card-price s { font-size: .7rem; font-weight: 400; color: var(--bs-secondary-color); }
+.pos-card-stock { font-size: .7rem; color: var(--bs-secondary-color); }
+.pos-card-qty { position: absolute; top: .35rem; right: .35rem; background: var(--bs-primary); color: #fff; border-radius: 999px; min-width: 22px; height: 22px; font-size: .75rem; font-weight: 700; display: flex; align-items: center; justify-content: center; z-index: 1; }
+.pos-card-hot { position: absolute; top: .35rem; left: .35rem; background: #fd7e14; color: #fff; border-radius: 999px; padding: 0 .4rem; font-size: .65rem; z-index: 1; }
+.pos-cart { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .75rem; padding: .9rem; box-shadow: 0 2px 10px rgba(0,0,0,.04); }
+@media (min-width: 992px) { .pos-cart { position: sticky; top: 72px; max-height: calc(100vh - 90px); overflow-y: auto; } }
+.pos-cart-items { max-height: 34vh; overflow-y: auto; margin: 0 -.25rem; padding: 0 .25rem; }
+.pos-line { display: flex; gap: .5rem; align-items: flex-start; padding: .5rem 0; border-bottom: 1px dashed var(--bs-border-color); }
+.pos-line img { width: 44px; height: 44px; object-fit: contain; border-radius: .4rem; border: 1px solid var(--bs-border-color); }
+.pos-step { padding: 0 .35rem; line-height: 1.4; }
+.pos-block { border-top: 1px solid var(--bs-border-color); padding: .7rem 0; }
+.pos-total { font-size: 1.5rem; font-weight: 800; color: var(--bs-danger); }
+.pos-pay { font-weight: 700; }
+.pos-suggest { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .5rem; max-height: 260px; overflow-y: auto; }
+.pos-suggest .dropdown-item { white-space: normal; border-bottom: 1px solid var(--bs-border-color); }
+.pos-flash { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: rgba(33,37,41,.92); color: #fff; padding: .45rem 1rem; border-radius: 999px; font-size: .85rem; z-index: 1080; pointer-events: none; }
+.pos-newcustomer { border-radius: .5rem; padding: .5rem .6rem; border: 1px dashed var(--bs-success); background: var(--bs-success-bg-subtle); }
+.pos-newcustomer.returning { border-color: var(--bs-warning); background: var(--bs-warning-bg-subtle); }
+.pos-welcome { position: fixed; right: 1rem; bottom: 1rem; z-index: 1080; max-width: 420px; }
+.pos-offers { border: 1px solid var(--bs-border-color); border-radius: .5rem; padding: .5rem .6rem; }
+.pos-offer { display: flex; gap: .5rem; align-items: center; margin-top: .4rem; padding: .4rem .55rem; border: 1px dashed var(--bs-danger-border-subtle); border-radius: .45rem; background: var(--bs-danger-bg-subtle); cursor: pointer; transition: border-color .15s; }
+.pos-offer:hover { border-color: var(--bs-danger); }
+.pos-offer.active { border: 1px solid var(--bs-success); background: var(--bs-success-bg-subtle); }
+
+/* Sức khỏe chi nhánh */
+.health-rank { width: 34px; height: 34px; border-radius: 50%; background: var(--bs-secondary-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+.health-store { transition: transform .1s, box-shadow .15s; }
+.health-store:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.08) !important; }
+
+/* Bảng điều phối giao hàng */
+.dispatch-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .6rem; }
+.dispatch-kpi { display: flex; gap: .6rem; align-items: center; padding: .6rem .75rem; background: var(--bs-body-bg); border: 1px solid; border-left-width: 4px; border-radius: .6rem; text-align: left; }
+.dispatch-kpi:disabled { opacity: 1; cursor: default; }
+.dispatch-kpi:not(:disabled):hover { box-shadow: 0 3px 10px rgba(0,0,0,.07); }
+.dispatch-kpi-icon { font-size: 1.4rem; }
+.shipper-strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 1fr); gap: .6rem; overflow-x: auto; padding-bottom: .3rem; }
+.shipper-card { text-align: left; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .6rem; padding: .6rem .7rem; transition: border-color .15s, box-shadow .15s; }
+.shipper-card:hover { border-color: var(--bs-primary); }
+.shipper-card.active { border-color: var(--bs-primary); box-shadow: 0 0 0 2px var(--bs-primary-bg-subtle); }
+.shipper-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--bs-body-bg); }
+.dispatch-suggest { font-size: .78rem; background: var(--bs-warning-bg-subtle); border-radius: .4rem; padding: .3rem .45rem; }
+.dispatch-bulk { position: sticky; top: 64px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .45rem .7rem; border: 1px dashed var(--bs-border-color); border-radius: .5rem; background: var(--bs-body-bg); }
+.dispatch-bulk.active { border-style: solid; border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle); }
+.dispatch-row-late > td { background: rgba(220,53,69,.08) !important; }
+
+/* Cửa sổ phân công giao hàng */
+.plan-summary { border: 1px solid var(--bs-border-color); border-radius: .6rem; padding: .7rem .85rem; background: var(--bs-tertiary-bg); }
+.plan-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .5rem; }
+.plan-method { text-align: left; border: 1px solid var(--bs-border-color); border-radius: .55rem; padding: .55rem .7rem; background: var(--bs-body-bg); }
+.plan-method:hover:not(:disabled) { border-color: var(--bs-primary); }
+.plan-method.active { border: 2px solid var(--bs-primary); background: var(--bs-primary-bg-subtle); }
+.plan-method:disabled { opacity: .5; }
+.plan-shippers { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .5rem; max-height: 300px; overflow-y: auto; padding: 2px; }
+.plan-shipper { text-align: left; border: 1px solid var(--bs-border-color); border-radius: .55rem; padding: .5rem .6rem; background: var(--bs-body-bg); }
+.plan-shipper:hover { border-color: var(--bs-primary); }
+.plan-shipper.active { border: 2px solid var(--bs-primary); background: var(--bs-primary-bg-subtle); }
+
+/* Thao tác đơn hàng */
+.order-actions { min-width: 200px; }
+.order-actions-more::after { display: none; }
+.order-mini-steps { display: flex; gap: 3px; margin-bottom: .35rem; }
+.order-mini-steps span { flex: 1; height: 4px; border-radius: 2px; background: var(--bs-border-color); }
+.order-mini-steps span.done { background: var(--bs-success); }
+.order-mini-steps span.current { background: var(--bs-primary); }
+.order-bulk { position: sticky; top: 64px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .45rem .75rem; border: 1px solid var(--bs-primary); border-radius: .5rem; background: var(--bs-primary-bg-subtle); }
+
+/* Khung xử lý đơn bên phải + bảng dễ bấm */
+.order-row-click { cursor: pointer; }
+.order-row-click:hover > td { background: var(--bs-primary-bg-subtle) !important; }
+.order-actions-main { font-weight: 600; padding: .45rem .8rem; }
+.order-panel { --bs-offcanvas-width: min(520px, 100vw); font-size: 1rem; box-shadow: -8px 0 30px rgba(0,0,0,.12); }
+.order-panel-primary { position: relative; font-weight: 700; padding: .9rem 1rem; font-size: 1.15rem; }
+.order-panel-kbd { position: absolute; right: .8rem; top: 50%; transform: translateY(-50%); font-size: .7rem; font-weight: 500; opacity: .7; border: 1px solid currentColor; border-radius: .25rem; padding: 0 .3rem; }
+.order-panel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.order-panel-actions .btn { padding: .6rem .5rem; font-weight: 500; }
+.order-panel-box { border: 1px solid var(--bs-border-color); border-radius: .6rem; padding: .75rem .9rem; }
+.order-panel-steps { display: flex; }
+.order-panel-steps > div { flex: 1; display: flex; flex-direction: column; align-items: center; font-size: .8rem; color: var(--bs-secondary-color); position: relative; }
+.order-panel-steps > div::before { content: ''; position: absolute; top: 8px; right: 50%; width: 100%; height: 3px; background: var(--bs-border-color); }
+.order-panel-steps > div:first-child::before { display: none; }
+.order-panel-steps span { width: 18px; height: 18px; border-radius: 50%; background: var(--bs-border-color); position: relative; z-index: 1; margin-bottom: .25rem; }
+.order-panel-steps .done span, .order-panel-steps .done::before, .order-panel-steps .current::before { background: var(--bs-success); }
+.order-panel-steps .current span { background: var(--bs-primary); box-shadow: 0 0 0 4px var(--bs-primary-bg-subtle); }
+.order-panel-steps .current { color: var(--bs-primary); font-weight: 700; }
+.order-panel-history { list-style: none; padding-left: 1rem; border-left: 2px solid var(--bs-border-color); margin: 0; }
+.order-panel-history li { margin-bottom: .5rem; }

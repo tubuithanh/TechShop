@@ -994,3 +994,26 @@ body.has-sticky-buy {
 .order-step.done::before, .order-step.done .dot { background: var(--bs-success); }
 .order-step.current .label { color: var(--bs-success); font-weight: 600; }
 .order-step .label { margin-top: .2rem; text-align: center; }
+
+/* Gợi ý mã giảm giá (trang Thanh toán) */
+.voucher-suggest-item { display: flex; gap: .6rem; align-items: center; width: 100%; margin-top: .4rem; padding: .5rem .65rem; border: 1px dashed var(--bs-danger-border-subtle); border-radius: .5rem; background: var(--bs-danger-bg-subtle); color: inherit; transition: border-color .15s; }
+.voucher-suggest-item:hover { border-color: var(--bs-danger); }
+.voucher-suggest-item.active { border: 1px solid var(--bs-success); background: var(--bs-success-bg-subtle); }
+
+/* Ví voucher (Tài khoản -> Mã giảm giá của tôi) */
+.voucher-summary { display: flex; flex-wrap: wrap; gap: 1.5rem; padding: 1rem 1.25rem; border-radius: .75rem; background: linear-gradient(135deg, var(--bs-danger-bg-subtle), var(--bs-warning-bg-subtle)); }
+.voucher-ticket { display: flex; border: 1px solid var(--bs-border-color); border-radius: .6rem; overflow: hidden; background: var(--bs-body-bg); }
+.voucher-ticket-left { width: 92px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bs-danger); color: #fff; padding: .5rem; position: relative; }
+.voucher-ticket-left::after { content: ''; position: absolute; right: -6px; top: 0; bottom: 0; width: 12px; background: radial-gradient(circle at 6px 8px, var(--bs-body-bg) 4px, transparent 5px) 0 0 / 12px 16px repeat-y; }
+.voucher-ticket.expiring .voucher-ticket-left { background: #fd7e14; }
+.voucher-ticket.locked { opacity: .75; }
+.voucher-ticket.locked .voucher-ticket-left { background: var(--bs-secondary); }
+.voucher-ticket-body { flex: 1; min-width: 0; padding: .65rem .9rem; }
+.voucher-code { font-size: .85rem; padding: .15rem .5rem; border: 1px dashed var(--bs-danger); border-radius: .35rem; color: var(--bs-danger); background: var(--bs-danger-bg-subtle); }
+
+/* Giao hỏa tốc */
+.express-box { border: 1px dashed #f0ad4e; border-radius: .6rem; padding: .6rem .75rem; background: #fff8e6; }
+.express-box.selected { border-style: solid; border-color: #fd7e14; background: #fff1dc; }
+[data-bs-theme="dark"] .express-box { background: rgba(253,126,20,.08); }
+.express-badge { padding: .4rem .6rem; border-radius: .5rem; background: #fff8e6; border: 1px solid #ffe2a8; }
+[data-bs-theme="dark"] .express-badge { background: rgba(253,126,20,.08); border-color: rgba(253,126,20,.3); }

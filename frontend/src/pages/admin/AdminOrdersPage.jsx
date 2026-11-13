@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Badge, Button, Card, Form, Table } from 'react-bootstrap';
+import { Badge, Button, Card, Form, Table, Toast, ToastContainer } from 'react-bootstrap';
+import OrderActions, { ReasonModal } from '../../components/admin/OrderActions';
+import DeliveryPlanModal from '../../components/admin/DeliveryPlanModal';
+import OrderWorkPanel from '../../components/admin/OrderWorkPanel';
+import { hasPagePermission } from '../../utils/permissions';
+import { orderActions as allowedTransitions } from '../../utils/orderWorkflow';
 import api from '../../services/api';
 import HandoverModal from '../../components/admin/HandoverModal';
 import OrderReceipt from '../../components/admin/OrderReceipt';
@@ -64,6 +69,7 @@ export default function AdminOrdersPage() {
     limit: pageSize
   });
   const loadOrders = () => { reloadList(); setInboxKey((k) => k + 1); };
+  useEffect(() => { setSelected([]); }, [query.apiParams.page, query.apiParams.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const page = query.values.page;
   const setPage = query.setPage;
 
@@ -140,52 +146,57 @@ export default function AdminOrdersPage() {
     { key: 'to', label: 'Đến ngày', type: 'date' }
   ];
 
-  const handleChangeStatus = async (orderId, status) => {
-    const reason = ['returning', 'cancelled'].includes(status) ? window.prompt('Nhập lý do:') : '';
-    if (['returning', 'cancelled'].includes(status) && !reason?.trim()) return;
+  // Thông báo nhẹ góc màn hình thay cho alert()
+  const [toasts, setToasts] = useState([]);
+  const notify = (text, tone = 'success') => { const id = Date.now() + Math.random(); setToasts((t) => [...t, { id, text, tone }]); setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000); };
+  const [reasonTarget, setReasonTarget] = useState(null); // { status, orders } -> hộp thoại lý do
+  const [delivering, setDelivering] = useState(null);
+  const [working, setWorking] = useState(null); // { order, list } -> khung xử lý đơn bên phải
+  const [selected, setSelected] = useState([]);
+  const canDeliver = hasPagePermission(user, '/admin/deliveries');
+
+  // Đổi trạng thái 1 hoặc nhiều đơn; trả về số đơn thành công
+  const changeStatus = async (list, status, reason) => {
     setBusy(true);
-    try {
-      await orderService.updateOrderStatus(orderId, status, reason || `Cập nhật trạng thái: ${ORDER_LABELS[status]}`);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Không thể cập nhật trạng thái đơn hàng');
+    let ok = 0; const fails = [];
+    for (const o of list) {
+      try { await orderService.updateOrderStatus(o._id, status, reason || `Cập nhật trạng thái: ${ORDER_LABELS[status]}`); ok += 1; }
+      catch (err) { fails.push(`${o.orderCode}: ${err.response?.data?.message || 'lỗi'}`); }
     }
-    // Luôn tải lại dù thành công hay thất bại - dropdown đang hiển thị lựa chọn người dùng vừa
-    // chọn (chưa chắc đã lưu), tải lại để đồng bộ đúng trạng thái thật từ server.
-    loadOrders();
-    setBusy(false);
+    setBusy(false); loadOrders();
+    if (ok) notify(list.length === 1 ? `Đơn ${list[0].orderCode} → ${ORDER_LABELS[status]}` : `Đã chuyển ${ok}/${list.length} đơn sang "${ORDER_LABELS[status]}"`);
+    if (fails.length) notify(fails.join('; '), 'danger');
+    return ok;
   };
-  const action = async (o, path, payload, message) => {
-    if (!window.confirm(message)) return;
+  const action = async (o, path, payload, message, done) => {
+    if (message && !window.confirm(message)) return;
     setBusy(true);
-    try { await api.post(`/orders/${o._id}/${path}`, payload); }
-    catch (err) { alert(err.response?.data?.message || 'Không thể lưu'); }
+    try { await api.post(`/orders/${o._id}/${path}`, payload); notify(done || 'Đã lưu'); }
+    catch (err) { notify(err.response?.data?.message || 'Không thể lưu', 'danger'); }
     finally { setBusy(false); loadOrders(); }
+  };
+  // Một điểm xử lý mọi thao tác của nút chính + menu ⋯
+  const runAction = (o, key) => {
+    if (key.startsWith('status:')) return changeStatus([o], key.slice(7));
+    if (key.startsWith('reason:')) return setReasonTarget({ status: key.slice(7), orders: [o] });
+    switch (key) {
+      case 'confirm-payment': return action(o, 'confirm-payment', { confirmed: true }, `Xác nhận đã nhận đủ ${formatVND(o.grandTotal)} chuyển khoản cho đơn ${o.orderCode}?`, 'Đã xác nhận nhận tiền chuyển khoản');
+      case 'receive-return': return action(o, 'receive-return', { received: true }, 'Xác nhận đã nhận và kiểm đếm đầy đủ hàng trả? Hệ thống sẽ hoàn kho.', 'Đã nhận hàng trả, tồn kho đã hoàn lại');
+      case 'refund': return setRefunding(o);
+      case 'handover': return setHandover(o);
+      case 'edit': return setEditing(o);
+      case 'transfer': return setTransfer(o);
+      case 'deliver': return setDelivering(o);
+      default: return undefined;
+    }
   };
 
   // Nút thao tác của 1 đơn - dùng chung cho "Việc cần làm" và "Tất cả đơn"
-  const renderActions = (o) => (
-    <>
-      <Form.Select
-        size="sm"
-        value={o.status}
-        disabled={busy || !!o.activeTransferId || orderActions(o).length === 0}
-        onChange={(e) => handleChangeStatus(o._id, e.target.value)}
-      >
-        <option value={o.status}>{orderLabel(o)}</option>
-        {orderActions(o).map((s) => (
-          <option key={s} value={s}>
-            {ORDER_LABELS[s]}
-          </option>
-        ))}
-      </Form.Select>
-      {!['creating', 'unknown', 'active'].includes(o.shipment?.phase) && !o.activeTransferId && ['pending', 'confirmed'].includes(o.status) && <Button variant="outline-secondary" className="mt-1 me-1" size="sm" disabled={busy} onClick={() => setEditing(o)}>Sửa thông tin</Button>}
-      {!['creating', 'unknown', 'active'].includes(o.shipment?.phase) && !o.activeTransferId && o.source !== 'pos' && ['pending', 'confirmed', 'processing'].includes(o.status) && (!['vnpay', 'momo'].includes(o.paymentMode) || o.paymentStatus === 'paid') && <Button variant="outline-primary" className="mt-1" size="sm" disabled={busy} onClick={() => setTransfer(o)}>Điều phối chi nhánh</Button>}
-      {o.deliveryMethod === 'store_pickup' && ['ready_for_pickup', 'shipping'].includes(o.status) && <Button className="mt-1" size="sm" disabled={busy} onClick={() => setHandover(o)}>Bàn giao cho khách</Button>}
-      {o.status === 'returning' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'receive-return', { received: true }, 'Xác nhận đã nhận và kiểm đếm đầy đủ hàng trả? Hệ thống sẽ hoàn kho.')}>Đã nhận hàng trả</Button>}
-      {o.paymentMode === 'bank_transfer' && ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'].includes(o.status) && o.paymentStatus !== 'paid' && <Button className="mt-1" size="sm" disabled={busy} onClick={() => action(o, 'confirm-payment', { confirmed: true }, 'Xác nhận đã nhận đủ tiền chuyển khoản?')}>Đã nhận chuyển khoản</Button>}
-      {o.refundStatus === 'pending' && ['cancelled', 'returned'].includes(o.status) && <Button className="mt-1" variant="warning" size="sm" disabled={busy} onClick={() => setRefunding(o)}>Hoàn tiền</Button>}
-    </>
-  );
+  const renderActions = (o) => <OrderActions o={o} busy={busy} canDeliver={canDeliver} onRun={runAction} />;
+  // Thao tác hàng loạt trên các đơn đã chọn (chỉ áp cho đơn được phép)
+  const selectedOrders = orders.filter((o) => selected.includes(o._id));
+  const bulkTargets = (status) => selectedOrders.filter((o) => !o.activeTransferId && allowedTransitions(o).includes(status) && !(status === 'confirmed' && ['vnpay', 'momo'].includes(o.paymentMode) && o.paymentStatus !== 'paid'));
+  const toggleSelect = (id) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
   return (
     <div>
@@ -220,7 +231,7 @@ export default function AdminOrdersPage() {
 
       <OrderTransfers order={transfer} onClose={() => setTransfer(null)} onChanged={loadOrders} />
       {view === 'inbox' ? (
-        <OrderInbox renderActions={renderActions} onDetails={setDetails} reloadKey={inboxKey} isAdmin={user?.role === 'admin'} />
+        <OrderInbox renderActions={renderActions} onDetails={(o) => setWorking({ order: o, list: [o] })} onOpen={(o, list) => setWorking({ order: o, list })} reloadKey={inboxKey} isAdmin={user?.role === 'admin'} />
       ) : (
       <>
       <AdminSearchBar
@@ -255,10 +266,22 @@ export default function AdminOrdersPage() {
         })}
       </div>
 
+      {selected.length > 0 && (
+        <div className="order-bulk mb-2">
+          <span className="small"><b>{selected.length}</b> đơn đã chọn</span>
+          {[['confirmed', 'Xác nhận', 'primary'], ['processing', 'Bắt đầu chuẩn bị', 'primary'], ['ready_for_pickup', 'Sẵn sàng nhận', 'primary']].map(([st, label, variant]) => {
+            const n = bulkTargets(st).length;
+            return n > 0 && <Button key={st} size="sm" variant={variant} disabled={busy} onClick={async () => { await changeStatus(bulkTargets(st), st); setSelected([]); }}>{label} ({n})</Button>;
+          })}
+          {bulkTargets('cancelled').length > 0 && <Button size="sm" variant="outline-danger" disabled={busy} onClick={() => setReasonTarget({ status: 'cancelled', orders: bulkTargets('cancelled') })}>Hủy ({bulkTargets('cancelled').length})</Button>}
+          <Button size="sm" variant="link" onClick={() => setSelected([])}>Bỏ chọn</Button>
+        </div>
+      )}
       <Card className="shadow-sm">
         <Table striped hover responsive className="mb-0">
           <thead>
             <tr className="text-muted">
+              <th className="p-3" style={{ width: 36 }}><Form.Check aria-label="Chọn tất cả" checked={orders.length > 0 && selected.length === orders.length} onChange={() => setSelected(selected.length === orders.length ? [] : orders.map((o) => o._id))} /></th>
               <th className="p-3">Mã đơn</th>
               <th className="p-3">Khách hàng</th>
               <th className="p-3">Cửa hàng</th>
@@ -269,8 +292,9 @@ export default function AdminOrdersPage() {
           </thead>
           <tbody>
             {orders.map((o) => (
-              <tr key={o._id}>
-                <td className="p-3"><Button variant="link" size="sm" onClick={() => setDetails(o)}>{o.orderCode}</Button><div className="small">{orderMethod(o)}</div>
+              <tr key={o._id} className={`order-row-click ${selected.includes(o._id) ? 'table-active' : ''}`} onClick={(e) => { if (!e.target.closest('button, a, input, .dropdown, .dropdown-menu')) setWorking({ order: o, list: orders }); }}>
+                <td className="p-3"><Form.Check aria-label={`Chọn đơn ${o.orderCode}`} checked={selected.includes(o._id)} onChange={() => toggleSelect(o._id)} /></td>
+                <td className="p-3"><Button variant="link" className="p-0 fw-semibold" onClick={() => setWorking({ order: o, list: orders })}>{o.orderCode}</Button><div className="small">{orderMethod(o)}</div>
                   {o.invoiceInfo?.taxCode && (
                     <span className="badge bg-info mt-1" title={`${o.invoiceInfo.companyName} - MST ${o.invoiceInfo.taxCode}`}>
                       HĐ công ty
@@ -291,7 +315,7 @@ export default function AdminOrdersPage() {
                   {['pending', 'processing'].includes(o.refundStatus) && <div className="small text-warning mt-1">{o.refundStatus === 'processing' ? 'Đang hoàn tiền...' : 'Chờ hoàn tiền'}</div>}
                   {o.refundStatus === 'completed' && o.refundInfo?.method && <div className="small text-success mt-1">Đã hoàn {o.refundInfo.method === 'gateway' ? `qua ${o.refundInfo.gateway === 'vnpay' ? 'VNPay' : 'MoMo'}` : 'thủ công'}</div>}
                 </td>
-                <td className="p-3">{renderActions(o)}</td>
+                <td className="p-3" style={{ minWidth: 220 }}>{renderActions(o)}</td>
               </tr>
             ))}
           </tbody>
@@ -305,6 +329,16 @@ export default function AdminOrdersPage() {
       {handover && <HandoverModal key={handover._id} order={handover} onHide={() => setHandover(null)} onDone={() => { setHandover(null); loadOrders(); }} />}
       {details && <OrderReceipt order={details} onHide={() => setDetails(null)} />}
       {editing && <OrderEditModal key={editing._id} order={editing} onClose={() => setEditing(null)} onChanged={loadOrders} />}
+      {reasonTarget && <ReasonModal key={reasonTarget.status + reasonTarget.orders.length} target={reasonTarget} onHide={() => setReasonTarget(null)} onSubmit={async (reason) => { const t = reasonTarget; setReasonTarget(null); await changeStatus(t.orders, t.status, reason); setSelected([]); }} />}
+      {delivering && <DeliveryPlanModal key={delivering._id} order={delivering} onHide={() => setDelivering(null)} onChanged={loadOrders} />}
+      {working && <OrderWorkPanel order={working.order} list={working.list} busy={busy} canDeliver={canDeliver} onClose={() => setWorking(null)} onSelect={(o) => setWorking((w) => ({ ...w, order: o }))} onReceipt={setDetails} onRun={runAction} />}
+      <ToastContainer position="bottom-end" className="p-3" style={{ zIndex: 1080 }}>
+        {toasts.map((t) => (
+          <Toast key={t.id} bg={t.tone} onClose={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>
+            <Toast.Body className="text-white">{t.text}</Toast.Body>
+          </Toast>
+        ))}
+      </ToastContainer>
     </div>
   );
 }

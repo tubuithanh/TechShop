@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { MultiPicker } from '../../components/admin/ScopePicker';
 import AuditStamp from '../../components/admin/AuditStamp';
 
-const emptyForm = { name: '', email: '', password: '', role: 'staff', groupIds: [], storeId: '', managedStoreIds: [], title: '' };
+const emptyForm = { name: '', email: '', password: '', role: 'staff', groupIds: [], storeId: '', managedStoreIds: [], title: '', managerId: '' };
 
 export default function AdminStaffPage() {
   const { user } = useAuth();
@@ -49,7 +49,8 @@ export default function AdminStaffPage() {
       groupIds: (s.groupIds || []).map((g) => g._id || g),
       storeId: s.storeId?._id || s.storeId || '',
       managedStoreIds: (s.managedStoreIds || []).map((m) => m._id || m),
-      title: s.title || ''
+      title: s.title || '',
+      managerId: s.managerId?._id || s.managerId || ''
     });
     setEditingId(s._id);
     setShowForm(true);
@@ -66,12 +67,13 @@ export default function AdminStaffPage() {
           groupIds: form.groupIds,
           storeId: form.storeId || null,
           managedStoreIds: form.role === 'staff' ? form.managedStoreIds : [],
-          title: form.title
+          title: form.title,
+          managerId: form.managerId || null
         };
         if (form.password) payload.newPassword = form.password;
         await staffService.update(editingId, payload);
       } else {
-        await staffService.create({ ...form, storeId: form.storeId || null });
+        await staffService.create({ ...form, storeId: form.storeId || null, managerId: form.managerId || null });
       }
       setShowForm(false);
       setForm(emptyForm);
@@ -167,6 +169,17 @@ export default function AdminStaffPage() {
                 <Form.Group className="mb-3">
                   <Form.Label>Chức danh</Form.Label>
                   <Form.Control placeholder="VD: Nhân viên bán hàng, Quản lý chi nhánh" maxLength={80} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                </Form.Group>
+              </Col>
+              <Col md={12}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Quản lý trực tiếp <span className="small text-muted fw-normal">(người nhân viên báo cáo - xem được báo cáo hiệu suất của nhân viên này)</span></Form.Label>
+                  <Form.Select value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
+                    <option value="">— Không có —</option>
+                    {staff.filter((x) => x._id !== editingId && x.isActive !== false).sort((a, b) => (/quản lý/i.test(b.title || '') - /quản lý/i.test(a.title || '')) || a.name.localeCompare(b.name)).map((x) => (
+                      <option key={x._id} value={x._id}>{x.name}{x.title ? ` - ${x.title}` : x.role === 'admin' ? ' - Quản trị viên' : ''}{x.storeId?.name ? ` (${x.storeId.name})` : ''}</option>
+                    ))}
+                  </Form.Select>
                 </Form.Group>
               </Col>
               {form.role === 'staff' && (
@@ -291,6 +304,7 @@ export default function AdminStaffPage() {
                     </div>
                   )}
                   {s.title && <div className="small text-muted">{s.title}</div>}
+                  {s.managerId?.name && <div className="small text-muted">↳ Báo cáo cho: <b>{s.managerId.name}</b></div>}
                 </td>
                 <td>
                   <Badge bg={s.isActive ? 'success' : 'danger'}>{s.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Badge>

@@ -9,6 +9,7 @@ import { flyToCart } from '../utils/flyToCart';
 import { productService } from '../services/productService';
 import { userService } from '../services/userService';
 import ProductReviews from '../components/ProductReviews';
+import ExpressBadge from '../components/ExpressBadge';
 import api from '../services/api';
 import ProductGallery from '../components/ProductGallery';
 import { useCart } from '../store/CartContext';
@@ -488,9 +489,7 @@ export default function ProductDetailPage() {
             <div>
               <ArrowRepeat className="text-primary" /> Đổi trả miễn phí 30 ngày nếu lỗi nhà sản xuất
             </div>
-            <div>
-              <Truck className="text-primary" /> Giao nhanh 2 giờ nội thành
-            </div>
+            <ExpressBadge productId={product._id} />
           </div>
         </Col>
       </Row>
