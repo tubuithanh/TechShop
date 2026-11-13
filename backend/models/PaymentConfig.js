@@ -6,14 +6,15 @@ const mongoose = require('mongoose');
 const paymentConfigSchema = new mongoose.Schema(
   {
     // env: dùng biến môi trường VNP_* | custom: dùng thông tin nhập ở trang quản trị | off: tắt thanh toán VNPay
-    vnpayMode: { type: String, enum: ['env', 'custom', 'off'], default: 'env' },
+    // simulator: cổng thanh toán GIẢ LẬP (utils/paymentSimulator.js) - kiểm thử / demo khi cổng thật lỗi
+    vnpayMode: { type: String, enum: ['env', 'custom', 'off', 'simulator'], default: 'env' },
     vnpTmnCode: { type: String, default: '', trim: true },
     vnpHashSecretEnc: { type: String, default: '' },
     vnpUrl: { type: String, default: '', trim: true },
     vnpReturnUrl: { type: String, default: '', trim: true },
 
     // MoMo: env = biến môi trường MOMO_* | custom = nhập ở trang quản trị | off = tắt
-    momoMode: { type: String, enum: ['env', 'custom', 'off'], default: 'env' },
+    momoMode: { type: String, enum: ['env', 'custom', 'off', 'simulator'], default: 'env' },
     momoPartnerCode: { type: String, default: '', trim: true },
     momoAccessKey: { type: String, default: '', trim: true },
     momoSecretKeyEnc: { type: String, default: '' },

@@ -27,6 +27,7 @@ function configFromEnv() {
 
 function configFromDoc(doc) {
   if (!doc || !doc.momoMode || doc.momoMode === 'env') return configFromEnv();
+  if (doc.momoMode === 'simulator') return require('./paymentSimulator').momoConfig(doc.momoRedirectUrl || defaultRedirectUrl());
   if (doc.momoMode === 'off') {
     return { source: 'off', partnerCode: '', accessKey: '', secretKey: '', endpoint: DEFAULT_ENDPOINT, redirectUrl: defaultRedirectUrl(), ipnUrl: '' };
   }
@@ -108,9 +109,13 @@ async function callCreate(body, cfg) {
   return data;
 }
 
+// Chữ ký của link tới trang thanh toán GIẢ LẬP (chống sửa số tiền / mã giao dịch / địa chỉ quay về trên link)
+const simulatorSignature = (p, c) => hmac(`${p.orderId}|${p.amount}|${p.redirectUrl}`, c.secretKey);
+
 // Tạo link thanh toán cho đơn hàng. Mỗi lần thử dùng 1 mã giao dịch (orderId của MoMo) MỚI - MoMo từ chối
 // mã đã dùng. ipnUrl: địa chỉ MoMo gọi báo kết quả (mặc định lấy theo địa chỉ máy chủ đang chạy).
-async function createPayment({ order, ipnUrl, cfg, now = new Date() }) {
+// apiBase: địa chỉ backend - chỉ dùng ở chế độ giả lập để trỏ tới trang thanh toán giả
+async function createPayment({ order, ipnUrl, cfg, now = new Date(), apiBase = '' }) {
   const c = cfg || (await getConfig());
   const amount = Math.round(order.grandTotal);
   if (amount < MIN_AMOUNT || amount > MAX_AMOUNT) {
@@ -127,6 +132,11 @@ async function createPayment({ order, ipnUrl, cfg, now = new Date() }) {
     requestType: REQUEST_TYPE,
     extraData: ''
   };
+  if (c.source === 'simulator') {
+    // Giả lập: không gọi MoMo; link trỏ tới trang thanh toán giả của TechShop, kèm chữ ký để trang giả xác minh
+    const q = new URLSearchParams({ partnerCode: c.partnerCode, orderId: p.orderId, requestId: p.requestId, amount: p.amount, orderInfo: p.orderInfo, redirectUrl: p.redirectUrl, signature: simulatorSignature(p, c) });
+    return { txnRef, paymentUrl: `${apiBase}/api/payments/simulator/momo?${q}` };
+  }
   const data = await callCreate({ partnerCode: c.partnerCode, accessKey: c.accessKey, ...p, lang: 'vi', signature: createSignature(p, c) }, c);
   return { txnRef, paymentUrl: data.payUrl };
 }
@@ -155,6 +165,7 @@ async function verifyResult(params) {
 
 // Kiểm tra kết nối: tạo thử 1 yêu cầu thanh toán 10.000đ (không trừ tiền - chỉ tạo link)
 async function testConnection(cfg) {
+  if (cfg.source === 'simulator') return { ok: true, message: 'Đang dùng cổng MoMo GIẢ LẬP - không cần kết nối MoMo. Khách được chuyển tới trang thanh toán giả của TechShop.' };
   if (!isComplete(cfg)) return { ok: false, message: 'Chưa nhập đủ Partner Code, Access Key và Secret Key' };
   try {
     await createPayment({ order: { orderCode: 'TEST', grandTotal: 10000 }, ipnUrl: 'https://example.com/api/payments/momo/ipn', cfg });
@@ -187,6 +198,9 @@ const REFUND_ERRORS = {
 // Trả về { requestId, code, message, transId } nếu thành công (resultCode = 0), ném MomoError nếu không.
 async function refund({ transId, amount, description, orderCode, cfg, now = new Date() }) {
   const c = cfg || (await getConfig());
+  if (c.source === 'simulator') {
+    return { requestId: `RFSIM${now.getTime()}`, code: '0', message: 'Hoàn tiền giả lập thành công', transId: require('./paymentSimulator').randomDigits(10) };
+  }
   if (!isComplete(c)) throw new MomoError('MoMo chưa được cấu hình');
   if (!transId) throw new MomoError('Đơn thiếu mã giao dịch MoMo (transId) - không hoàn tự động được');
   const refundId = `${String(orderCode || 'RF').replace(/[^0-9a-zA-Z]/g, '')}RF${now.getTime()}${crypto.randomInt(100, 999)}`;
@@ -221,6 +235,8 @@ async function refund({ transId, amount, description, orderCode, cfg, now = new 
 }
 
 module.exports = {
+  simulatorSignature,
+  hmac,
   refund,
   isConfigured,
   getConfig,

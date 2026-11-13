@@ -9,6 +9,7 @@ const MOMO_PUBLIC_TEST_KEYS = { momoPartnerCode: 'MOMO', momoAccessKey: 'F8BBA84
 const MODES = [
   { value: 'custom', label: 'Nhập thông tin tại đây', hint: 'Partner Code, Access Key, Secret Key do MoMo cấp (khuyên dùng)' },
   { value: 'env', label: 'Dùng biến môi trường', hint: 'Lấy từ MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY trên máy chủ' },
+  { value: 'simulator', label: 'Giả lập (demo)', hint: 'Trang thanh toán giả của TechShop - dùng khi MoMo lỗi / chưa có tài khoản, không trừ tiền thật' },
   { value: 'off', label: 'Tắt thanh toán MoMo', hint: 'Ẩn lựa chọn "Thanh toán qua ví MoMo" ở trang thanh toán' }
 ];
 
@@ -81,7 +82,7 @@ export default function MomoSettingsPanel() {
   const active =
     momoMode === 'custom'
       ? saved.momoMode === 'custom' && saved.momoPartnerCode && saved.momoAccessKey && saved.hasSecretKey
-      : momoMode === 'env' && saved.envConfigured;
+      : momoMode === 'simulator' ? saved.momoMode === 'simulator' : momoMode === 'env' && saved.envConfigured;
   const ipn = form.momoIpnUrl || saved.defaultIpnUrl;
 
   // Panel nằm trong form chung của trang Cấu hình: chặn Enter để không vô tình gửi form cấu hình chung
@@ -115,6 +116,8 @@ export default function MomoSettingsPanel() {
         Trạng thái:{' '}
         {saved.momoMode === 'off' ? (
           <Badge bg="secondary">Đang tắt</Badge>
+        ) : saved.momoMode === 'simulator' ? (
+          <Badge bg="warning" text="dark">Đang chạy GIẢ LẬP</Badge>
         ) : active ? (
           <Badge bg="success">Đang hoạt động</Badge>
         ) : (
@@ -144,6 +147,15 @@ export default function MomoSettingsPanel() {
           ))}
         </div>
       </Form.Group>
+
+      {momoMode === 'simulator' && (
+        <Alert variant="warning" className="small">
+          <div className="fw-semibold mb-1">Cổng MoMo GIẢ LẬP đang được chọn</div>
+          Khách chọn "MoMo" sẽ được chuyển tới trang thanh toán giả của TechShop (có nút Thành công / Thất bại), không kết nối
+          MoMo thật và <b>không trừ tiền</b>. Đơn bấm "Thành công" được ghi nhận là đã thanh toán; hoàn tiền qua MoMo cũng được giả lập.
+          Chỉ dùng để kiểm thử / demo khi cổng thật lỗi - nhớ chuyển lại "Nhập thông tin tại đây" khi bán hàng thật.
+        </Alert>
+      )}
 
       {momoMode === 'env' && (
         <Alert variant={saved.envConfigured ? 'info' : 'warning'} className="small">

@@ -3,7 +3,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { encrypt, decrypt, keySource } = require('../utils/secretBox');
 const vnpay = require('../utils/vnpay');
 
-const MODES = ['env', 'custom', 'off'];
+const MODES = ['env', 'custom', 'off', 'simulator'];
 const URL_RE = /^https?:\/\/[^\s]+$/i;
 
 function ipnUrl(req) {

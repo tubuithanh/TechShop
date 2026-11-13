@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, InputGroup, Nav, Badge, Modal, Spinner } from 'react-bootstrap';
 import {
   Gear, TelephoneFill, GridFill, Truck, Search, Tools,
-  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill, PaletteFill, ShieldLockFill, LayoutTextWindowReverse, Wallet2, AwardFill
+  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill, PaletteFill, ShieldLockFill, LayoutTextWindowReverse, AwardFill
 } from 'react-bootstrap-icons';
 import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
-import VnpaySettingsPanel from '../../components/admin/VnpaySettingsPanel';
-import MomoSettingsPanel from '../../components/admin/MomoSettingsPanel';
+import PaymentSettingsPanel from '../../components/admin/PaymentSettingsPanel';
 import ShippingProvidersPanel from '../../components/admin/ShippingProvidersPanel';
 import ThemeSettingsPanel from '../../components/admin/ThemeSettingsPanel';
 import SecuritySettingsPanel from '../../components/admin/SecuritySettingsPanel';
@@ -24,15 +23,14 @@ const TABS = [
   { key: 'footer', label: 'Chân trang (Footer)', icon: LayoutTextWindowReverse },
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
   { key: 'carriers', label: 'Đơn vị giao hàng', icon: Truck },
+  { key: 'payment', label: 'Thanh toán', icon: CreditCard2FrontFill },
   { key: 'vat', label: 'Thuế VAT', icon: CreditCard2FrontFill },
   { key: 'loyalty', label: 'Hạng thành viên', icon: AwardFill },
   { key: 'seo', label: 'SEO', icon: Search },
   { key: 'maintenance', label: 'Bảo trì', icon: Tools },
   { key: 'security', label: 'Bảo mật', icon: ShieldLockFill },
   { key: 'audit', label: 'Nhật ký thao tác', icon: JournalText },
-  { key: 'email', label: 'Cấu hình gửi email', icon: EnvelopeFill },
-  { key: 'payment', label: 'Cấu hình thanh toán VNPay', icon: CreditCard2FrontFill },
-  { key: 'momo', label: 'Cấu hình thanh toán MoMo', icon: Wallet2 }
+  { key: 'email', label: 'Cấu hình gửi email', icon: EnvelopeFill }
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -84,6 +82,7 @@ export default function AdminSettingsPage() {
   // ?tab=email: mở thẳng tab Email (VD khi quay về từ trang cấp quyền Gmail)
   const [activeTab, setActiveTab] = useState(() => {
     const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'momo') return 'payment'; // link cũ: tab MoMo riêng đã gộp vào tab Thanh toán
     return TABS.some((t) => t.key === tab) ? tab : 'general';
   });
   const [saving, setSaving] = useState(false);
@@ -433,9 +432,12 @@ export default function AdminSettingsPage() {
 
                 {activeTab === 'email' && <MailSettingsPanel />}
 
-                {activeTab === 'payment' && <VnpaySettingsPanel />}
+                {activeTab === 'payment' && (
+                  <PaymentSettingsPanel
+                    initialGateway={new URLSearchParams(window.location.search).get('gateway') || (new URLSearchParams(window.location.search).get('tab') === 'momo' ? 'momo' : 'vnpay')}
+                  />
+                )}
 
-                {activeTab === 'momo' && <MomoSettingsPanel />}
                 {activeTab === 'carriers' && <ShippingProvidersPanel />}
 
                 {activeTab === 'security' && <SecuritySettingsPanel />}
@@ -511,7 +513,7 @@ export default function AdminSettingsPage() {
               </Card.Body>
             </Card>
 
-            <div className={`d-flex gap-2 mt-3 ${['email', 'payment', 'momo', 'security', 'loyalty'].includes(activeTab) ? 'd-none' : ''}`}>
+            <div className={`d-flex gap-2 mt-3 ${['email', 'payment', 'carriers', 'security', 'loyalty'].includes(activeTab) ? 'd-none' : ''}`}>
               <Button type="submit" variant="primary" disabled={saving || !isDirty}>
                 {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
               </Button>

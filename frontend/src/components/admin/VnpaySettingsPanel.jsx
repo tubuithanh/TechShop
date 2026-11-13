@@ -6,6 +6,7 @@ import { settingService } from '../../services/settingService';
 const MODES = [
   { value: 'custom', label: 'Nhập thông tin tại đây', hint: 'Terminal ID và Secret Key do VNPay cấp (khuyên dùng)' },
   { value: 'env', label: 'Dùng biến môi trường', hint: 'Lấy từ VNP_TMN_CODE / VNP_HASH_SECRET trên máy chủ (cách cấu hình cũ)' },
+  { value: 'simulator', label: 'Giả lập (demo)', hint: 'Trang thanh toán giả của TechShop - dùng khi VNPay lỗi / chưa có tài khoản, không trừ tiền thật' },
   { value: 'off', label: 'Tắt thanh toán VNPay', hint: 'Ẩn lựa chọn "Thanh toán qua VNPay" ở trang thanh toán' }
 ];
 
@@ -74,7 +75,7 @@ export default function VnpaySettingsPanel() {
   const active =
     vnpayMode === 'custom'
       ? saved.vnpayMode === 'custom' && saved.vnpTmnCode && saved.hasHashSecret
-      : vnpayMode === 'env' && saved.envConfigured;
+      : vnpayMode === 'simulator' ? saved.vnpayMode === 'simulator' : vnpayMode === 'env' && saved.envConfigured;
 
   // Panel nằm trong form chung của trang Cấu hình: chặn Enter để không vô tình gửi form cấu hình chung
   return (
@@ -105,6 +106,8 @@ export default function VnpaySettingsPanel() {
         Trạng thái:{' '}
         {saved.vnpayMode === 'off' ? (
           <Badge bg="secondary">Đang tắt</Badge>
+        ) : saved.vnpayMode === 'simulator' ? (
+          <Badge bg="warning" text="dark">Đang chạy GIẢ LẬP</Badge>
         ) : active ? (
           <Badge bg="success">Đang hoạt động</Badge>
         ) : (
@@ -134,6 +137,15 @@ export default function VnpaySettingsPanel() {
           ))}
         </div>
       </Form.Group>
+
+      {vnpayMode === 'simulator' && (
+        <Alert variant="warning" className="small">
+          <div className="fw-semibold mb-1">Cổng VNPay GIẢ LẬP đang được chọn</div>
+          Khách chọn "VNPay" sẽ được chuyển tới trang thanh toán giả của TechShop (có nút Thành công / Thất bại), không kết nối
+          VNPay thật và <b>không trừ tiền</b>. Đơn bấm "Thành công" được ghi nhận là đã thanh toán; hoàn tiền qua VNPay cũng được giả lập.
+          Chỉ dùng để kiểm thử / demo khi cổng thật lỗi - nhớ chuyển lại "Nhập thông tin tại đây" khi bán hàng thật.
+        </Alert>
+      )}
 
       {vnpayMode === 'env' && (
         <Alert variant={saved.envConfigured ? 'info' : 'warning'} className="small">
@@ -195,7 +207,7 @@ export default function VnpaySettingsPanel() {
         </>
       )}
 
-      {vnpayMode !== 'off' && (
+      {!['off', 'simulator'].includes(vnpayMode) && (
         <Form.Group className="mb-3">
           <Form.Label className="small fw-medium">IPN URL (khai báo trong trang quản lý merchant của VNPay)</Form.Label>
           <InputGroup size="sm">

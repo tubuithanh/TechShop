@@ -45,10 +45,16 @@ const createVnpayPayment = asyncHandler(async (req, res) => {
   const { order, status, error } = await loadPayableOrder(req, 'vnpay');
   if (error) return res.status(status).json({ message: error });
   const ipAddr = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
-  const { txnRef, paymentUrl, createDate } = await vnpay.buildPaymentUrl({ order, ipAddr });
+  const { txnRef, paymentUrl, createDate } = await vnpay.buildPaymentUrl({ order, ipAddr, apiBase: apiBase(req) });
   await rememberAttempt(order, txnRef, createDate);
   res.json({ data: { paymentUrl } });
 });
+
+// Địa chỉ backend đang chạy (sau proxy lấy giao thức gốc) - trang thanh toán giả lập nằm ở backend
+function apiBase(req) {
+  const proto = (req.get('x-forwarded-proto') || req.protocol).split(',')[0].trim();
+  return `${proto}://${req.get('host')}`;
+}
 
 // Địa chỉ MoMo gọi báo kết quả (IPN) - theo địa chỉ máy chủ đang chạy (sau proxy lấy giao thức gốc)
 function momoIpnUrl(req) {
@@ -65,7 +71,7 @@ const createMomoPayment = asyncHandler(async (req, res) => {
   if (error) return res.status(status).json({ message: error });
   let created;
   try {
-    created = await momo.createPayment({ order, ipnUrl: momoIpnUrl(req) });
+    created = await momo.createPayment({ order, ipnUrl: momoIpnUrl(req), apiBase: apiBase(req) });
   } catch (err) {
     if (err instanceof momo.MomoError) return res.status(502).json({ message: `MoMo: ${err.message}` });
     throw err;

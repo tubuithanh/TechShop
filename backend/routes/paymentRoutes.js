@@ -26,4 +26,11 @@ router.post('/momo/ipn', momoIpn); // MoMo gọi trực tiếp (JSON), không c�
 router.get('/momo/return', momoReturn); // bảo vệ bằng chữ ký MoMo
 router.post('/momo/:orderId', protect, createMomoPayment);
 
+// Cổng thanh toán GIẢ LẬP (chỉ chạy khi admin bật chế độ "Giả lập" cho cổng tương ứng) - bảo vệ bằng chữ ký
+const simulator = require('../controllers/paymentSimulatorController');
+router.get('/simulator/vnpay', simulator.vnpayPage);
+router.post('/simulator/vnpay/complete', simulator.vnpayComplete);
+router.get('/simulator/momo', simulator.momoPage);
+router.post('/simulator/momo/complete', simulator.momoComplete);
+
 module.exports = router;

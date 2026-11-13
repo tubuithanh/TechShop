@@ -22,6 +22,7 @@ function configFromEnv() {
 function configFromDoc(doc) {
   if (!doc || doc.vnpayMode === 'env') return configFromEnv();
   if (doc.vnpayMode === 'off') return { source: 'off', tmnCode: '', hashSecret: '', url: DEFAULT_URL, returnUrl: defaultReturnUrl() };
+  if (doc.vnpayMode === 'simulator') return require('./paymentSimulator').vnpayConfig(doc.vnpReturnUrl || defaultReturnUrl());
   return {
     source: 'custom',
     tmnCode: doc.vnpTmnCode || '',
@@ -72,8 +73,11 @@ function vnTime(date) {
 // Mỗi lần thanh toán cần 1 mã giao dịch (TxnRef) MỚI - VNPay từ chối mã đã dùng, nên thử thanh toán lại
 // sau khi thất bại phải sinh mã khác. Mã giao dịch = mã đơn + dấu thời gian.
 // `cfg` truyền vào khi kiểm tra cấu hình chưa lưu; bỏ trống thì dùng cấu hình hiện hành.
-async function buildPaymentUrl({ order, ipAddr, now = new Date(), cfg }) {
-  const { tmnCode, hashSecret, url, returnUrl } = cfg || (await getConfig());
+// apiBase: địa chỉ backend (VD https://techshop-twv1.onrender.com) - chỉ dùng ở chế độ giả lập để trỏ tới trang thanh toán giả
+async function buildPaymentUrl({ order, ipAddr, now = new Date(), cfg, apiBase = '' }) {
+  const c0 = cfg || (await getConfig());
+  const { tmnCode, hashSecret, returnUrl } = c0;
+  const url = c0.source === 'simulator' ? `${apiBase}/api/payments/simulator/vnpay` : c0.url;
   const txnRef = `${order.orderCode}${now.getTime().toString().slice(-6)}`;
   const params = {
     vnp_Version: '2.1.0',
@@ -129,6 +133,7 @@ const VNPAY_ERRORS = {
 // Kiểm tra kết nối: tạo 1 link thanh toán thử (10.000đ, không tạo giao dịch thật) rồi mở thử link.
 // VNPay chuyển sang trang chọn phương thức thanh toán nếu mã đúng, hoặc trang Error.html?code=... nếu sai.
 async function testConnection(cfg) {
+  if (cfg.source === 'simulator') return { ok: true, message: 'Đang dùng cổng VNPay GIẢ LẬP - không cần kết nối VNPay. Khách được chuyển tới trang thanh toán giả của TechShop.' };
   if (!isComplete(cfg)) return { ok: false, message: 'Chưa nhập đủ Terminal ID và Secret Key' };
   const { paymentUrl } = await buildPaymentUrl({ order: { orderCode: 'TEST', grandTotal: 10000 }, cfg });
   let res;
@@ -185,6 +190,10 @@ class VnpayRefundError extends Error {
 // Trả về { requestId, code, message, transactionNo } nếu VNPay chấp nhận (vnp_ResponseCode = 00), ném lỗi nếu không.
 async function refund({ txnRef, transactionNo, transactionDate, amount, full = true, createBy, ipAddr, orderInfo, cfg, now = new Date() }) {
   const c = cfg || (await getConfig());
+  if (c.source === 'simulator') {
+    // Giả lập: VNPay "chấp nhận" ngay, không gọi ra ngoài
+    return { requestId: `RFSIM${now.getTime()}`, code: '00', message: 'Hoàn tiền giả lập thành công', transactionNo: `SIM${require('./paymentSimulator').randomDigits(8)}` };
+  }
   if (!isComplete(c)) throw new VnpayRefundError('VNPay chưa được cấu hình');
   if (!txnRef || !transactionDate) throw new VnpayRefundError('Đơn thiếu thông tin giao dịch gốc (mã giao dịch / thời gian tạo) - không hoàn tự động được');
   const p = {
