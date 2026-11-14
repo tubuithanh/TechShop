@@ -144,7 +144,7 @@ describe('Thanh toán VNPay', () => {
     const adminToken = (await request(app).post('/api/auth/login').send({ email: 'admin-test@example.com', password: 'admin123' })).body.accessToken;
     const confirm = await auth(request(app).put(`/api/orders/${order._id}/status`), adminToken).send({ status: 'confirmed' });
     expect(confirm.statusCode).toBe(400);
-    const cancel = await auth(request(app).put(`/api/orders/${order._id}/status`), adminToken).send({ status: 'cancelled' });
+    const cancel = await auth(request(app).put(`/api/orders/${order._id}/status`), adminToken).send({ status: 'cancelled', note: 'Khách không thanh toán' });
     expect(cancel.statusCode).toBe(200);
   });
 

@@ -10,8 +10,10 @@ import { ORDER_LABELS, orderMethod } from '../utils/orderWorkflow';
 import VatBreakdown from '../components/VatBreakdown';
 import ShipmentTracking from '../components/ShipmentTracking';
 import OrderReviewButton from '../components/OrderReviewButton';
+import OrderEInvoice from '../components/OrderEInvoice';
+import { orderDateTime, timeAgo } from '../utils/orderTime';
 
-const homeSteps = ['pending', 'confirmed', 'processing', 'shipping', 'delivered'];
+const homeSteps = ['pending', 'confirmed', 'processing', 'shipping', 'delivered']; // các bước của thanh tiến trình
 const statusLabel = {
   ...ORDER_LABELS,
   pending: 'Chờ xác nhận',
@@ -35,35 +37,35 @@ function formatVND(value) {
 }
 
 export default function OrderDetailPage() {
-  const { id } = useParams();
+  const { id } = useParams(); // mã đơn trên URL /account/orders/:id
   const location = useLocation();
-  const [order, setOrder] = useState(null);
+  const [order, setOrder] = useState(null); // null = đang tải
   const [warrantyForm, setWarrantyForm] = useState({ productId: '', issueDescription: '' });
   const [warrantyMsg, setWarrantyMsg] = useState(null); // { ok, text }
   // Phiếu bảo hành CHƯA XỬ LÝ XONG của đơn này, theo sản phẩm: productId -> mã phiếu. Sản phẩm đang bảo hành
   // không gửi thêm phiếu được (backend chặn 409) - khi phiếu cũ hoàn tất / trả máy thì gửi phiếu mới được.
   const [openWarranties, setOpenWarranties] = useState({});
   const loadOpenWarranties = () =>
-    warrantyService.getMyWarranties().then((list) =>
+    warrantyService.getMyWarranties().then((list) => // phiếu bảo hành của khách
       setOpenWarranties(
         Object.fromEntries(
           list
-            .filter((w) => String(w.orderId) === id && !['done', 'returned'].includes(w.status))
+            .filter((w) => String(w.orderId) === id && !['done', 'returned'].includes(w.status)) // phiếu của đơn này còn đang xử lý
             .map((w) => [String(w.productId), w.ticketCode])
         )
       )
     ).catch(() => {});
   const [paying, setPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState(location.state?.paymentError || '');
+  const [paymentError, setPaymentError] = useState(location.state?.paymentError || ''); // lỗi mở cổng truyền từ trang thanh toán
 
   const handlePay = async () => {
     setPaying(true);
     setPaymentError('');
     try {
-      await paymentService.start(order.paymentMode, id);
+      await paymentService.start(order.paymentMode, id); // xin link thanh toán rồi chuyển trang
     } catch (err) {
       setPaymentError(err.response?.data?.message || `Không mở được cổng thanh toán ${PAYMENT_GATEWAYS[order.paymentMode]?.label || ''}`);
-      setPaying(false);
+      setPaying(false); // chỉ mở lại nút khi lỗi (thành công thì đã rời trang)
     }
   };
 
@@ -72,11 +74,11 @@ export default function OrderDetailPage() {
   useEffect(() => {
     setLoadError('');
     orderService
-      .getOrderById(id)
+      .getOrderById(id) // tải chi tiết đơn
       .then(setOrder)
       .catch((err) =>
         setLoadError(
-          [400, 403, 404].includes(err.response?.status)
+          [400, 403, 404].includes(err.response?.status) // đơn không tồn tại / không phải của mình
             ? 'Đơn hàng không tồn tại hoặc không còn nữa.'
             : 'Không tải được đơn hàng, vui lòng thử lại sau.'
         )
@@ -89,30 +91,37 @@ export default function OrderDetailPage() {
   }, [order?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (order?.status === 'delivered') loadOpenWarranties();
+    if (order?.status === 'delivered') loadOpenWarranties(); // chỉ đơn đã giao mới gửi bảo hành
   }, [order?.status, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!getAccessToken()) return;
-    const socket = connectSocket();
+    if (!getAccessToken()) return; // chưa đăng nhập -> không kết nối real-time
+    const socket = connectSocket(); // kết nối Socket.IO
     socket.on('order:statusUpdated', (payload) => {
-      if (payload.orderId === id) {
-        orderService.getOrderById(id).then(setOrder);
+      if (payload.orderId === id) { // chỉ quan tâm đơn đang xem
+        orderService.getOrderById(id).then(setOrder).catch(() => {}); // tải lại đơn; lỗi mạng thì giữ dữ liệu cũ
       }
     });
-    return () => socket.disconnect();
+    return () => socket.disconnect(); // rời trang -> đóng kết nối
   }, [id]);
 
   const handleCancel = async () => {
-    if (!confirm('Bạn chắc chắn muốn hủy đơn hàng này?')) return;
-    const updated = await orderService.cancelOrder(id, 'Khách hàng yêu cầu hủy');
-    setOrder(updated);
+    if (!confirm('Bạn chắc chắn muốn hủy đơn hàng này?')) return; // hỏi lại trước khi hủy
+    // SỬA LỖI: trước đây không bắt lỗi -> backend từ chối (cửa hàng vừa chuẩn bị hàng, đơn vừa đổi...) thì khách
+    // bấm nút không thấy gì xảy ra. Nay báo đúng lý do và tải lại đơn để thấy trạng thái mới nhất.
+    try {
+      const updated = await orderService.cancelOrder(id, 'Khách hàng yêu cầu hủy');
+      setOrder(updated); // hiển thị trạng thái "Đã hủy"
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không hủy được đơn hàng, vui lòng thử lại');
+      orderService.getOrderById(id).then(setOrder).catch(() => {});
+    }
   };
 
   const handleWarrantyRequest = async (e) => {
     e.preventDefault();
     try {
-      const created = await warrantyService.createRequest({ orderId: id, ...warrantyForm });
+      const created = await warrantyService.createRequest({ orderId: id, ...warrantyForm }); // gửi yêu cầu bảo hành
       setWarrantyMsg({ ok: true, text: `Đã gửi yêu cầu bảo hành (mã phiếu ${created.ticketCode}). Vui lòng theo dõi trong mục "Bảo hành".` });
       setWarrantyForm({ productId: '', issueDescription: '' });
     } catch (err) {
@@ -165,8 +174,9 @@ export default function OrderDetailPage() {
           </span>
         </Alert>
       )}
+      {order.status === 'delivered' && <OrderEInvoice orderId={order._id} />}
       {order.refundStatus === 'pending' && <Alert variant="warning">Đang chờ hoàn tiền. Cửa hàng sẽ cập nhật sau khi hoàn tiền thực tế.</Alert>}
-      <p className="small text-muted mb-1">Đặt ngày {new Date(order.createdAt).toLocaleString('vi-VN')}</p>
+      <p className="small text-muted mb-1">Đặt lúc <b>{orderDateTime(order.createdAt)}</b> ({timeAgo(order.createdAt)})</p>
       <p className="small text-muted mb-4">
         Xử lý tại: <strong>{order.storeId?.name}</strong> ({order.storeId?.address})
       </p>

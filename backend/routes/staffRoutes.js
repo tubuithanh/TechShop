@@ -11,6 +11,8 @@ const work = require('../controllers/staffWorkController');
 router.get('/me/stores', protect, authorize('admin', 'staff'), work.myStores);
 
 router.use(protect, authorize('admin'));
+// Thêm / sửa / xóa nhân viên -> làm mới danh sách tài khoản demo ở trang đăng nhập
+router.use((req, res, next) => { if (req.method !== 'GET') require('../controllers/demoAccountsController').clearDemoCache(); next(); });
 router.get('/performance/summary', work.performanceSummary);
 router.get('/by-store/:storeId', work.storeStaff);
 router.post('/by-store/:storeId', work.addStaffToStore);

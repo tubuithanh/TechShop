@@ -753,3 +753,34 @@
 .order-panel-steps .current { color: var(--bs-primary); font-weight: 700; }
 .order-panel-history { list-style: none; padding-left: 1rem; border-left: 2px solid var(--bs-border-color); margin: 0; }
 .order-panel-history li { margin-bottom: .5rem; }
+
+@media print { body * { visibility: hidden; } .einvoice, .einvoice * { visibility: visible; } .einvoice { position: absolute; left: 0; top: 0; border: 0; } }
+
+.order-quick-search .form-control { font-size: 1rem; }
+.order-quick-search { max-width: 760px; }
+
+/* Trang hóa đơn điện tử */
+.einv-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .6rem; }
+.einv-kpi { display: flex; align-items: center; gap: .7rem; text-align: left; background: var(--bs-body-bg); border: 1px solid; border-left-width: 4px; border-radius: .6rem; padding: .65rem .8rem; }
+.einv-kpi:disabled { opacity: 1; cursor: default; }
+.einv-kpi:not(:disabled):hover, .einv-kpi.active { box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.einv-tabs .nav-link { font-weight: 500; }
+.einv-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; padding: .55rem .9rem; border-bottom: 1px solid var(--bs-border-color); background: var(--bs-tertiary-bg); }
+.einv-bulk.active { background: var(--bs-success-bg-subtle); }
+.einv-row-attention > td { background: rgba(220,53,69,.06) !important; }
+.einv-table tbody tr[role="button"]:hover > td { background: var(--bs-primary-bg-subtle) !important; }
+
+/* Bàn làm việc */
+.ws-task { transition: transform .1s, box-shadow .15s; }
+a:hover > .ws-task { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+.ws-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; }
+.ws-stat { border: 1px solid var(--bs-border-color); border-radius: .5rem; padding: .55rem .75rem; }
+.ws-row { display: flex; align-items: center; gap: .6rem; padding: .4rem .5rem; border-radius: .4rem; border-bottom: 1px dashed var(--bs-border-color); min-width: 0; }
+a.ws-row:hover { background: var(--bs-primary-bg-subtle); }
+.ws-action { font-weight: 500; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bs-success); flex-shrink: 0; }
+.ws-feed { list-style: none; padding-left: .8rem; margin: 0; border-left: 2px solid var(--bs-border-color); max-height: 520px; overflow-y: auto; }
+.ws-feed li { position: relative; padding: 0 0 .65rem .5rem; }
+.ws-feed li::before { content: ''; position: absolute; left: -1.15rem; top: .4rem; width: 9px; height: 9px; border-radius: 50%; background: var(--bs-primary); }
+.spin { animation: ws-spin 1s linear infinite; }
+@keyframes ws-spin { to { transform: rotate(360deg); } }

@@ -3,8 +3,8 @@
 // Mỗi tài khoản luôn ở phòng user_<id> (utils/socketServer.js) nên chỉ cần ngắt phòng đó. Trình duyệt kết nối lại
 // bằng token hiện tại; middlewares/socketAuth.js chỉ nhận lại nếu token và tài khoản còn hợp lệ.
 function disconnectAccount(req, accountId) {
-  const io = req.app?.get('io');
-  if (io && accountId) io.in(`user_${accountId}`).disconnectSockets(true);
+  const io = req.app?.get('io'); // đối tượng Socket.io đã lưu trong app (server.js -> attachSocket)
+  if (io && accountId) io.in(`user_${accountId}`).disconnectSockets(true); // ngắt mọi kết nối trong phòng của tài khoản
 }
 
 module.exports = { disconnectAccount };

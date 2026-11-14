@@ -55,3 +55,17 @@ test('SH-1: Chi nhánh tốt điểm cao hơn chi nhánh có vấn đề; TechSh
   const seller = await Admin.findOne({ title: 'Nhân viên bán hàng', storeId: good._id });
   expect((await get(seller)).statusCode).toBe(403);
 });
+
+test('SH-2: Chỉ admin / trưởng cửa hàng xem được; nhân viên làm nhiều chi nhánh hoặc "Quản lý kho" bị chặn', async () => {
+  const s1 = await Store.create({ name: 'CN A', address: 'a', city: 'HCM', phoneNumber: '0281234567' });
+  const s2 = await Store.create({ name: 'CN B', address: 'b', city: 'HN', phoneNumber: '0241234567' });
+  const mk = (title, extra = {}) => Admin.create({ name: title, email: `${Math.random()}@t.vn`, password: '12345678', role: 'staff', title, storeId: s1._id, ...extra });
+  const seller = await mk('Nhân viên bán hàng', { managedStoreIds: [s2._id] }); // làm 2 chi nhánh nhưng không phải trưởng
+  const kho = await mk('Quản lý kho');
+  const truong = await mk('Cửa hàng trưởng', { managedStoreIds: [s2._id] });
+  expect((await get(seller)).statusCode).toBe(403);
+  expect((await get(kho)).statusCode).toBe(403);
+  const ok = await get(truong);
+  expect(ok.statusCode).toBe(200);
+  expect(ok.body.data.stores.map((x) => x.store.name).sort()).toEqual(['CN A', 'CN B']);
+});

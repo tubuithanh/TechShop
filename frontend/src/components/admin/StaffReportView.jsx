@@ -3,6 +3,7 @@ import { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, XAxis, YAxis, 
 import { Card, Row, Col, Button, Form, Badge, Spinner, Alert, Table } from 'react-bootstrap';
 import { ArrowUpShort, ArrowDownShort, Trophy, StarFill, Truck, Cart3, Tools, ChatQuote } from 'react-bootstrap-icons';
 import AdminThumb from './AdminThumb';
+import SalesInsights from './SalesInsights';
 
 export const money = (v) => (v || 0).toLocaleString('vi-VN') + 'đ';
 export const shortMoney = (v) => (v >= 1e9 ? `${(v / 1e9).toFixed(1)} tỷ` : v >= 1e6 ? `${Math.round(v / 1e6)} tr` : (v || 0).toLocaleString('vi-VN'));
@@ -98,7 +99,8 @@ function Feedback({ list, empty }) {
 }
 
 // ---------- Báo cáo 1 nhân viên (dùng cho "Báo cáo của tôi" và quản lý xem từng người) ----------
-export default function StaffReportView({ load, title }) {
+// loadSales / canSetTarget: phân tích bán hàng chi tiết + quyền đặt chỉ tiêu (components/admin/SalesInsights.jsx)
+export default function StaffReportView({ load, title, loadSales, canSetTarget }) {
   const [range, setRange] = useState(periodPresets()[0][2]);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -195,6 +197,7 @@ export default function StaffReportView({ load, title }) {
                   </Card.Body></Card>
                 </Col>
               </Row>
+              {loadSales && s && <SalesInsights loadSales={loadSales} staffId={s._id} staffName={s.name} canSetTarget={canSetTarget} range={range} />}
             </section>
           )}
 

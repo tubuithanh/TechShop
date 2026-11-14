@@ -137,6 +137,7 @@ const create = asyncHandler(async (req, res) => {
       outcome.order.newAccount = { created: true, linkedOrders: linked.orders, linkedPoints: linked.points, hasEmail: Boolean(newAccount.email) };
       if (newAccount.email) require('../utils/notifyEmail').emailCounterWelcome(newAccount, outcome.order);
     }
+    if (!outcome.replay) require('../utils/einvoice').autoIssueIfEnabled(outcome.order._id); // tự xuất hóa đơn nếu bật
     if (!outcome.replay && userId) {
       await Notification.create({ userId, type: 'order', title: 'Mua hàng tại cửa hàng', message: `Đơn ${outcome.order.orderCode} đã hoàn tất`, link: `/account/orders/${outcome.order._id}` });
       emailOrderPlaced(outcome.order);

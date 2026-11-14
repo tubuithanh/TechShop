@@ -49,6 +49,14 @@ const shippingCfg = require('../controllers/shippingConfigController');
 router.get('/shipping', protect, authorize('admin'), shippingCfg.getShippingConfig);
 router.put('/shipping', protect, authorize('admin'), shippingCfg.updateShippingConfig);
 router.post('/shipping/test', protect, authorize('admin'), shippingCfg.testShippingConfig);
+// Hóa đơn điện tử (giả lập mặc định / Bkav eHoadon / ...) - CHỈ admin
+const demoAcc = require('../controllers/demoAccountsController');
+router.get('/demo-accounts', protect, authorize('admin'), demoAcc.getDemoSetting);
+router.put('/demo-accounts', protect, authorize('admin'), demoAcc.updateDemoSetting);
+const einvoiceCfg = require('../controllers/einvoiceConfigController');
+router.get('/einvoice', protect, authorize('admin'), einvoiceCfg.getConfig);
+router.put('/einvoice', protect, authorize('admin'), einvoiceCfg.updateConfig);
+router.post('/einvoice/test', protect, authorize('admin'), einvoiceCfg.testConfig);
 
 // Template màu sắc giao diện - CHỈ admin
 router.get('/themes', protect, authorize('admin'), getThemeTemplates);

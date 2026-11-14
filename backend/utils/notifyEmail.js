@@ -281,7 +281,36 @@ function emailCounterWelcome(user, order) {
   });
 }
 
+// Gửi hóa đơn điện tử (giả lập) cho người mua: tóm tắt + link tra cứu bằng mã tra cứu
+function emailEInvoice(inv) {
+  runInBackground(`hóa đơn ${inv.series}-${inv.number}`, async () => {
+    const EInvoice = require('../models/EInvoice');
+    const shop = await shopInfo();
+    const url = `${clientUrl()}/tra-cuu-hoa-don?code=${inv.lookupCode}`;
+    const no = String(inv.number).padStart(8, '0');
+    await sendMail({
+      to: inv.buyer.email,
+      subject: `Hóa đơn điện tử ${inv.series} số ${no} - ${shop.name}`,
+      html: layout({
+        shop,
+        title: 'Hóa đơn điện tử',
+        intro: `Kính gửi ${esc(inv.buyer.companyName || inv.buyer.name || 'Quý khách')}, ${esc(shop.name)} gửi hóa đơn giá trị gia tăng cho đơn hàng <strong>${esc(inv.orderCode)}</strong>.`,
+        body: `${infoTable([
+          ['Ký hiệu', `${inv.template}${inv.series}`], ['Số hóa đơn', no], ['Ngày lập', new Date(inv.issuedAt).toLocaleDateString('vi-VN')],
+          ['Mã của CQT', inv.taxAuthorityCode], ['Tổng tiền thanh toán', vnd(inv.totals.total)], ['Mã tra cứu', inv.lookupCode]
+        ])}
+          <p style="text-align:center;margin:16px 0"><a href="${url}" style="background:#d70018;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Xem hóa đơn</a></p>
+          <p style="margin:0;font-size:12px;color:#6b7280">Đây là hóa đơn điện tử GIẢ LẬP phục vụ kiểm thử, không có giá trị kê khai thuế.</p>`
+      }),
+      text: plain(`Hóa đơn ${inv.template}${inv.series} số ${no}`, `Tổng tiền: ${vnd(inv.totals.total)}`, `Mã tra cứu: ${inv.lookupCode}`, `Xem tại: ${url}`)
+    });
+    // Gửi được mới ghi nhận (trước đây ghi "đã gửi" ngay cả khi máy chủ email lỗi)
+    await EInvoice.updateOne({ _id: inv._id }, { emailedTo: inv.buyer.email, emailedAt: new Date() });
+  });
+}
+
 module.exports = {
+  emailEInvoice,
   emailCounterWelcome,
   emailShipmentEvent,
   trackingInfo,

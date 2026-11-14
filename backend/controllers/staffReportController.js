@@ -11,14 +11,14 @@ const Order = require('../models/Order');
 const Warranty = require('../models/Warranty');
 const WarrantyCard = require('../models/WarrantyCard');
 const asyncHandler = require('../utils/asyncHandler');
-const { subordinateIds } = require('../utils/reportingLine');
+const { subordinateIds } = require('../utils/reportingLine'); // cấp dưới theo tuyến báo cáo
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const DAY = 86400000;
 const oid = (v) => new mongoose.Types.ObjectId(String(v));
 const r1 = (n) => (n == null || Number.isNaN(n) ? null : Math.round(n * 10) / 10);
-const DELIVERY_POSITIVE = ['Giao hàng nhanh', 'Đóng gói cẩn thận', 'Nhân viên nhiệt tình'];
-const DELIVERY_NEGATIVE = ['Giao hàng chậm', 'Đóng gói sơ sài'];
+const DELIVERY_POSITIVE = ['Giao hàng nhanh', 'Đóng gói cẩn thận', 'Nhân viên nhiệt tình']; // thẻ khen liên quan giao hàng
+const DELIVERY_NEGATIVE = ['Giao hàng chậm', 'Đóng gói sơ sài']; // thẻ chê liên quan giao hàng
 
 // Vai trò suy ra từ chức danh (seed/generateStaff.js: TITLES)
 function staffKind(s) {
@@ -32,9 +32,9 @@ function staffKind(s) {
 }
 // Chức danh không rõ -> dựa vào công việc thực tế nhiều nhất trong kỳ
 function resolveKind(s, m) {
-  const k = staffKind(s);
+  const k = staffKind(s); // theo chức danh
   if (k !== 'other' || !m) return k;
-  const act = [['warranty', m.warranty.tickets], ['delivery', m.delivery.assigned], ['sales', m.sales.orders + m.sales.onlineConfirmed]].sort((a, b) => b[1] - a[1]);
+  const act = [['warranty', m.warranty.tickets], ['delivery', m.delivery.assigned], ['sales', m.sales.orders + m.sales.onlineConfirmed]].sort((a, b) => b[1] - a[1]); // việc làm nhiều nhất trong kỳ
   return act[0][1] > 0 ? act[0][0] : 'other';
 }
 const KIND_LABEL = { sales: 'Bán hàng', delivery: 'Giao hàng', warranty: 'Bảo hành', manager: 'Quản lý', warehouse: 'Kho', other: 'Khác' };
@@ -48,21 +48,21 @@ function parseRange(q) {
   };
   const now = new Date();
   const vn = new Date(now.getTime() + 7 * 3600000);
-  const monthStart = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1) - 7 * 3600000);
-  let from = day(q.from, false) || monthStart;
+  const monthStart = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1) - 7 * 3600000); // ngày 1 tháng này (giờ VN)
+  let from = day(q.from, false) || monthStart; // mặc định từ đầu tháng
   let to = day(q.to, true) || new Date(Math.max(now.getTime(), from.getTime() + DAY));
   if (to <= from) to = new Date(from.getTime() + DAY);
   if (to - from > 3 * 366 * DAY) from = new Date(to.getTime() - 3 * 366 * DAY); // tối đa 3 năm
   const span = to - from;
-  return { from, to, prevFrom: new Date(from.getTime() - span), prevTo: from, bucket: span <= 62 * DAY ? 'day' : 'month' };
+  return { from, to, prevFrom: new Date(from.getTime() - span), prevTo: from, bucket: span <= 62 * DAY ? 'day' : 'month' }; // kỳ trước cùng độ dài; <= 62 ngày nhóm theo ngày, dài hơn theo tháng
 }
 const bucketExpr = (field, bucket) => ({ $dateToString: { format: bucket === 'day' ? '%Y-%m-%d' : '%Y-%m', date: field, timezone: TZ } });
 function bucketKeys(from, to, bucket) {
   const keys = [];
   const fmt = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0, bucket === 'day' ? 10 : 7);
-  for (let t = from.getTime(); t < to.getTime(); t += bucket === 'day' ? DAY : 28 * DAY) {
+  for (let t = from.getTime(); t < to.getTime(); t += bucket === 'day' ? DAY : 28 * DAY) { // bước 28 ngày để không bỏ sót tháng nào
     const k = fmt(new Date(t));
-    if (keys[keys.length - 1] !== k) keys.push(k);
+    if (keys[keys.length - 1] !== k) keys.push(k); // bỏ khóa trùng
   }
   const last = fmt(new Date(to.getTime() - 1));
   if (keys[keys.length - 1] !== last) keys.push(last);
@@ -70,7 +70,7 @@ function bucketKeys(from, to, bucket) {
 }
 
 // Đánh giá của khách gắn với đơn (Review.orderId)
-const reviewLookup = { $lookup: { from: 'reviews', localField: '_id', foreignField: 'orderId', as: 'rv', pipeline: [{ $project: { rating: 1, criteria: 1, tags: 1, message: 1, createdAt: 1, displayName: 1, isAnonymous: 1 } }] } };
+const reviewLookup = { $lookup: { from: 'reviews', localField: '_id', foreignField: 'orderId', as: 'rv', pipeline: [{ $project: { rating: 1, criteria: 1, tags: 1, message: 1, createdAt: 1, displayName: 1, isAnonymous: 1 } }] } }; // nối đánh giá của đơn
 
 // Số liệu của nhiều nhân viên trong [from, to). withSeries: kèm chuỗi thời gian; withDetail: kèm top sản phẩm + nhận xét gần đây
 async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, withDetail = false } = {}) {
@@ -84,8 +84,8 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
       reviewLookup,
       { $project: { createdBy: 1, grandTotal: 1, units: { $sum: '$items.quantity' }, b: bucketExpr('$createdAt', bucket), rv: 1 } },
       { $facet: {
-        totals: [{ $group: { _id: '$createdBy', orders: { $sum: 1 }, revenue: { $sum: '$grandTotal' }, units: { $sum: '$units' } } }],
-        series: withSeries ? [{ $group: { _id: { s: '$createdBy', b: '$b' }, revenue: { $sum: '$grandTotal' }, orders: { $sum: 1 } } }] : [{ $match: { _id: null } }],
+        totals: [{ $group: { _id: '$createdBy', orders: { $sum: 1 }, revenue: { $sum: '$grandTotal' }, units: { $sum: '$units' } } }], // tổng đơn / doanh thu / số máy theo người bán
+        series: withSeries ? [{ $group: { _id: { s: '$createdBy', b: '$b' }, revenue: { $sum: '$grandTotal' }, orders: { $sum: 1 } } }] : [{ $match: { _id: null } }], // theo ngày / tháng
         ratings: [{ $unwind: '$rv' }, { $group: { _id: '$createdBy', n: { $sum: 1 }, rating: { $avg: '$rv.rating' }, service: { $avg: '$rv.criteria.service' }, recent: { $push: '$rv' } } }]
       } }
     ]),
@@ -99,28 +99,28 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
       : [],
     // Đơn online nhân viên đã xác nhận
     Order.aggregate([
-      { $match: { source: { $ne: 'pos' }, 'statusHistory.changedBy': { $in: sid }, createdAt: inRange } },
+      { $match: { source: { $ne: 'pos' }, 'statusHistory.changedBy': { $in: sid }, createdAt: inRange } }, // đơn online có nhân viên thao tác
       { $unwind: '$statusHistory' },
       { $match: { 'statusHistory.changedBy': { $in: sid }, 'statusHistory.status': 'confirmed' } },
-      { $group: { _id: { s: '$statusHistory.changedBy', o: '$_id' } } },
+      { $group: { _id: { s: '$statusHistory.changedBy', o: '$_id' } } }, // mỗi đơn chỉ tính 1 lần / người
       { $group: { _id: '$_id.s', n: { $sum: 1 } } }
     ]),
     // Giao hàng: đơn được phân công cho nhân viên (đơn có vận đơn đơn vị ngoài còn hiệu lực tính cho đơn vị đó)
     Order.aggregate([
-      { $match: { shipperId: { $in: sid }, createdAt: inRange } },
+      { $match: { shipperId: { $in: sid }, createdAt: inRange } }, // đơn được phân công
       { $addFields: {
-        viaCarrier: { $and: [{ $ifNull: ['$shipment.provider', false] }, { $not: [{ $in: ['$shipment.phase', ['cancelled', 'failed']] }] }] },
+        viaCarrier: { $and: [{ $ifNull: ['$shipment.provider', false] }, { $not: [{ $in: ['$shipment.phase', ['cancelled', 'failed']] }] }] }, // đơn giao qua đơn vị vận chuyển (không tính cho shipper)
         shippedAt: { $first: { $map: { input: { $filter: { input: { $ifNull: ['$statusHistory', []] }, cond: { $eq: ['$$this.status', 'shipping'] } } }, in: '$$this.changedAt' } } },
         deliveredAt: { $first: { $map: { input: { $filter: { input: { $ifNull: ['$statusHistory', []] }, cond: { $eq: ['$$this.status', 'delivered'] } } }, in: '$$this.changedAt' } } },
         failedTries: { $size: { $filter: { input: { $ifNull: ['$deliveryAttempts', []] }, cond: { $eq: ['$$this.result', 'failed'] } } } }
       } },
-      { $match: { viaCarrier: false } },
+      { $match: { viaCarrier: false } }, // chỉ đơn shipper tự giao
       reviewLookup,
       { $project: {
         shipperId: 1, status: 1, failedTries: 1, b: bucketExpr('$createdAt', bucket), rv: 1,
         done: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] },
-        cod: { $cond: [{ $and: [{ $eq: ['$status', 'delivered'] }, { $eq: ['$paymentMode', 'cod'] }] }, '$grandTotal', 0] },
-        hours: { $cond: [{ $and: ['$shippedAt', '$deliveredAt'] }, { $divide: [{ $subtract: ['$deliveredAt', '$shippedAt'] }, 3600000] }, null] }
+        cod: { $cond: [{ $and: [{ $eq: ['$status', 'delivered'] }, { $eq: ['$paymentMode', 'cod'] }] }, '$grandTotal', 0] }, // tiền COD đã thu
+        hours: { $cond: [{ $and: ['$shippedAt', '$deliveredAt'] }, { $divide: [{ $subtract: ['$deliveredAt', '$shippedAt'] }, 3600000] }, null] } // giờ từ lấy hàng tới giao xong
       } },
       { $facet: {
         totals: [{ $group: { _id: '$shipperId', assigned: { $sum: 1 }, delivered: { $sum: '$done' }, failedTries: { $sum: '$failedTries' }, returned: { $sum: { $cond: [{ $in: ['$status', ['returning', 'returned']] }, 1, 0] } }, pending: { $sum: { $cond: [{ $in: ['$status', ['confirmed', 'processing', 'shipping']] }, 1, 0] } }, cod: { $sum: '$cod' }, hours: { $avg: '$hours' } } }],
@@ -130,12 +130,12 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
     ]),
     // Bảo hành: phiếu được giao cho kỹ thuật viên (assignedTo) hoặc kỹ thuật viên có cập nhật trạng thái
     Warranty.aggregate([
-      { $match: { createdAt: inRange, $or: [{ assignedTo: { $in: sid } }, { 'statusHistory.changedBy': { $in: sid } }] } },
+      { $match: { createdAt: inRange, $or: [{ assignedTo: { $in: sid } }, { 'statusHistory.changedBy': { $in: sid } }] } }, // phiếu được giao hoặc có cập nhật
       { $addFields: {
-        techs: { $setIntersection: [{ $setUnion: [{ $cond: ['$assignedTo', ['$assignedTo'], []] }, { $map: { input: { $ifNull: ['$statusHistory', []] }, in: '$$this.changedBy' } }] }, sid] },
+        techs: { $setIntersection: [{ $setUnion: [{ $cond: ['$assignedTo', ['$assignedTo'], []] }, { $map: { input: { $ifNull: ['$statusHistory', []] }, in: '$$this.changedBy' } }] }, sid] }, // kỹ thuật viên liên quan tới phiếu
         doneAt: { $first: { $map: { input: { $filter: { input: { $ifNull: ['$statusHistory', []] }, cond: { $in: ['$$this.status', ['done', 'returned']] } } }, in: '$$this.changedAt' } } }
       } },
-      { $unwind: '$techs' },
+      { $unwind: '$techs' }, // mỗi kỹ thuật viên được tính 1 lần cho phiếu
       { $project: {
         techs: 1, cost: 1, customerRating: 1, customerFeedback: 1, updatedAt: 1, b: bucketExpr('$createdAt', bucket),
         done: { $cond: [{ $in: ['$status', ['done', 'returned']] }, 1, 0] },
@@ -149,14 +149,14 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
     ]),
     // Gói gia hạn bảo hành bán được
     WarrantyCard.aggregate([
-      { $match: { 'extensions.paidBy': { $in: sid } } },
+      { $match: { 'extensions.paidBy': { $in: sid } } }, // gói gia hạn do nhân viên bán
       { $unwind: '$extensions' },
       { $match: { 'extensions.paidBy': { $in: sid }, 'extensions.status': 'paid', 'extensions.paidAt': inRange } },
       { $group: { _id: '$extensions.paidBy', n: { $sum: 1 }, revenue: { $sum: '$extensions.price' } } }
     ])
   ]);
 
-  const byId = (rows) => new Map(rows.map((r) => [String(r._id), r]));
+  const byId = (rows) => new Map(rows.map((r) => [String(r._id), r])); // mảng -> Map theo id
   const S = sales[0]; const D = deliveries[0]; const W = warranties[0];
   const sT = byId(S.totals); const sR = byId(S.ratings); const conf = byId(confirmed);
   const dT = byId(D.totals); const dR = byId(D.ratings);
@@ -183,7 +183,7 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
       },
       delivery: {
         assigned: d.assigned || 0, delivered: d.delivered || 0, failedTries: d.failedTries || 0, returned: d.returned || 0, pending: d.pending || 0,
-        successRate: d.delivered + d.failedTries ? Math.round((d.delivered / (d.delivered + d.failedTries)) * 100) : null,
+        successRate: d.delivered + d.failedTries ? Math.round((d.delivered / (d.delivered + d.failedTries)) * 100) : null, // % thành công trên tổng lần giao
         avgHours: r1(d.hours), cod: d.cod || 0,
         reviews: dr.n || 0, score: r1(dr.score), rating: r1(dr.rating), service: r1(dr.service), low: dr.low || 0,
         praise: tags.filter((t) => DELIVERY_POSITIVE.includes(t)).length,
@@ -197,7 +197,7 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
       }
     };
     if (withSeries) {
-      const pick = (rows, f) => new Map(rows.filter((r) => String(r._id.s) === id).map((r) => [r._id.b, f(r)]));
+      const pick = (rows, f) => new Map(rows.filter((r) => String(r._id.s) === id).map((r) => [r._id.b, f(r)])); // chuỗi thời gian của 1 người
       const sp = pick(S.series, (r) => r); const dp = pick(D.series, (r) => r); const wp = pick(W.series, (r) => r);
       m.series = keys.map((k) => ({
         key: k,
@@ -221,9 +221,9 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
 
 // Điểm tổng hợp để xếp hạng trong cùng vai trò
 const RANK_BY = {
-  sales: (m) => m.sales.revenue,
-  delivery: (m) => m.delivery.delivered * (m.delivery.score ? m.delivery.score / 5 : 0.8),
-  warranty: (m) => m.warranty.done * (m.warranty.rating ? m.warranty.rating / 5 : 0.8) + m.warranty.extensions,
+  sales: (m) => m.sales.revenue, // bán hàng: theo doanh thu
+  delivery: (m) => m.delivery.delivered * (m.delivery.score ? m.delivery.score / 5 : 0.8), // giao hàng: số đơn × điểm đánh giá
+  warranty: (m) => m.warranty.done * (m.warranty.rating ? m.warranty.rating / 5 : 0.8) + m.warranty.extensions, // bảo hành: số phiếu xong × điểm + gói bán được
   manager: (m) => m.sales.revenue + m.sales.onlineConfirmed,
   warehouse: (m) => m.sales.onlineConfirmed,
   other: (m) => m.sales.revenue
@@ -233,14 +233,17 @@ const RANK_BY = {
 function managerStores(req) {
   if (req.accountRole === 'admin') return null; // null = tất cả
   const a = req.account || {};
-  const ids = (a.managedStoreIds || []).map((x) => String(x._id || x));
-  if (staffKind(a) === 'manager' && a.storeId) ids.push(String(a.storeId._id || a.storeId));
+  const ids = (a.managedStoreIds || []).map((x) => String(x._id || x)); // chi nhánh quản lý thêm
+  // SỬA LỖI: trước đây chỉ nhận chức danh chứa "quản lý" -> "Cửa hàng trưởng", "Trưởng chi nhánh"... không xem được
+  // chi nhánh của chính mình. Nay dùng chung cách nhận diện trưởng cửa hàng với Dashboard / Sức khỏe chi nhánh.
+  const isManager = staffKind(a) === 'manager' || require('../utils/staffRole').isStoreManager({ role: 'staff', title: a.title });
+  if (isManager && a.storeId) ids.push(String(a.storeId._id || a.storeId)); // + chi nhánh chính
   return [...new Set(ids)];
 }
 
 
-const sumBy = (list, path) => list.reduce((n, m) => n + (path.split('.').reduce((o, k) => o?.[k], m) || 0), 0);
-const avgBy = (list, path, weightPath) => {
+const sumBy = (list, path) => list.reduce((n, m) => n + (path.split('.').reduce((o, k) => o?.[k], m) || 0), 0); // cộng 1 trường lồng nhau ("sales.revenue") của cả đội
+const avgBy = (list, path, weightPath) => { // trung bình có trọng số (VD điểm theo số đánh giá)
   let s = 0; let w = 0;
   for (const m of list) {
     const v = path.split('.').reduce((o, k) => o?.[k], m);
@@ -259,25 +262,25 @@ function teamTotals(list) {
 
 // @route GET /api/staff-reports/team?from&to&storeId
 const teamReport = asyncHandler(async (req, res) => {
-  const allowed = managerStores(req);
+  const allowed = managerStores(req); // chi nhánh người xem quản lý
   // Người báo cáo cho tôi: trực tiếp + các cấp bên dưới
-  const [directIds, allSubs] = await Promise.all([subordinateIds(req.account._id, { recursive: false }), subordinateIds(req.account._id)]);
-  if (allowed && !allowed.length && !allSubs.length) return res.status(403).json({ message: 'Chỉ quản lý (chi nhánh hoặc có nhân viên báo cáo cho mình) / admin xem được báo cáo nhân viên' });
+  const [directIds, allSubs] = await Promise.all([subordinateIds(req.account._id, { recursive: false }), subordinateIds(req.account._id)]); // cấp dưới trực tiếp + mọi cấp
+  if (allowed && !allowed.length && !allSubs.length) return res.status(403).json({ message: 'Chỉ quản lý (chi nhánh hoặc có nhân viên báo cáo cho mình) / admin xem được báo cáo nhân viên' }); // không quản lý ai -> không xem được
   const direct = req.query.scope === 'direct';
   let filter;
-  if (direct) filter = { _id: { $in: directIds } };
+  if (direct) filter = { _id: { $in: directIds } }; // chỉ người báo cáo trực tiếp
   else if (req.query.storeId) {
-    if (!mongoose.isValidObjectId(req.query.storeId) || (allowed && !allowed.includes(String(req.query.storeId)))) return res.status(403).json({ message: 'Bạn không quản lý chi nhánh này' });
+    if (!mongoose.isValidObjectId(req.query.storeId) || (allowed && !allowed.includes(String(req.query.storeId)))) return res.status(403).json({ message: 'Bạn không quản lý chi nhánh này' }); // chi nhánh ngoài phạm vi
     filter = { storeId: oid(req.query.storeId) };
-  } else filter = allowed ? { $or: [{ storeId: { $in: allowed.map(oid) } }, { _id: { $in: allSubs } }] } : {};
+  } else filter = allowed ? { $or: [{ storeId: { $in: allowed.map(oid) } }, { _id: { $in: allSubs } }] } : {}; // mặc định: chi nhánh quản lý + mọi cấp dưới
   const range = parseRange(req.query);
   const staff = await Admin.find({ role: 'staff', ...filter }).select('name title avatar storeId isActive managerId').populate('storeId', 'name').populate('managerId', 'name').lean();
   const directSet = new Set(directIds.map(String));
   const ids = staff.map((s) => s._id);
-  const [cur, prev] = await Promise.all([buildMetrics(ids, range, { withSeries: true }), buildMetrics(ids, { from: range.prevFrom, to: range.prevTo, bucket: range.bucket })]);
+  const [cur, prev] = await Promise.all([buildMetrics(ids, range, { withSeries: true }), buildMetrics(ids, { from: range.prevFrom, to: range.prevTo, bucket: range.bucket })]); // kỳ này + kỳ trước
   const rows = staff.map((s) => ({ _id: s._id, name: s.name, title: s.title, avatar: s.avatar, isActive: s.isActive !== false, store: s.storeId?.name || '', manager: s.managerId?.name || '', isDirect: directSet.has(String(s._id)), kind: resolveKind(s, cur.get(String(s._id))), ...cur.get(String(s._id)), prev: prev.get(String(s._id)) }));
   // Chuỗi thời gian của cả đội
-  const series = (rows[0]?.series || bucketKeys(range.from, range.to, range.bucket).map((key) => ({ key }))).map((p, i) => {
+  const series = (rows[0]?.series || bucketKeys(range.from, range.to, range.bucket).map((key) => ({ key }))).map((p, i) => { // cộng chuỗi thời gian của cả đội
     const o = { key: p.key };
     for (const f of ['revenue', 'orders', 'delivered', 'failed', 'tickets', 'ticketsDone']) o[f] = rows.reduce((n, r) => n + (r.series?.[i]?.[f] || 0), 0);
     return o;
@@ -290,7 +293,7 @@ const teamReport = asyncHandler(async (req, res) => {
       headcount: { total: rows.length, active: rows.filter((r) => r.isActive).length, byKind: Object.entries(kinds).map(([k, n]) => ({ kind: k, label: KIND_LABEL[k], count: n })) },
       totals: teamTotals(rows), prevTotals: teamTotals(rows.map((r) => r.prev)),
       series,
-      staff: rows.map(({ series: _s, ...r }) => r).sort((a, b) => RANK_BY[b.kind](b) - RANK_BY[a.kind](a)),
+      staff: rows.map(({ series: _s, ...r }) => r).sort((a, b) => RANK_BY[b.kind](b) - RANK_BY[a.kind](a)), // bỏ chuỗi riêng từng người, xếp hạng
       scope: direct ? 'direct' : allowed ? 'stores' : 'all',
       directCount: directIds.length
     }
@@ -301,22 +304,22 @@ const teamReport = asyncHandler(async (req, res) => {
 async function personalReport(staff, query) {
   const range = parseRange(query);
   const storeId = staff.storeId?._id || staff.storeId;
-  const peers = await Admin.find({ role: 'staff', isActive: { $ne: false } }).select('title storeId').lean();
+  const peers = await Admin.find({ role: 'staff', isActive: { $ne: false } }).select('title storeId').lean(); // mọi nhân viên để xếp hạng
   const [mine, prev, peerMetrics] = await Promise.all([
     buildMetrics([staff._id], range, { withSeries: true, withDetail: true }),
     buildMetrics([staff._id], { from: range.prevFrom, to: range.prevTo, bucket: range.bucket }),
     buildMetrics(peers.map((p) => p._id), range)
   ]);
   const kind = resolveKind(staff, mine.get(String(staff._id)));
-  const sameKind = peers.filter((p) => String(p._id) !== String(staff._id) && resolveKind(p, peerMetrics.get(String(p._id))) === kind);
+  const sameKind = peers.filter((p) => String(p._id) !== String(staff._id) && resolveKind(p, peerMetrics.get(String(p._id))) === kind); // cùng vai trò
   const m = mine.get(String(staff._id));
   const score = RANK_BY[kind];
-  const rankIn = (list) => {
+  const rankIn = (list) => { // thứ hạng trong 1 danh sách
     const sorted = list.map((p) => ({ id: String(p._id), v: score(String(p._id) === String(staff._id) ? mine.get(String(staff._id)) : peerMetrics.get(String(p._id))) })).sort((a, b) => b.v - a.v);
     const pos = sorted.findIndex((x) => x.id === String(staff._id));
     return { rank: pos >= 0 ? pos + 1 : null, of: sorted.length };
   };
-  const storePeers = [...sameKind.filter((p) => String(p.storeId) === String(storeId)), { _id: staff._id }];
+  const storePeers = [...sameKind.filter((p) => String(p.storeId) === String(storeId)), { _id: staff._id }]; // cùng vai trò + cùng chi nhánh
   sameKind.push({ _id: staff._id });
   const avgOf = (list) => teamTotals(list.map((p) => (String(p._id) === String(staff._id) ? mine : peerMetrics).get(String(p._id))).filter(Boolean));
   const per = (t, n) => (n ? Math.round(t / n) : 0);
@@ -340,7 +343,7 @@ async function personalReport(staff, query) {
 
 // @route GET /api/staff-reports/me
 const myReport = asyncHandler(async (req, res) => {
-  if (req.accountRole !== 'staff') return res.status(403).json({ message: 'Chỉ dành cho tài khoản nhân viên' });
+  if (req.accountRole !== 'staff') return res.status(403).json({ message: 'Chỉ dành cho tài khoản nhân viên' }); // chỉ nhân viên
   const me = await Admin.findById(req.account._id).select('name title avatar storeId managerId').populate('storeId', 'name').populate('managerId', 'name title').lean();
   res.json({ data: await personalReport(me, req.query) });
 });
@@ -350,11 +353,19 @@ const staffReport = asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
   const staff = await Admin.findOne({ _id: req.params.id, role: 'staff' }).select('name title avatar storeId managerId').populate('storeId', 'name').populate('managerId', 'name title').lean();
   if (!staff) return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
-  const allowed = managerStores(req);
-  const isSelf = String(req.account._id) === String(staff._id);
-  const isSub = !isSelf && allowed && (await subordinateIds(req.account._id)).some((x) => String(x) === String(staff._id));
-  if (allowed && !isSelf && !isSub && !allowed.includes(String(staff.storeId?._id || staff.storeId))) return res.status(403).json({ message: 'Bạn không quản lý nhân viên này' });
+  if (!(await canViewStaff(req, staff))) return res.status(403).json({ message: 'Bạn không quản lý nhân viên này' });
   res.json({ data: await personalReport(staff, req.query) });
 });
 
-module.exports = { teamReport, myReport, staffReport, staffKind, parseRange, buildMetrics };
+// Người xem có được xem báo cáo của nhân viên `staff` không: admin; chính mình; cấp dưới; nhân viên thuộc chi nhánh mình quản lý.
+// manage = true: chỉ tính quyền QUẢN LÝ (bỏ trường hợp "chính mình") - dùng cho việc đặt chỉ tiêu.
+async function canViewStaff(req, staff, { manage = false } = {}) {
+  const allowed = managerStores(req); // null = admin (mọi chi nhánh)
+  if (!allowed) return true;
+  const isSelf = String(req.account._id) === String(staff._id); // xem của chính mình
+  if (isSelf) return !manage;
+  const isSub = (await subordinateIds(req.account._id)).some((x) => String(x) === String(staff._id)); // là cấp dưới của người xem
+  return isSub || allowed.includes(String(staff.storeId?._id || staff.storeId)); // hoặc cùng chi nhánh mình quản lý
+}
+
+module.exports = { teamReport, myReport, staffReport, staffKind, parseRange, buildMetrics, canViewStaff };

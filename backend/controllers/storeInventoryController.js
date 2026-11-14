@@ -6,7 +6,7 @@ const { searchFilter } = require('../utils/search');
 const { getScopedStoreId } = require('../middlewares/authMiddleware');
 
 // Số lượng hàng (tồn kho, ngưỡng cảnh báo): số nguyên >= 0 - không có "2,5 chiếc"
-const isCount = (value) => Number.isInteger(value) && value >= 0;
+const isCount = (value) => Number.isInteger(value) && value >= 0; // số nguyên >= 0
 const THRESHOLD_ERROR = 'Ngưỡng cảnh báo sắp hết hàng phải là số nguyên >= 0';
 
 // Chi nhánh được gán cho 1 staff không tự động biến mất khi cửa hàng đó bị ẩn (isActive=false) -
@@ -14,7 +14,7 @@ const THRESHOLD_ERROR = 'Ngưỡng cảnh báo sắp hết hàng phải là số
 // lại đây, staff đó vẫn thao tác được vô thời hạn lên tồn kho của 1 chi nhánh đã ngừng hoạt động.
 async function assertScopedStoreIsActive(scopedStoreId) {
   if (!scopedStoreId) return true;
-  const store = await Store.findById(scopedStoreId);
+  const store = await Store.findById(scopedStoreId); // chi nhánh nhân viên phụ trách
   return Boolean(store?.isActive);
 }
 
@@ -22,7 +22,7 @@ async function assertScopedStoreIsActive(scopedStoreId) {
 const getInventories = asyncHandler(async (req, res) => {
   const { productId, page = 1, limit = 20 } = req.query;
   const filter = {};
-  if (productId) filter.productId = productId;
+  if (productId) filter.productId = productId; // lọc theo sản phẩm
 
   // "Quản lý chi nhánh" (staff được gán storeId cụ thể) chỉ được xem đúng tồn kho chi nhánh mình -
   // BỎ QUA storeId họ tự truyền lên (nếu có), luôn ép về đúng chi nhánh được gán, để không ai lách
@@ -37,15 +37,15 @@ const getInventories = asyncHandler(async (req, res) => {
   // Tìm theo tên sản phẩm / màu / dung lượng: tìm sản phẩm khớp trước (qua index), rồi lấy tồn kho của chúng
   const productSearch = searchFilter(req.query.q);
   if (productSearch) {
-    const ids = await Product.find(productSearch).distinct('_id');
+    const ids = await Product.find(productSearch).distinct('_id'); // id sản phẩm khớp từ khóa
     filter.productId = filter.productId ? { $in: ids.filter((id) => String(id) === String(filter.productId)) } : { $in: ids };
   }
-  if (req.query.lowStock === 'true') filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
+  if (req.query.lowStock === 'true') filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] }; // chỉ dòng sắp hết hàng
 
   const inventories = await StoreInventory.find(filter)
     .populate('storeId', 'name city address')
     .populate('productId', 'title featuredImage price variants')
-    .sort({ lastUpdated: -1 })
+    .sort({ lastUpdated: -1 }) // mới cập nhật lên trước
     .skip((page - 1) * limit)
     .limit(Number(limit));
   const total = await StoreInventory.countDocuments(filter);
@@ -56,7 +56,7 @@ const getInventories = asyncHandler(async (req, res) => {
 // của sản phẩm khỏi kết quả (chỉ cần để tra nhãn, không cần gửi về cho từng dòng).
 function withVariantLabel(inv) {
   const obj = inv.toObject();
-  const variant = inv.productId?.variants?.id(inv.variantId);
+  const variant = inv.productId?.variants?.id(inv.variantId); // tìm phiên bản trong sản phẩm
   obj.variantLabel = variant ? variant.label : '(phiên bản đã xóa)';
   if (obj.productId) delete obj.productId.variants;
   return obj;
@@ -78,12 +78,12 @@ const upsertInventory = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Số lượng tồn kho không hợp lệ (phải là số nguyên >= 0)' });
   }
   if (lowStockThreshold !== undefined && !isCount(lowStockThreshold)) return res.status(400).json({ message: THRESHOLD_ERROR });
-  if (!storeId || !(await Store.exists({ _id: storeId }))) {
+  if (!storeId || !(await Store.exists({ _id: storeId }))) { // chi nhánh phải tồn tại
     return res.status(400).json({ message: 'Vui lòng chọn đúng cửa hàng' });
   }
   // Tồn kho tính theo phiên bản - phiên bản phải thực sự thuộc sản phẩm này (không nhận variantId tùy ý)
-  const product = productId ? await Product.findById(productId, 'variants') : null;
-  if (!product || !variantId || !product.variants.id(variantId)) {
+  const product = productId ? await Product.findById(productId, 'variants') : null; // chỉ lấy danh sách phiên bản
+  if (!product || !variantId || !product.variants.id(variantId)) { // phiên bản phải thuộc đúng sản phẩm
     return res.status(400).json({ message: 'Vui lòng chọn đúng sản phẩm và phiên bản (màu/dung lượng)' });
   }
 
@@ -98,9 +98,9 @@ const upsertInventory = asyncHandler(async (req, res) => {
   }
 
   const inventory = await StoreInventory.findOneAndUpdate(
-    { storeId, productId, variantId },
+    { storeId, productId, variantId }, // khóa duy nhất của dòng tồn kho
     { stock, lowStockThreshold, lastUpdated: new Date() },
-    { new: true, upsert: true, runValidators: true }
+    { new: true, upsert: true, runValidators: true } // chưa có thì tạo; kiểm tra ràng buộc schema
   );
   res.status(201).json({ data: inventory });
 });
@@ -129,30 +129,30 @@ const updateInventory = asyncHandler(async (req, res) => {
   //  - stock + expectedStock: đặt số tuyệt đối (kiểm kê) chỉ khi tồn kho vẫn đúng như lúc xem, khác thì 409;
   //  - stock không kèm expectedStock: đặt thẳng (giữ cho tương thích).
   const { stock, expectedStock, adjust, lowStockThreshold } = req.body;
-  const condition = { _id: inventory._id };
-  const update = { $set: { lastUpdated: new Date() } };
+  const condition = { _id: inventory._id }; // điều kiện cập nhật
+  const update = { $set: { lastUpdated: new Date() } }; // nội dung cập nhật
   if (adjust !== undefined) {
     if (!Number.isInteger(adjust) || adjust === 0) return res.status(400).json({ message: 'Số lượng nhập / xuất phải là số nguyên khác 0' });
     if (stock !== undefined) return res.status(400).json({ message: 'Chỉ dùng 1 cách: nhập / xuất theo chênh lệch hoặc đặt số lượng' });
-    update.$inc = { stock: adjust };
-    if (adjust < 0) condition.stock = { $gte: -adjust };
+    update.$inc = { stock: adjust }; // cộng / trừ nguyên tử
+    if (adjust < 0) condition.stock = { $gte: -adjust }; // xuất bớt: phải còn đủ hàng
   } else if (stock !== undefined) {
     if (!isCount(stock)) {
       return res.status(400).json({ message: 'Số lượng tồn kho không hợp lệ (phải là số nguyên >= 0)' });
     }
     if (expectedStock !== undefined) {
       if (!isCount(expectedStock)) return res.status(400).json({ message: 'Số lượng tồn cũ không hợp lệ' });
-      condition.stock = expectedStock;
+      condition.stock = expectedStock; // kiểm kê: chỉ ghi nếu tồn kho chưa đổi
     }
-    update.$set.stock = stock;
+    update.$set.stock = stock; // đặt số tuyệt đối
   }
   if (lowStockThreshold !== undefined) {
     if (!isCount(lowStockThreshold)) return res.status(400).json({ message: THRESHOLD_ERROR });
     update.$set.lowStockThreshold = lowStockThreshold;
   }
-  const saved = await StoreInventory.findOneAndUpdate(condition, update, { new: true });
+  const saved = await StoreInventory.findOneAndUpdate(condition, update, { new: true }); // 1 lệnh nguyên tử
   if (!saved) {
-    const current = await StoreInventory.findById(inventory._id);
+    const current = await StoreInventory.findById(inventory._id); // không ghi được -> đọc số hiện tại để báo
     if (adjust < 0) return res.status(400).json({ message: `Không đủ hàng để xuất (còn ${current?.stock ?? 0})`, data: current });
     return res.status(409).json({ message: `Tồn kho vừa thay đổi (hiện còn ${current?.stock ?? 0}), vui lòng kiểm tra rồi nhập lại`, data: current });
   }
@@ -162,11 +162,14 @@ const updateInventory = asyncHandler(async (req, res) => {
 // @route GET /api/store-inventories/low-stock?storeId= - cảnh báo sắp hết hàng
 const getLowStockAlerts = asyncHandler(async (req, res) => {
   const scopedStoreId = getScopedStoreId(req);
-  const filter = scopedStoreId ? { storeId: scopedStoreId } : req.query.storeId ? { storeId: req.query.storeId } : {};
+  const filter = scopedStoreId ? { storeId: scopedStoreId } : req.query.storeId ? { storeId: req.query.storeId } : {}; // nhân viên: chi nhánh mình
+  // SỬA (hiệu năng): trước đây tải TOÀN BỘ tồn kho lên bộ nhớ rồi mới lọc bằng JavaScript -> nay để MongoDB lọc
+  // "tồn kho <= ngưỡng cảnh báo" ($expr so sánh 2 trường của cùng bản ghi), chỉ tải các dòng sắp hết hàng
+  filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
   const inventories = await StoreInventory.find(filter)
     .populate('storeId', 'name')
     .populate('productId', 'title featuredImage variants');
-  const lowStock = inventories.filter((inv) => inv.stock <= inv.lowStockThreshold).map(withVariantLabel);
+  const lowStock = inventories.map(withVariantLabel); // gắn nhãn phiên bản
   res.json({ data: lowStock });
 });
 

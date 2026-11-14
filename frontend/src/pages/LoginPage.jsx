@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Container, Form, Button, Alert } from 'react-bootstrap';
+import DemoAccounts from '../components/DemoAccounts';
 import { useAuth } from '../store/AuthContext';
 
 const ZALO_ERROR_MESSAGES = {
@@ -9,43 +10,6 @@ const ZALO_ERROR_MESSAGES = {
   zalo_profile_failed: 'Không lấy được hồ sơ Zalo (tên/ảnh đại diện), vui lòng thử lại',
   zalo_complete_failed: 'Máy chủ không hoàn tất được đăng nhập bằng Zalo'
 };
-
-// Tài khoản kiểm thử hiển thị ở trang đăng nhập (bấm để điền sẵn). 10 tài khoản nhân viên @techshop.vn dưới đây là
-// tài khoản DEMO CÔNG KHAI, dùng chung mật khẩu "nhanvien123" (cả trên máy lẫn máy chủ thật); các tài khoản nhân viên
-// khác giữ mật khẩu riêng.
-const STAFF_DEMO_PASSWORD = 'nhanvien123';
-const DEMO_GROUPS = [
-  {
-    title: 'Khách hàng & quản trị',
-    accounts: [
-      ['Khách hàng', 'customer@example.com', 'customer123'],
-      ['Quản trị', 'admin@example.com', 'admin123'],
-      ['Nhân viên CSKH', 'staff@example.com', 'staff123'],
-      ['Quản lý chi nhánh', 'manager@example.com', 'manager123'],
-      ['Giao hàng', 'shipper@example.com', 'shipper123']
-    ]
-  },
-  {
-    title: 'Quản lý',
-    accounts: [
-      ['Quản lý vùng (mọi chi nhánh)', 'quang.nh.vung@techshop.vn'],
-      ['Quản lý TechShop Quận 1', 'khoa.nm1@techshop.vn'],
-      ['Quản lý TechShop Cầu Giấy', 'tai.nv9@techshop.vn'],
-      ['Quản lý TechShop Hải Châu', 'son.tc17@techshop.vn'],
-      ['Quản lý TechShop Cà Mau', 'vinh.tt25@techshop.vn']
-    ]
-  },
-  {
-    title: 'Nhân viên',
-    accounts: [
-      ['Bán hàng (Quận 1)', 'ha.ttt2@techshop.vn'],
-      ['Bán hàng 2 chi nhánh', 'linh.tm.parttime@techshop.vn'],
-      ['Kho (Quận 1)', 'dat.vt5@techshop.vn'],
-      ['Giao hàng (Quận 1)', 'mai.dt6@techshop.vn'],
-      ['Kỹ thuật bảo hành (Quận 1)', 'lan.ht8@techshop.vn']
-    ]
-  }
-];
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -77,8 +41,10 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(form);
-      navigate(returnPath, { replace: true });
+      const u = await login(form);
+      // Quản trị / nhân viên không có trang cần quay lại -> vào thẳng "Dashboard" theo vị trí
+      const staffHome = ['admin', 'staff'].includes(u?.role) && returnPath === '/' ? '/admin/workspace' : returnPath;
+      navigate(staffHome, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Đăng nhập thất bại');
     } finally {
@@ -155,28 +121,7 @@ export default function LoginPage() {
           Đăng ký ngay
         </Link>
       </p>
-      <div className="mt-4 small text-muted bg-light rounded p-3">
-        <p className="fw-medium mb-1">Tài khoản demo <span className="fw-normal">(bấm để điền sẵn)</span>:</p>
-        {DEMO_GROUPS.map((g) => (
-          <div key={g.title} className="mb-2">
-            <div className="fw-semibold text-body mt-2">{g.title}</div>
-            {g.accounts.map(([label, email, password]) => {
-              const pw = password ?? STAFF_DEMO_PASSWORD;
-              return (
-                <button
-                  key={email}
-                  type="button"
-                  className="btn btn-link btn-sm p-0 d-block text-start text-muted text-decoration-none w-100"
-                  title="Điền vào ô đăng nhập"
-                  onClick={() => { setForm({ email, password: pw }); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                >
-                  <span className="text-body">{label}:</span> {email}{pw && <> / <code>{pw}</code></>}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+      <DemoAccounts onPick={({ email, password }) => { setForm({ email, password }); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
     </Container>
   );
 }

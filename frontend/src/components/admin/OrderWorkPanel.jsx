@@ -4,6 +4,10 @@ import { TelephoneFill, GeoAltFill, ChevronLeft, ChevronRight, Truck, PencilSqua
 import { orderService } from '../../services/orderService';
 import { ORDER_LABELS, orderActions, orderLabel, orderMethod } from '../../utils/orderWorkflow';
 import { primaryAction } from './OrderActions';
+import api from '../../services/api';
+import { EInvoiceModal } from '../../pages/admin/AdminEInvoicesPage';
+import EInvoiceDraftModal from './EInvoiceDraftModal';
+import { orderDateTime, timeAgo } from '../../utils/orderTime';
 
 const money = (v) => (v ?? 0).toLocaleString('vi-VN') + 'đ';
 const FLOW_HOME = ['pending', 'confirmed', 'processing', 'shipping', 'delivered'];
@@ -19,6 +23,22 @@ export default function OrderWorkPanel({ order, list, onClose, onRun, onSelect, 
   const [autoNext, setAutoNext] = useState(() => { try { return localStorage.getItem('orders.autoNext') !== '0'; } catch { return true; } });
   const [loading, setLoading] = useState(false);
   useEffect(() => { setO(order); }, [order]);
+  // Hóa đơn điện tử của đơn (đơn đã giao)
+  const [einv, setEinv] = useState(undefined);
+  const [einvOpen, setEinvOpen] = useState(null);
+  const [einvBusy, setEinvBusy] = useState(false);
+  const [einvMsg, setEinvMsg] = useState('');
+  const [draftOpen, setDraftOpen] = useState(false);
+  useEffect(() => {
+    setEinv(undefined); setEinvMsg('');
+    if (o.status !== 'delivered') return;
+    api.get(`/einvoices/by-order/${o._id}`).then((r) => setEinv(r.data.data.find((x) => x.status === 'issued') || null)).catch(() => setEinv(null));
+  }, [o._id, o.status]);
+  const issueEInvoice = async () => {
+    setEinvBusy(true); setEinvMsg('');
+    try { const r = await api.post(`/einvoices/orders/${o._id}/issue`, { sendEmail: true }); setEinv(r.data.data); setEinvMsg(r.data.data.emailQueuedTo ? `Đang gửi hóa đơn tới ${r.data.data.emailQueuedTo}` : 'Đã phát hành hóa đơn'); }
+    catch (e) { setEinvMsg(e.response?.data?.message || 'Không phát hành được'); } finally { setEinvBusy(false); }
+  };
   const idx = list.findIndex((x) => x._id === order._id);
   const prev = idx > 0 ? list[idx - 1] : null;
   const next = idx >= 0 && idx < list.length - 1 ? list[idx + 1] : null;
@@ -67,7 +87,8 @@ export default function OrderWorkPanel({ order, list, onClose, onRun, onSelect, 
       <Offcanvas.Header closeButton className="border-bottom">
         <div className="flex-grow-1">
           <Offcanvas.Title className="fs-4 fw-bold">#{o.orderCode} {loading && <Spinner size="sm" />}</Offcanvas.Title>
-          <div className="text-muted">{orderMethod(o)} · {o.storeId?.name} · {new Date(o.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
+          <div className="text-muted">{orderMethod(o)} · {o.storeId?.name}</div>
+          <div className="text-muted small">🕒 Đặt lúc <b className="text-body">{orderDateTime(o.createdAt)}</b> ({timeAgo(o.createdAt)})</div>
         </div>
         <div className="d-flex gap-1 me-2">
           {onReceipt && <Button variant="outline-secondary" onClick={() => onReceipt(o)} title="Xem / in hóa đơn"><Receipt className="me-1" />Hóa đơn</Button>}
@@ -96,6 +117,17 @@ export default function OrderWorkPanel({ order, list, onClose, onRun, onSelect, 
             {others.map((x) => <Button key={x.key} variant={x.variant} disabled={busy} onClick={() => run(x.key)}><x.icon className="me-2" />{x.label}</Button>)}
           </div>
         )}
+        {o.status === 'delivered' && einv !== undefined && (
+          <div className="order-panel-box d-flex align-items-center gap-2">
+            <span className="flex-grow-1">{einv ? <>🧾 Hóa đơn <b>{einv.template}{einv.series}-{String(einv.number).padStart(8, '0')}</b><span className="d-block small text-muted">Mã tra cứu {einv.lookupCode}</span></> : <>🧾 Chưa xuất hóa đơn điện tử</>}{einvMsg && <span className="d-block small text-primary">{einvMsg}</span>}</span>
+            {einv ? <Button variant="outline-success" onClick={() => setEinvOpen(einv._id)}>Xem</Button> : <Button variant="success" disabled={einvBusy} onClick={() => setDraftOpen(true)}>Xem trước & xuất</Button>}
+          </div>
+        )}
+        {o.status !== 'delivered' && !['cancelled', 'returned'].includes(o.status) && (
+          <Button variant="link" className="p-0 text-start" onClick={() => setDraftOpen(true)}>🧾 Xem trước hóa đơn điện tử (phát hành được sau khi giao hàng)</Button>
+        )}
+        {draftOpen && <EInvoiceDraftModal orderId={o._id} onHide={() => setDraftOpen(false)} onIssued={(inv) => { setDraftOpen(false); setEinv(inv); setEinvMsg((inv.emailQueuedTo || inv.emailedTo) ? `Đã phát hành · đang gửi email tới ${inv.emailQueuedTo || inv.emailedTo}` : 'Đã phát hành hóa đơn'); setEinvOpen(inv._id); }} />}
+        {einvOpen && <EInvoiceModal id={einvOpen} onHide={(nextId) => setEinvOpen(nextId || null)} onChanged={() => api.get(`/einvoices/by-order/${o._id}`).then((r) => setEinv(r.data.data.find((x) => x.status === 'issued') || null))} />}
         <Form.Check type="switch" id="auto-next" checked={autoNext} label="Xong đơn này tự chuyển sang đơn tiếp theo" className="text-muted"
           onChange={(e) => { setAutoNext(e.target.checked); try { localStorage.setItem('orders.autoNext', e.target.checked ? '1' : '0'); } catch { /* bỏ qua */ } }} />
 

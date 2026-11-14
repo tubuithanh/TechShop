@@ -82,10 +82,11 @@ async function main() {
     const shippingFee = itemsTotal >= 5000000 ? 0 : 30000;
 
     // Thời gian: trong 12 tháng gần đây; giao sau 1-4 ngày
-    const createdAt = new Date(Date.now() - rand(1, DAYS) * 86400000 - rand(0, 86400000));
+    const createdAt = new Date(Date.now() - rand(2, DAYS) * 86400000 - rand(0, 86400000));
     const confirmedAt = new Date(createdAt.getTime() + rand(1, 6) * 3600000);
     const shippedAt = new Date(confirmedAt.getTime() + rand(2, 24) * 3600000);
-    const deliveredAt = new Date(shippedAt.getTime() + rand(8, 72) * 3600000);
+    // Không để mốc thời gian vượt quá hiện tại (đơn đã giao xong thì phải giao trong quá khứ)
+    const deliveredAt = new Date(Math.min(shippedAt.getTime() + rand(8, 72) * 3600000, Date.now() - rand(5, 120) * 60000));
     const code = `SEEDGH${Date.now().toString().slice(-6)}${String(i).padStart(4, '0')}`;
     const actor = shipper ? { changedBy: shipper._id, actorName: shipper.name, actorRole: 'staff' } : { actorName: 'GHN', actorRole: 'carrier' };
 
@@ -134,7 +135,7 @@ async function main() {
       if (packaging <= 2 && chance(0.7)) tags.add('Đóng gói sơ sài');
       if (quality <= 2 && chance(0.5)) tags.add('Có lỗi / trầy xước');
       const tone = rating >= 4 ? 'good' : rating === 3 ? 'mid' : 'bad';
-      const at = new Date(deliveredAt.getTime() + rand(2, 120) * 3600000);
+      const at = new Date(Math.min(deliveredAt.getTime() + rand(2, 120) * 3600000, Date.now() - 60000));
       const fullCriteria = chance(0.85); // một số khách chỉ chấm sao chung
       const r = await Review.create({
         userId: customer._id, productId: line.productId, orderId: order._id, reviewKey: key,

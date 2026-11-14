@@ -1,18 +1,19 @@
+// store/CartContext.jsx - xem chú thích từng dòng bên dưới
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { cartService } from '../services/cartService';
+import { cartService } from '../services/cartService'; // gọi API /api/cart
 import { useAuth } from './AuthContext';
 
-const CartContext = createContext(null);
+const CartContext = createContext(null); // kênh chia sẻ giỏ hàng
 
 export function CartProvider({ children }) {
   const { user } = useAuth();
-  const [cart, setCart] = useState({ items: [] });
+  const [cart, setCart] = useState({ items: [] }); // giỏ hiện tại
   const [loading, setLoading] = useState(false);
 
   // Chỉ tài khoản khách hàng có giỏ hàng (API giỏ hàng từ chối nhân viên / admin)
-  const customerId = user?.role === 'customer' ? user._id : null;
-  const refreshCart = useCallback(async () => {
-    if (!customerId) return;
+  const customerId = user?.role === 'customer' ? user._id : null; // chỉ khách hàng có giỏ
+  const refreshCart = useCallback(async () => { // useCallback: giữ nguyên hàm giữa các lần render
+    if (!customerId) return; // không phải khách -> không gọi API
     setLoading(true);
     try {
       const data = await cartService.getCart();
@@ -35,8 +36,8 @@ export function CartProvider({ children }) {
   }, [customerId, refreshCart]);
 
   // storeId: cửa hàng khách chọn để mua (mô hình multi-store) - có thể null nếu chưa chọn
-  const addToCart = async (productId, variantId, quantity = 1, storeId = null) => {
-    const data = await cartService.addItem({ productId, variantId, quantity, storeId });
+  const addToCart = async (productId, variantId, quantity = 1, storeId = null) => { // lỗi (hết hàng) -> ném ra cho trang hiển thị
+    const data = await cartService.addItem({ productId, variantId, quantity, storeId }); // API trả giỏ mới
     setCart(data);
   };
 
@@ -50,8 +51,8 @@ export function CartProvider({ children }) {
     setCart(data);
   };
 
-  const totalAmount = cart.items?.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) || 0;
-  const totalItems = cart.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
+  const totalAmount = cart.items?.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) || 0; // tổng tiền (chỉ hiển thị; backend tính lại khi đặt)
+  const totalItems = cart.items?.reduce((sum, i) => sum + i.quantity, 0) || 0; // tổng số món (huy hiệu trên icon giỏ)
 
   return (
     <CartContext.Provider

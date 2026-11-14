@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, InputGroup, Nav, Badge, Modal, Spinner } from 'react-bootstrap';
 import {
   Gear, TelephoneFill, GridFill, Truck, Search, Tools,
-  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill, PaletteFill, ShieldLockFill, LayoutTextWindowReverse, AwardFill
-} from 'react-bootstrap-icons';
+  Facebook, Chat, Youtube, Instagram, ExclamationTriangleFill, ArrowCounterclockwise, Image, EnvelopeFill, JournalText, CreditCard2FrontFill, PaletteFill, ShieldLockFill, LayoutTextWindowReverse, AwardFill, FileEarmarkText } from 'react-bootstrap-icons';
 import MailSettingsPanel from '../../components/admin/MailSettingsPanel';
 import PaymentSettingsPanel from '../../components/admin/PaymentSettingsPanel';
 import ShippingProvidersPanel from '../../components/admin/ShippingProvidersPanel';
+import EInvoiceConfigPanel from '../../components/admin/EInvoiceConfigPanel';
+import DemoAccountsToggle from '../../components/admin/DemoAccountsToggle';
 import ThemeSettingsPanel from '../../components/admin/ThemeSettingsPanel';
 import SecuritySettingsPanel from '../../components/admin/SecuritySettingsPanel';
 import LoyaltySettingsPanel from '../../components/admin/LoyaltySettingsPanel';
@@ -23,6 +24,7 @@ const TABS = [
   { key: 'footer', label: 'Chân trang (Footer)', icon: LayoutTextWindowReverse },
   { key: 'shipping', label: 'Vận chuyển', icon: Truck },
   { key: 'carriers', label: 'Đơn vị giao hàng', icon: Truck },
+  { key: 'einvoice', label: 'Hóa đơn điện tử', icon: FileEarmarkText },
   { key: 'payment', label: 'Thanh toán', icon: CreditCard2FrontFill },
   { key: 'vat', label: 'Thuế VAT', icon: CreditCard2FrontFill },
   { key: 'loyalty', label: 'Hạng thành viên', icon: AwardFill },
@@ -439,8 +441,9 @@ export default function AdminSettingsPage() {
                 )}
 
                 {activeTab === 'carriers' && <ShippingProvidersPanel />}
+                {activeTab === 'einvoice' && <EInvoiceConfigPanel />}
 
-                {activeTab === 'security' && <SecuritySettingsPanel />}
+                {activeTab === 'security' && <><SecuritySettingsPanel /><DemoAccountsToggle /></>}
 
                 {activeTab === 'loyalty' && <LoyaltySettingsPanel />}
 
@@ -513,7 +516,7 @@ export default function AdminSettingsPage() {
               </Card.Body>
             </Card>
 
-            <div className={`d-flex gap-2 mt-3 ${['email', 'payment', 'carriers', 'security', 'loyalty'].includes(activeTab) ? 'd-none' : ''}`}>
+            <div className={`d-flex gap-2 mt-3 ${['email', 'payment', 'carriers', 'einvoice', 'security', 'loyalty'].includes(activeTab) ? 'd-none' : ''}`}>
               <Button type="submit" variant="primary" disabled={saving || !isDirty}>
                 {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
               </Button>

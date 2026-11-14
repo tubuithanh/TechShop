@@ -138,7 +138,7 @@ async function main() {
               rating: r, message: chance(0.8) ? pick(POS_COMMENTS[tone]) : '', isVerifiedPurchase: true, variantLabel: order.items[0].variantLabel,
               criteria: { quality: clamp(4.6 + (Math.random() - 0.5)), accuracy: clamp(4.7 + (Math.random() - 0.5)), service }, tags
             });
-            await Review.collection.updateOne({ _id: rv._id }, { $set: { createdAt: new Date(at.getTime() + rand(1, 72) * 3600000) } });
+            await Review.collection.updateOne({ _id: rv._id }, { $set: { createdAt: new Date(Math.min(at.getTime() + rand(1, 72) * 3600000, Date.now() - 60000)) } });
             posReviews += 1;
           }
         }

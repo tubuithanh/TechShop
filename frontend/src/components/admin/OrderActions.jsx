@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Dropdown, Form, Modal, Badge } from 'react-bootstrap';
-import { CheckLg, BoxSeam, Truck, BagCheck, ArrowReturnLeft, Cash, ThreeDots, PencilSquare, ArrowLeftRight, XCircle, CurrencyExchange, HourglassSplit, Shop } from 'react-bootstrap-icons';
+import { CheckLg, BoxSeam, Truck, BagCheck, ArrowReturnLeft, Cash, ThreeDots, PencilSquare, ArrowLeftRight, XCircle, CurrencyExchange, HourglassSplit, Shop, FileEarmarkText } from 'react-bootstrap-icons';
 import { ORDER_LABELS, orderActions } from '../../utils/orderWorkflow';
 
 const ACTIVE_SHIPMENT = ['creating', 'unknown', 'active'];
@@ -15,6 +15,9 @@ export const REASONS = {
 
 // Bước tiếp theo của đơn: 1 nút chính rõ ràng (null = không cần làm gì)
 export function primaryAction(o, { canDeliver } = {}) {
+  // Đơn đã giao, đã thu tiền, chưa có hóa đơn điện tử -> bước tiếp theo là xuất hóa đơn
+  if (o.status === 'delivered' && o.einvoice === null && o.paymentStatus !== 'refunded' && o.refundStatus !== 'completed'
+    && !(['vnpay', 'momo', 'bank_transfer'].includes(o.paymentMode) && o.paymentStatus !== 'paid')) return { key: 'einvoice', label: 'Xuất hóa đơn', icon: FileEarmarkText, variant: 'success' };
   if (o.activeTransferId) return { key: 'wait', label: 'Chờ điều phối chi nhánh', icon: HourglassSplit, disabled: true };
   if (o.refundStatus === 'pending' && ['cancelled', 'returned'].includes(o.status)) return { key: 'refund', label: 'Hoàn tiền cho khách', icon: CurrencyExchange, variant: 'warning' };
   if (o.status === 'returning') return { key: 'receive-return', label: 'Đã nhận hàng trả', icon: ArrowReturnLeft, variant: 'warning' };
@@ -92,6 +95,8 @@ export default function OrderActions({ o, busy, canDeliver, onRun }) {
           <Button variant={primary.variant || 'secondary'} disabled={busy || primary.disabled} className="flex-grow-1 text-nowrap order-actions-main" onClick={() => onRun(o, primary.key)}>
             <primary.icon className="me-1" />{primary.label}
           </Button>
+        ) : o.einvoice ? (
+          <Button variant="outline-success" className="flex-grow-1 text-nowrap order-actions-main" onClick={() => onRun(o, 'einvoice-view')}><FileEarmarkText className="me-1" />HĐ {String(o.einvoice.number).padStart(8, '0')}</Button>
         ) : <span className="small text-muted flex-grow-1 align-self-center">{o.status === 'delivered' ? '✓ Hoàn tất' : o.status === 'cancelled' ? 'Đã hủy' : '—'}</span>}
         {extras.length > 0 && (
           <Dropdown align="end">

@@ -1,24 +1,29 @@
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
-const User = require('../models/User');
-const Admin = require('../models/Admin');
-const Otp = require('../models/Otp');
-const asyncHandler = require('../utils/asyncHandler');
-const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
-const { sendOtp } = require('../utils/sendOtp');
-const { isMailConfigured } = require('../utils/mailer');
-const { sendPasswordResetCode, sendChangeEmailCode } = require('../utils/notifyEmail');
-const Setting = require('../models/Setting');
-const { buildAuthUrl, exchangeCodeForToken, fetchZaloProfile } = require('../utils/zaloAuth');
-const { disconnectAccount } = require('../utils/socketAuth');
+// =====================================================================================================
+// controllers/authController.js - XỬ LÝ TÀI KHOẢN: đăng ký (có OTP email), đăng nhập (khách + nhân viên),
+// đăng nhập Zalo (OAuth 2.0 + PKCE), làm mới token, đăng xuất, đổi mật khẩu, quên mật khẩu, đổi email.
+// Mỗi hàm được bọc asyncHandler -> lỗi bất ngờ tự chuyển sang errorHandler (không làm sập server).
+// =====================================================================================================
+const jwt = require('jsonwebtoken'); // ký / kiểm tra JWT
+const bcrypt = require('bcryptjs'); // băm mã OTP (lưu bản băm, không lưu mã gốc)
+const crypto = require('crypto'); // tạo chuỗi ngẫu nhiên an toàn
+const User = require('../models/User'); // khách hàng
+const Admin = require('../models/Admin'); // admin / nhân viên
+const Otp = require('../models/Otp'); // mã xác thực một lần
+const asyncHandler = require('../utils/asyncHandler'); // bắt lỗi của hàm async
+const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens'); // tạo token
+const { sendOtp } = require('../utils/sendOtp'); // gửi mã OTP đăng ký
+const { isMailConfigured } = require('../utils/mailer'); // đã cấu hình gửi email chưa
+const { sendPasswordResetCode, sendChangeEmailCode } = require('../utils/notifyEmail'); // email quên mật khẩu / đổi email
+const Setting = require('../models/Setting'); // cấu hình (tên cửa hàng hiển thị trong email)
+const { buildAuthUrl, exchangeCodeForToken, fetchZaloProfile } = require('../utils/zaloAuth'); // gọi API Zalo
+const { disconnectAccount } = require('../utils/socketAuth'); // ngắt kết nối real-time cũ
 const {
-  normalizeName,
-  validateName,
-  normalizePhone,
-  validatePhone,
-  validatePassword,
-  normalizeAddresses
+  normalizeName, // chuẩn hóa họ tên (bỏ khoảng trắng thừa...)
+  validateName, // kiểm tra họ tên hợp lệ
+  normalizePhone, // chuẩn hóa số điện thoại
+  validatePhone, // kiểm tra số điện thoại hợp lệ
+  validatePassword, // mật khẩu khách: >= 8 ký tự, có chữ và số
+  normalizeAddresses // kiểm tra + chuẩn hóa danh sách địa chỉ
 } = require('../utils/customerValidation');
 
 const OTP_EXPIRES_MINUTES = 5; // mã OTP có hiệu lực 5 phút
@@ -28,55 +33,61 @@ const MAX_OTP_ATTEMPTS = 5; // nhập sai tối đa 5 lần
 // dùng sameSite: 'none' + secure: true mới được trình duyệt gửi kèm ở request cross-origin. Lúc dev
 // local (cùng origin qua Vite proxy) vẫn cần sameSite: 'lax' vì 'none' bắt buộc https (secure).
 const REFRESH_COOKIE_OPTIONS = {
-  httpOnly: true,
+  httpOnly: true, // JavaScript ở trình duyệt KHÔNG đọc được cookie này (chống XSS lấy trộm)
   sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-  secure: process.env.NODE_ENV === 'production',
-  maxAge: 7 * 24 * 60 * 60 * 1000
+  secure: process.env.NODE_ENV === 'production', // chỉ gửi qua https ở production
+  maxAge: 7 * 24 * 60 * 60 * 1000 // sống 7 ngày (bằng hạn refresh token)
 };
 
 // Cookie giữ state + code_verifier giữa bước bắt đầu đăng nhập Zalo và bước Zalo gọi lại
 const ZALO_PKCE_COOKIE = 'zalo_pkce';
 const ZALO_PKCE_COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: 'lax',
+  sameSite: 'lax', // vẫn được gửi khi Zalo chuyển hướng (GET) về trang callback
   secure: process.env.NODE_ENV === 'production',
-  maxAge: 10 * 60 * 1000
+  maxAge: 10 * 60 * 1000 // 10 phút là đủ để đăng nhập Zalo
 };
 
+// Quy tắc mật khẩu cũ (chỉ áp dụng cho tài khoản quản trị): tối thiểu 6 ký tự
 function getPasswordStrength(password) {
-  if (!password || password.length < 6) return { valid: false, message: 'Mật khẩu phải có ít nhất 6 ký tự' };
+  if (typeof password !== 'string' || password.length < 6) return { valid: false, message: 'Mật khẩu phải có ít nhất 6 ký tự' };
   return { valid: true };
 }
 
+// Lấy email dạng chuỗi đã chuẩn hóa (bỏ khoảng trắng, chữ thường); không phải chuỗi -> '' (coi như chưa nhập)
+// SỬA LỖI: trước đây gửi email là object/số (VD {"email": {}}) thì email.toLowerCase() ném lỗi -> trả 500.
+const emailOf = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+
 // ================== ĐĂNG KÝ KHÁCH HÀNG (collection: users) ==================
+// Luồng: (1) xin mã OTP -> (2) nhập mã để xác thực email -> (3) gửi form đăng ký đầy đủ
 
 const requestRegisterOtp = asyncHandler(async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ message: 'Vui lòng nhập email' });
+  const email = emailOf(req.body.email); // email đã chuẩn hóa
+  if (!email) return res.status(400).json({ message: 'Vui lòng nhập email' }); // chưa nhập
 
-  const existed = await User.findOne({ email: email.toLowerCase() });
-  if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' });
+  const existed = await User.findOne({ email }); // email đã có tài khoản khách?
+  if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' }); // 409 = xung đột dữ liệu
   // Cũng kiểm tra trùng với collection "admins" - tránh gửi OTP đăng ký cho email của 1 admin thật.
-  const existedAdmin = await Admin.findOne({ email: email.toLowerCase() });
+  const existedAdmin = await Admin.findOne({ email });
   if (existedAdmin) return res.status(409).json({ message: 'Email đã được sử dụng' });
 
-  await Otp.deleteMany({ email: email.toLowerCase(), purpose: 'register' });
-  const code = Otp.generateCode();
-  const codeHash = await bcrypt.hash(code, 10);
+  await Otp.deleteMany({ email, purpose: 'register' }); // xóa mã cũ -> mỗi email chỉ có 1 mã đang hiệu lực
+  const code = Otp.generateCode(); // sinh mã số ngẫu nhiên
+  const codeHash = await bcrypt.hash(code, 10); // băm mã (lộ DB cũng không biết mã gốc)
   await Otp.create({
-    email: email.toLowerCase(),
+    email,
     codeHash,
-    purpose: 'register',
-    expiresAt: new Date(Date.now() + OTP_EXPIRES_MINUTES * 60 * 1000)
+    purpose: 'register', // mục đích: đăng ký
+    expiresAt: new Date(Date.now() + OTP_EXPIRES_MINUTES * 60 * 1000) // hết hạn sau 5 phút
   });
   try {
-    const setting = await Setting.findOne().select('siteName').lean();
-    await sendOtp(email, code, 'register', { expiresMinutes: OTP_EXPIRES_MINUTES, shopName: setting?.siteName || 'TechShop' });
+    const setting = await Setting.findOne().select('siteName').lean(); // tên cửa hàng cho tiêu đề email
+    await sendOtp(email, code, 'register', { expiresMinutes: OTP_EXPIRES_MINUTES, shopName: setting?.siteName || 'TechShop' }); // gửi email
   } catch (err) {
     // Gửi email thất bại: xóa mã vừa tạo và báo lỗi rõ ràng (không để khách chờ một email không bao giờ tới)
     console.error('[OTP] Gửi email thất bại:', err.message);
-    await Otp.deleteMany({ email: email.toLowerCase(), purpose: 'register' });
-    return res.status(502).json({ message: 'Không gửi được email xác thực, vui lòng thử lại sau ít phút' });
+    await Otp.deleteMany({ email, purpose: 'register' });
+    return res.status(502).json({ message: 'Không gửi được email xác thực, vui lòng thử lại sau ít phút' }); // 502 = lỗi dịch vụ bên ngoài
   }
 
   res.json({
@@ -91,7 +102,7 @@ const verifyRegisterOtp = asyncHandler(async (req, res) => {
   const { email, code } = req.body;
   // Bắt buộc email là chuỗi: nếu thiếu, Mongoose bỏ điều kiện email -> lấy nhầm mã OTP mới nhất của NGƯỜI KHÁC
   if (typeof email !== 'string' || !email.trim()) return res.status(400).json({ message: 'Vui lòng nhập email' });
-  const otp = await Otp.findOne({ email: email.trim().toLowerCase(), purpose: 'register' }).sort({ createdAt: -1 });
+  const otp = await Otp.findOne({ email: email.trim().toLowerCase(), purpose: 'register' }).sort({ createdAt: -1 }); // mã mới nhất
 
   if (!otp) return res.status(400).json({ message: 'Không tìm thấy mã OTP, vui lòng yêu cầu gửi lại' });
   // Trước đây chỉ dựa vào TTL index của MongoDB (quét nền, không chạy đúng ngay tại thời điểm hết
@@ -100,35 +111,36 @@ const verifyRegisterOtp = asyncHandler(async (req, res) => {
   if (otp.expiresAt < new Date()) {
     return res.status(400).json({ message: 'Mã OTP đã hết hạn, vui lòng yêu cầu gửi lại' });
   }
-  if (otp.attempts >= MAX_OTP_ATTEMPTS) {
+  if (otp.attempts >= MAX_OTP_ATTEMPTS) { // đã sai 5 lần -> khóa mã này (chống dò mã)
     return res.status(429).json({ message: 'Bạn đã nhập sai quá nhiều lần, vui lòng yêu cầu gửi lại mã mới' });
   }
-  const isMatch = await otp.compareCode(code || '');
-  if (!isMatch) {
-    otp.attempts += 1;
+  const isMatch = await otp.compareCode(String(code || '')); // so mã nhập với bản băm
+  if (!isMatch) { // sai
+    otp.attempts += 1; // tăng số lần sai
     await otp.save();
     return res.status(400).json({ message: 'Mã OTP không đúng' });
   }
-  otp.verified = true;
+  otp.verified = true; // đúng -> đánh dấu email đã xác thực
   await otp.save();
   res.json({ message: 'Xác thực OTP thành công, vui lòng hoàn tất đăng ký' });
 });
 
 const register = asyncHandler(async (req, res) => {
-  const { email, password, confirmPassword, acceptTerms } = req.body;
+  const { password, confirmPassword, acceptTerms } = req.body;
+  const email = emailOf(req.body.email); // email đã chuẩn hóa
 
   if (!email) return res.status(400).json({ message: 'Vui lòng nhập email' });
   // Kiểm tra đầy đủ ở backend (giao diện cũng kiểm tra, nhưng request có thể gửi thẳng tới API)
   const fieldError =
-    validateName(req.body.displayName) ||
-    validatePhone(req.body.phoneNumber) ||
-    validatePassword(password) ||
-    (confirmPassword !== undefined && confirmPassword !== password ? 'Mật khẩu nhập lại không khớp' : null);
-  if (fieldError) return res.status(400).json({ message: fieldError });
-  if (!acceptTerms) {
+    validateName(req.body.displayName) || // họ tên
+    validatePhone(req.body.phoneNumber) || // số điện thoại
+    validatePassword(password) || // mật khẩu
+    (confirmPassword !== undefined && confirmPassword !== password ? 'Mật khẩu nhập lại không khớp' : null); // nhập lại khớp
+  if (fieldError) return res.status(400).json({ message: fieldError }); // lỗi đầu tiên gặp phải
+  if (!acceptTerms) { // bắt buộc đồng ý điều khoản
     return res.status(400).json({ message: 'Bạn cần đồng ý với Điều khoản sử dụng và Chính sách bảo mật' });
   }
-  const { addresses, error: addressError } = normalizeAddresses(req.body.addresses);
+  const { addresses, error: addressError } = normalizeAddresses(req.body.addresses); // địa chỉ (không bắt buộc)
   if (addressError) return res.status(400).json({ message: addressError });
 
   const displayName = normalizeName(req.body.displayName);
@@ -138,58 +150,60 @@ const register = asyncHandler(async (req, res) => {
     return res.status(409).json({ message: 'Số điện thoại đã được sử dụng cho tài khoản khác' });
   }
 
-  const existed = await User.findOne({ email: email.toLowerCase() });
+  const existed = await User.findOne({ email }); // kiểm tra lại (có thể vừa có người đăng ký trong lúc chờ OTP)
   if (existed) return res.status(409).json({ message: 'Email đã được sử dụng' });
   // Cũng phải kiểm tra trùng với collection "admins" - nếu không, ai đó có thể tự đăng ký tài khoản
   // khách hàng bằng đúng email của 1 admin thật, khiến admin đó gặp khó khăn khi đăng nhập lại
   // (login() phải thử cả 2 collection - xem sửa đổi ở login() bên dưới để phòng vệ thêm 1 lớp nữa).
-  const existedAdmin = await Admin.findOne({ email: email.toLowerCase() });
+  const existedAdmin = await Admin.findOne({ email });
   if (existedAdmin) return res.status(409).json({ message: 'Email đã được sử dụng' });
 
-  const verifiedOtp = await Otp.findOne({ email: email.toLowerCase(), purpose: 'register', verified: true }).sort({
+  // Phải có mã OTP ĐÃ XÁC THỰC cho đúng email này -> chứng minh khách sở hữu email
+  const verifiedOtp = await Otp.findOne({ email, purpose: 'register', verified: true }).sort({
     createdAt: -1
   });
   if (!verifiedOtp) return res.status(400).json({ message: 'Vui lòng xác thực OTP trước khi đăng ký' });
 
-  const user = await User.create({
+  const user = await User.create({ // tạo tài khoản (mật khẩu được băm trong hook pre('save') của model User)
     displayName,
     email,
     phoneNumber,
     password,
     addresses,
-    isEmailVerified: true,
-    termsAcceptedAt: new Date()
+    isEmailVerified: true, // email đã xác thực qua OTP
+    termsAcceptedAt: new Date() // thời điểm đồng ý điều khoản (bằng chứng pháp lý)
   });
-  await Otp.deleteMany({ email: email.toLowerCase(), purpose: 'register' });
+  await Otp.deleteMany({ email, purpose: 'register' }); // mã đã dùng xong -> xóa
 
+  // Đăng ký xong là đăng nhập luôn: cấp access token + refresh token (cookie)
   const accessToken = generateAccessToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
   const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
   res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
-  res.status(201).json({ message: 'Đăng ký thành công', user: user.toSafeObject(), accessToken });
+  res.status(201).json({ message: 'Đăng ký thành công', user: user.toSafeObject(), accessToken }); // 201 = đã tạo mới; toSafeObject bỏ mật khẩu
 });
 
 // ================== ĐĂNG NHẬP (thử User trước, nếu không có thì thử Admin) ==================
 
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) { // phải là chuỗi khác rỗng
     return res.status(400).json({ message: 'Vui lòng nhập email và mật khẩu' });
   }
 
-  const normalizedEmail = email.toLowerCase();
+  const normalizedEmail = email.toLowerCase(); // email lưu ở dạng chữ thường
 
-  const user = await User.findOne({ email: normalizedEmail }).select('+password');
-  if (user && user.isActive) {
-    const isMatch = await user.comparePassword(password);
+  const user = await User.findOne({ email: normalizedEmail }).select('+password'); // mật khẩu bị ẩn mặc định -> chọn thêm
+  if (user && user.isActive) { // có tài khoản khách và chưa bị khóa
+    const isMatch = await user.comparePassword(password); // so mật khẩu với bản băm bcrypt
     if (isMatch) {
-      user.lastLoginAt = new Date();
+      user.lastLoginAt = new Date(); // ghi lần đăng nhập gần nhất
       await user.save();
 
       const accessToken = generateAccessToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
       const refreshToken = generateRefreshToken({ _id: user._id, role: 'customer', tokenVersion: user.tokenVersion });
-      res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
-      return res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
+      res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS); // refresh token -> cookie httpOnly
+      return res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken }); // access token -> body
     }
   }
 
@@ -204,7 +218,7 @@ const login = asyncHandler(async (req, res) => {
       admin.lastLoginAt = new Date();
       await admin.save();
 
-      const accessToken = generateAccessToken({ _id: admin._id, role: admin.role, tokenVersion: admin.tokenVersion });
+      const accessToken = generateAccessToken({ _id: admin._id, role: admin.role, tokenVersion: admin.tokenVersion }); // role = 'admin' | 'staff'
       const refreshToken = generateRefreshToken({ _id: admin._id, role: admin.role, tokenVersion: admin.tokenVersion });
       res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
       // Nạp sẵn permissions của các nhóm quyền (giống hệt protect() cho các request sau) - để
@@ -213,55 +227,61 @@ const login = asyncHandler(async (req, res) => {
       await admin.populate('groupIds', 'name code permissions');
       await admin.populate('storeId', 'name city');
       await admin.populate('managedStoreIds', 'name city isActive');
+      // Nhân viên: tính phạm vi chi nhánh (điều chuyển, chi nhánh quản lý thêm)
       const scope = admin.role === 'staff' ? await require('../utils/staffScope').computeStoreScope(admin, req.headers['x-store-id']) : null;
+      // directReports: số người báo cáo trực tiếp -> frontend quyết định hiện menu "Báo cáo nhân viên"
       return res.json({ message: 'Đăng nhập thành công', user: { ...withStoreScope(admin.toSafeObject(), scope), directReports: await Admin.countDocuments({ managerId: admin._id }) }, accessToken });
     }
   }
 
   // Chỉ báo "đã bị khóa" khi mật khẩu ĐÚNG - nếu không, ai biết email cũng dò được tài khoản nào bị khóa
-  const locked = [user, admin].find((acc) => acc && !acc.isActive);
+  const locked = [user, admin].find((acc) => acc && !acc.isActive); // tài khoản bị khóa (nếu có)
   if (locked && (await locked.comparePassword(password))) {
     return res.status(401).json({ message: 'Tài khoản đã bị khóa' });
   }
-  return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+  return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' }); // thông báo chung: không tiết lộ email có tồn tại không
 });
 
 // ================== ĐĂNG NHẬP BẰNG ZALO (OAuth 2.0 + PKCE) ==================
+// Luồng: (1) zaloLoginRedirect: chuyển trình duyệt sang trang đăng nhập Zalo
+//        (2) zaloCallback: Zalo gọi về kèm "code" -> đổi lấy access_token của Zalo
+//        (3) zaloComplete: frontend gửi hồ sơ Zalo -> tạo / tìm tài khoản -> cấp token TechShop
 
 const zaloLoginRedirect = asyncHandler(async (req, res) => {
-  if (!process.env.ZALO_APP_ID || !process.env.ZALO_REDIRECT_URI) {
+  if (!process.env.ZALO_APP_ID || !process.env.ZALO_REDIRECT_URI) { // chưa cấu hình ứng dụng Zalo
     return res.status(500).json({ message: 'Đăng nhập Zalo chưa được cấu hình (thiếu ZALO_APP_ID/ZALO_REDIRECT_URI)' });
   }
+  // state: chuỗi ngẫu nhiên chống giả mạo callback (CSRF); codeVerifier: bí mật PKCE chứng minh đúng người bắt đầu đăng nhập
   const { url, state, codeVerifier } = buildAuthUrl({ appId: process.env.ZALO_APP_ID, redirectUri: process.env.ZALO_REDIRECT_URI });
   // Cất state + code_verifier trong cookie httpOnly có chữ ký, sống 10 phút. sameSite=lax: trình duyệt vẫn
   // gửi kèm cookie khi Zalo chuyển hướng (điều hướng cấp cao nhất, GET) về callback.
   const pkce = jwt.sign({ state, v: codeVerifier }, process.env.JWT_ACCESS_SECRET, { expiresIn: '10m' });
   res.cookie(ZALO_PKCE_COOKIE, pkce, ZALO_PKCE_COOKIE_OPTIONS);
-  res.redirect(url);
+  res.redirect(url); // chuyển sang trang đăng nhập của Zalo
 });
 
 const zaloCallback = asyncHandler(async (req, res) => {
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-  const { code, state } = req.query;
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'; // địa chỉ frontend để chuyển hướng về
+  const { code, state } = req.query; // Zalo gửi kèm code (đổi lấy token) và state (đã gửi đi ở bước 1)
   // Chỉ nhận callback khớp đúng lượt đăng nhập vừa bắt đầu từ chính trình duyệt này (state trong cookie)
   let pkce = null;
   try {
-    pkce = jwt.verify(req.cookies?.[ZALO_PKCE_COOKIE] || '', process.env.JWT_ACCESS_SECRET);
+    pkce = jwt.verify(req.cookies?.[ZALO_PKCE_COOKIE] || '', process.env.JWT_ACCESS_SECRET); // đọc cookie đã ký
   } catch {
-    pkce = null;
+    pkce = null; // không có / bị sửa / hết hạn
   }
-  const { maxAge, ...clearOptions } = ZALO_PKCE_COOKIE_OPTIONS;
+  const { maxAge, ...clearOptions } = ZALO_PKCE_COOKIE_OPTIONS; // bỏ maxAge khi xóa cookie
   res.clearCookie(ZALO_PKCE_COOKIE, clearOptions); // dùng 1 lần
-  if (!code || typeof state !== 'string' || !pkce || pkce.state !== state) {
+  if (!code || typeof state !== 'string' || !pkce || pkce.state !== state) { // state không khớp -> có thể bị giả mạo
     return res.redirect(`${clientUrl}/login?error=zalo_failed`);
   }
 
   try {
-    const tokenData = await exchangeCodeForToken({
+    const tokenData = await exchangeCodeForToken({ // đổi code lấy access_token của Zalo
       appId: process.env.ZALO_APP_ID,
       appSecret: process.env.ZALO_APP_SECRET,
       code,
-      codeVerifier: pkce.v
+      codeVerifier: pkce.v // PKCE: Zalo kiểm tra khớp với code_challenge đã gửi ở bước 1
     });
 
     // KHÔNG gọi lấy hồ sơ (graph.zalo.me) ngay tại đây - Zalo chặn trả về thông tin cá nhân nếu
@@ -281,7 +301,7 @@ const zaloCallback = asyncHandler(async (req, res) => {
     res.redirect(`${clientUrl}/zalo-finish#session=${encodeURIComponent(zaloSession)}`);
   } catch (err) {
     console.error('Lỗi đăng nhập Zalo:', err.message);
-    res.redirect(`${clientUrl}/login?error=zalo_failed`);
+    res.redirect(`${clientUrl}/login?error=zalo_failed`); // lỗi -> về trang đăng nhập kèm thông báo
   }
 });
 
@@ -311,21 +331,21 @@ const zaloComplete = asyncHandler(async (req, res) => {
   // access_token (Zalo vẫn trả "id" cho máy chủ ở nước ngoài, chỉ chặn tên / ảnh) và bắt buộc phải khớp.
   let verifiedId = null;
   try {
-    verifiedId = String((await fetchZaloProfile(zaloAccessToken)).id);
+    verifiedId = String((await fetchZaloProfile(zaloAccessToken)).id); // id thật theo Zalo
   } catch (err) {
     console.error('[Zalo] Không xác minh được id từ máy chủ:', err.message);
   }
-  if (verifiedId === null && process.env.ZALO_ALLOW_UNVERIFIED_ID !== 'true') {
+  if (verifiedId === null && process.env.ZALO_ALLOW_UNVERIFIED_ID !== 'true') { // không xác minh được -> từ chối (trừ khi cố ý cho phép)
     return res.status(502).json({ message: 'Không xác minh được tài khoản Zalo, vui lòng thử lại sau' });
   }
-  if (verifiedId !== null && verifiedId !== id) {
+  if (verifiedId !== null && verifiedId !== id) { // id gửi lên khác id thật -> giả mạo
     return res.status(401).json({ message: 'Thông tin tài khoản Zalo không khớp' });
   }
 
-  const safeName = typeof name === 'string' && name.trim() ? name.trim() : 'Người dùng Zalo';
-  const safeAvatar = typeof picture?.data?.url === 'string' ? picture.data.url : '';
+  const safeName = typeof name === 'string' && name.trim() ? name.trim() : 'Người dùng Zalo'; // tên hiển thị
+  const safeAvatar = typeof picture?.data?.url === 'string' ? picture.data.url : ''; // ảnh đại diện
 
-  let user = await User.findOne({ zaloId: id });
+  let user = await User.findOne({ zaloId: id }); // đã từng đăng nhập Zalo?
   if (!user) {
     // Zalo Social API không trả về email -> tài khoản để TRỐNG email (ID Zalo lưu ở trường zaloId).
     // Khách tự thêm email sau ở trang Thông tin tài khoản (xác thực bằng mã gửi tới email).
@@ -333,7 +353,7 @@ const zaloComplete = asyncHandler(async (req, res) => {
       displayName: safeName,
       avatar: safeAvatar,
       zaloId: id,
-      password: crypto.randomBytes(24).toString('hex'),
+      password: crypto.randomBytes(24).toString('hex'), // mật khẩu ngẫu nhiên không ai biết (chỉ đăng nhập qua Zalo)
       termsAcceptedAt: new Date()
     });
   }
@@ -348,27 +368,29 @@ const zaloComplete = asyncHandler(async (req, res) => {
   res.json({ message: 'Đăng nhập thành công', user: user.toSafeObject(), accessToken });
 });
 
+// ================== LÀM MỚI ACCESS TOKEN ==================
+// Frontend gọi khi access token hết hạn (nhận 401) -> dùng refresh token trong cookie để xin token mới
 const refresh = asyncHandler(async (req, res) => {
-  const token = req.cookies?.refreshToken;
+  const token = req.cookies?.refreshToken; // trình duyệt tự gửi cookie
   if (!token) return res.status(401).json({ message: 'Không tìm thấy refresh token' });
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET); // kiểm tra bằng khóa refresh
     let account, role;
     if (decoded.role === 'customer') {
       account = await User.findById(decoded.id);
       role = 'customer';
     } else {
       account = await Admin.findById(decoded.id);
-      role = account?.role;
+      role = account?.role; // lấy role mới nhất từ DB (có thể vừa bị đổi)
     }
-    if (!account || !account.isActive) return res.status(401).json({ message: 'Tài khoản không hợp lệ' });
+    if (!account || !account.isActive) return res.status(401).json({ message: 'Tài khoản không hợp lệ' }); // bị xóa / khóa
     if ((decoded.tv || 0) !== (account.tokenVersion || 0)) return res.status(401).json({ message: 'Phiên đăng nhập đã hết hiệu lực (mật khẩu vừa được thay đổi), vui lòng đăng nhập lại' });
 
-    const accessToken = generateAccessToken({ _id: account._id, role, tokenVersion: account.tokenVersion });
+    const accessToken = generateAccessToken({ _id: account._id, role, tokenVersion: account.tokenVersion }); // cấp access token mới
     res.json({ accessToken });
   } catch (err) {
-    return res.status(401).json({ message: 'Refresh token không hợp lệ hoặc đã hết hạn' });
+    return res.status(401).json({ message: 'Refresh token không hợp lệ hoặc đã hết hạn' }); // frontend nhận 401 -> chuyển về trang đăng nhập
   }
 });
 
@@ -377,50 +399,54 @@ const logout = asyncHandler(async (req, res) => {
   // lệnh xóa thiếu "SameSite=None; Secure" bị trình duyệt chặn -> cookie còn nguyên, mở lại trang là
   // tự đăng nhập lại. Bỏ maxAge (Express 4 sẽ dùng nó đặt hạn mới thay vì xóa).
   const { maxAge, ...clearOptions } = REFRESH_COOKIE_OPTIONS;
-  res.clearCookie('refreshToken', clearOptions);
-  res.json({ message: 'Đăng xuất thành công' });
+  res.clearCookie('refreshToken', clearOptions); // xóa cookie refresh token
+  res.json({ message: 'Đăng xuất thành công' }); // access token ở frontend do frontend tự xóa
 });
 
 // Nhân viên: storeId trả về = chi nhánh ĐANG làm việc (điều chuyển tạm thời / chi nhánh đang chọn của quản lý
 // nhiều chi nhánh) kèm danh sách chi nhánh được thao tác - xem utils/staffScope.js
 function withStoreScope(obj, scope) {
-  if (!scope) return obj;
+  if (!scope) return obj; // admin / khách: giữ nguyên
   return {
     ...obj,
-    homeStoreId: obj.storeId,
-    storeId: scope.currentStore || null,
-    storeScope: { current: scope.current, stores: scope.stores, transfer: scope.transfer }
+    homeStoreId: obj.storeId, // chi nhánh chính (gốc)
+    storeId: scope.currentStore || null, // chi nhánh đang thao tác
+    storeScope: { current: scope.current, stores: scope.stores, transfer: scope.transfer } // cho ô chọn chi nhánh
   };
 }
 
+// @route GET /api/auth/me - thông tin tài khoản đang đăng nhập (frontend gọi khi tải lại trang)
 const getMe = asyncHandler(async (req, res) => {
   // directReports: số người báo cáo trực tiếp (hiện menu Báo cáo nhân viên cho quản lý)
   const directReports = req.accountRole === 'customer' ? undefined : await Admin.countDocuments({ managerId: req.account._id });
   res.json({ user: { ...withStoreScope(req.account.toSafeObject(), req.storeScope), directReports } });
 });
 
+// @route PUT /api/auth/change-password { oldPassword, newPassword }
 const changePassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  const Model = req.accountRole === 'customer' ? User : Admin;
-  const account = await Model.findById(req.account._id).select('+password');
+  // SỬA LỖI: thiếu / sai kiểu mật khẩu cũ trước đây làm bcrypt ném lỗi -> 500; nay trả 400 rõ ràng
+  if (typeof oldPassword !== 'string' || !oldPassword) return res.status(400).json({ message: 'Vui lòng nhập mật khẩu hiện tại' });
+  const Model = req.accountRole === 'customer' ? User : Admin; // chọn đúng collection
+  const account = await Model.findById(req.account._id).select('+password'); // lấy kèm mật khẩu băm
 
-  const isMatch = await account.comparePassword(oldPassword);
+  const isMatch = await account.comparePassword(oldPassword); // phải nhập đúng mật khẩu hiện tại
   if (!isMatch) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
 
   // Khách hàng áp quy tắc mật khẩu mới (8 ký tự, có chữ và số); tài khoản quản trị giữ quy tắc cũ
   const passwordError = req.accountRole === 'customer' ? validatePassword(newPassword) : getPasswordStrength(newPassword).message;
   if (passwordError) return res.status(400).json({ message: passwordError });
 
-  account.password = newPassword;
+  account.password = newPassword; // hook pre('save') của model sẽ băm mật khẩu
   // Đăng xuất mọi thiết bị khác (token cũ hết hiệu lực); thiết bị đang thao tác nhận token mới để ở lại
   account.tokenVersion = (account.tokenVersion || 0) + 1;
   disconnectAccount(req, account._id); // các thiết bị khác mất kết nối real-time; thiết bị này kết nối lại bằng token mới
   await account.save();
   const role = req.accountRole;
-  res.cookie('refreshToken', generateRefreshToken({ _id: account._id, role, tokenVersion: account.tokenVersion }), REFRESH_COOKIE_OPTIONS);
+  res.cookie('refreshToken', generateRefreshToken({ _id: account._id, role, tokenVersion: account.tokenVersion }), REFRESH_COOKIE_OPTIONS); // refresh token mới
   res.json({
     message: 'Đổi mật khẩu thành công. Các thiết bị khác đã được đăng xuất.',
-    accessToken: generateAccessToken({ _id: account._id, role, tokenVersion: account.tokenVersion })
+    accessToken: generateAccessToken({ _id: account._id, role, tokenVersion: account.tokenVersion }) // access token mới
   });
 });
 
@@ -432,22 +458,22 @@ const RESET_GENERIC_MESSAGE = 'Nếu email này đã đăng ký tài khoản, m�
 
 // @route POST /api/auth/password/request-otp { email }
 const requestPasswordReset = asyncHandler(async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Vui lòng nhập email hợp lệ' });
+  const email = String(req.body.email || '').trim().toLowerCase(); // chuẩn hóa email
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Vui lòng nhập email hợp lệ' }); // dạng a@b.c
 
-  const user = await User.findOne({ email, isActive: true }).select('_id').lean();
-  if (!user) return res.json({ message: RESET_GENERIC_MESSAGE });
+  const user = await User.findOne({ email, isActive: true }).select('_id').lean(); // có tài khoản đang hoạt động?
+  if (!user) return res.json({ message: RESET_GENERIC_MESSAGE }); // không có -> vẫn trả thông báo chung (không lộ thông tin)
 
-  await Otp.deleteMany({ email, purpose: 'reset_password' });
+  await Otp.deleteMany({ email, purpose: 'reset_password' }); // xóa mã cũ
   const code = Otp.generateCode();
   await Otp.create({
     email,
-    codeHash: await bcrypt.hash(code, 10),
+    codeHash: await bcrypt.hash(code, 10), // lưu bản băm
     purpose: 'reset_password',
     expiresAt: new Date(Date.now() + OTP_EXPIRES_MINUTES * 60 * 1000)
   });
   try {
-    await sendPasswordResetCode(email, code, { expiresMinutes: OTP_EXPIRES_MINUTES });
+    await sendPasswordResetCode(email, code, { expiresMinutes: OTP_EXPIRES_MINUTES }); // gửi email chứa mã
   } catch (err) {
     console.error('[RESET] Gửi email thất bại:', err.message);
     await Otp.deleteMany({ email, purpose: 'reset_password' });
@@ -464,14 +490,14 @@ const requestPasswordReset = asyncHandler(async (req, res) => {
 const resetPassword = asyncHandler(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const { code, newPassword, confirmPassword } = req.body;
-  const otp = await Otp.findOne({ email, purpose: 'reset_password' }).sort({ createdAt: -1 });
-  if (!otp || otp.expiresAt < new Date()) {
+  const otp = await Otp.findOne({ email, purpose: 'reset_password' }).sort({ createdAt: -1 }); // mã mới nhất
+  if (!otp || otp.expiresAt < new Date()) { // không có / hết hạn
     return res.status(400).json({ message: 'Mã xác thực không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
   }
-  if (otp.attempts >= MAX_OTP_ATTEMPTS) {
+  if (otp.attempts >= MAX_OTP_ATTEMPTS) { // sai quá 5 lần
     return res.status(429).json({ message: 'Bạn đã nhập sai quá nhiều lần, vui lòng yêu cầu mã mới' });
   }
-  if (!(await otp.compareCode(String(code || '')))) {
+  if (!(await otp.compareCode(String(code || '')))) { // mã sai -> tăng số lần sai
     otp.attempts += 1;
     await otp.save();
     return res.status(400).json({ message: 'Mã xác thực không đúng' });
@@ -481,10 +507,10 @@ const resetPassword = asyncHandler(async (req, res) => {
   if (passwordError) return res.status(400).json({ message: passwordError });
 
   const user = await User.findOne({ email, isActive: true });
-  if (!user) return res.status(400).json({ message: 'Mã xác thực không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
-  user.password = newPassword;
+  if (!user) return res.status(400).json({ message: 'Mã xác thực không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' }); // tài khoản vừa bị khóa
+  user.password = newPassword; // băm trong hook pre('save')
   user.tokenVersion = (user.tokenVersion || 0) + 1; // đăng xuất mọi thiết bị đang dùng mật khẩu cũ
-  disconnectAccount(req, user._id);
+  disconnectAccount(req, user._id); // ngắt kết nối real-time cũ
   await user.save();
   await Otp.deleteMany({ email, purpose: 'reset_password' }); // mã chỉ dùng được một lần
   res.json({ message: 'Đặt lại mật khẩu thành công, vui lòng đăng nhập bằng mật khẩu mới' });
@@ -494,14 +520,14 @@ const resetPassword = asyncHandler(async (req, res) => {
 // Tài khoản Zalo đang dùng email tạm -> không cần mật khẩu (chưa từng đặt). Tài khoản thường -> phải nhập mật
 // khẩu hiện tại (lấy được phiên đăng nhập cũng không chiếm được tài khoản). Luôn xác thực bằng mã gửi tới
 // email MỚI để chắc chắn email đó là của khách.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // kiểm tra dạng email đơn giản
 
 // @route POST /api/auth/email/request-otp { email, currentPassword? }
 const requestEmailChange = asyncHandler(async (req, res) => {
-  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chức năng dành cho khách hàng' });
+  if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chức năng dành cho khách hàng' }); // nhân viên không dùng
   const email = String(req.body.email || '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email) || email.length > 254) return res.status(400).json({ message: 'Vui lòng nhập email hợp lệ' });
-  if (User.isPlaceholderEmail(email)) return res.status(400).json({ message: 'Email không hợp lệ' });
+  if (!EMAIL_RE.test(email) || email.length > 254) return res.status(400).json({ message: 'Vui lòng nhập email hợp lệ' }); // 254 = độ dài tối đa chuẩn
+  if (User.isPlaceholderEmail(email)) return res.status(400).json({ message: 'Email không hợp lệ' }); // không cho dùng email tạm kiểu Zalo
 
   const user = await User.findById(req.account._id).select('+password');
   if (email === user.email) return res.status(400).json({ message: 'Đây là email hiện tại của bạn' });
@@ -510,21 +536,21 @@ const requestEmailChange = asyncHandler(async (req, res) => {
     const ok = typeof req.body.currentPassword === 'string' && (await user.comparePassword(req.body.currentPassword));
     if (!ok) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
   }
-  if (await User.exists({ email, _id: { $ne: user._id } })) {
+  if (await User.exists({ email, _id: { $ne: user._id } })) { // email mới đã thuộc tài khoản khác
     return res.status(409).json({ message: 'Email này đã được dùng cho tài khoản khác' });
   }
 
-  await Otp.deleteMany({ userId: user._id, purpose: 'change_email' });
+  await Otp.deleteMany({ userId: user._id, purpose: 'change_email' }); // xóa mã đổi email cũ của khách này
   const code = Otp.generateCode();
   await Otp.create({
-    email,
-    userId: user._id,
+    email, // email MỚI
+    userId: user._id, // gắn với tài khoản -> người khác không dùng được mã này
     codeHash: await bcrypt.hash(code, 10),
     purpose: 'change_email',
     expiresAt: new Date(Date.now() + OTP_EXPIRES_MINUTES * 60 * 1000)
   });
   try {
-    await sendChangeEmailCode(email, code, { expiresMinutes: OTP_EXPIRES_MINUTES });
+    await sendChangeEmailCode(email, code, { expiresMinutes: OTP_EXPIRES_MINUTES }); // gửi mã tới email MỚI
   } catch (err) {
     console.error('[CHANGE-EMAIL] Gửi email thất bại:', err.message);
     await Otp.deleteMany({ userId: user._id, purpose: 'change_email' });
@@ -540,7 +566,7 @@ const requestEmailChange = asyncHandler(async (req, res) => {
 const verifyEmailChange = asyncHandler(async (req, res) => {
   if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chức năng dành cho khách hàng' });
   const email = String(req.body.email || '').trim().toLowerCase();
-  const otp = await Otp.findOne({ userId: req.account._id, email, purpose: 'change_email' }).sort({ createdAt: -1 });
+  const otp = await Otp.findOne({ userId: req.account._id, email, purpose: 'change_email' }).sort({ createdAt: -1 }); // đúng tài khoản + đúng email
   if (!otp || otp.expiresAt < new Date()) {
     return res.status(400).json({ message: 'Mã xác nhận không đúng hoặc đã hết hạn, vui lòng yêu cầu mã mới' });
   }
@@ -558,13 +584,13 @@ const verifyEmailChange = asyncHandler(async (req, res) => {
     return res.status(409).json({ message: 'Email này đã được dùng cho tài khoản khác' });
   }
   const user = await User.findById(req.account._id);
-  user.email = email;
+  user.email = email; // cập nhật email mới
   await user.save();
-  await Otp.deleteMany({ userId: user._id, purpose: 'change_email' });
+  await Otp.deleteMany({ userId: user._id, purpose: 'change_email' }); // mã dùng xong -> xóa
   res.json({ message: 'Đã cập nhật email thành công', user: user.toSafeObject() });
 });
 
-module.exports = {
+module.exports = { // xuất cho routes/authRoutes.js (và app.js dùng zaloCallback)
   requestEmailChange,
   verifyEmailChange,
   requestRegisterOtp,

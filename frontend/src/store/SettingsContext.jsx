@@ -1,3 +1,4 @@
+// store/SettingsContext.jsx - xem chú thích từng dòng bên dưới
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { settingService } from '../services/settingService';
 import { applyTheme, DEFAULT_THEME } from '../utils/theme';
@@ -5,21 +6,21 @@ import { applyHead, cachedHead, headOf } from '../utils/siteHead';
 
 // Nhớ bộ màu lần trước trong trình duyệt để tô màu NGAY khi mở trang, tránh chớp màu đỏ mặc định
 // trong lúc chờ API cấu hình trả về
-const THEME_CACHE_KEY = 'techshop-theme';
+const THEME_CACHE_KEY = 'techshop-theme'; // khóa lưu bộ màu trong localStorage
 function cachedTheme() {
   try {
-    return JSON.parse(localStorage.getItem(THEME_CACHE_KEY)) || DEFAULT_THEME;
+    return JSON.parse(localStorage.getItem(THEME_CACHE_KEY)) || DEFAULT_THEME; // bộ màu lần trước
   } catch {
     return DEFAULT_THEME;
   }
 }
-applyTheme(cachedTheme());
+applyTheme(cachedTheme()); // tô màu ngay khi nạp file (trước cả khi React chạy)
 // Tiêu đề / mô tả / favicon lần trước -> áp dụng ngay, không chờ API
-applyHead(cachedHead());
+applyHead(cachedHead()); // tiêu đề / favicon lần trước
 
 const SettingsContext = createContext(null);
 
-const DEFAULT_SETTINGS = {
+const DEFAULT_SETTINGS = { // giá trị mặc định khi chưa tải xong / API lỗi
   siteName: 'TechShop',
   tagline: 'Website thương mại điện tử đa chi nhánh',
   logoUrl: '',
@@ -41,26 +42,27 @@ const DEFAULT_SETTINGS = {
 };
 
 export function SettingsProvider({ children }) {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS); // cấu hình hiện tại
   const [loading, setLoading] = useState(true);
 
   const refreshSettings = useCallback(async () => {
-    const data = await settingService.getSettings();
+    const data = await settingService.getSettings(); // GET /api/settings (công khai)
     setSettings(data);
     return data;
   }, []);
 
   useEffect(() => {
-    refreshSettings().finally(() => setLoading(false));
+    // SỬA LỖI: backend không phản hồi -> trước đây sinh lỗi 'unhandled promise rejection'. Nay bắt lỗi, giữ cấu hình mặc định.
+    refreshSettings().catch(() => {}).finally(() => setLoading(false));
   }, [refreshSettings]);
 
   // Cập nhật tiêu đề trang & favicon động theo cấu hình - một điểm nhấn thường thấy ở các
   // website TMĐT chuyên nghiệp (cho phép đổi thương hiệu mà không cần sửa code/deploy lại).
   // Áp dụng màu sắc giao diện mỗi khi cấu hình thay đổi
   useEffect(() => {
-    applyTheme(settings.theme);
+    applyTheme(settings.theme); // đổi biến màu CSS
     try {
-      localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(settings.theme || DEFAULT_THEME));
+      localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(settings.theme || DEFAULT_THEME)); // nhớ cho lần sau
     } catch {
       /* trình duyệt chặn lưu trữ - bỏ qua */
     }
@@ -69,8 +71,8 @@ export function SettingsProvider({ children }) {
   // Tiêu đề (Tiêu đề SEO / tên website), mô tả SEO và favicon theo cấu hình - chỉ áp dụng khi đã tải xong cấu hình
   // thật (không ghi đè bằng giá trị mặc định lúc đang tải), và nhớ lại cho lần mở trang sau
   useEffect(() => {
-    if (loading) return;
-    applyHead(headOf(settings), { remember: true });
+    if (loading) return; // đang tải -> không ghi đè bằng mặc định
+    applyHead(headOf(settings), { remember: true }); // tiêu đề SEO, mô tả, favicon
   }, [settings, loading]);
 
   return (

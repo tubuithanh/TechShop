@@ -517,6 +517,28 @@ Bộ test dùng `mongodb-memory-server` để tạo MongoDB tạm trong bộ nh�
 - **Danh sách vấn đề cần xử lý:** sắp theo mức nghiêm trọng, mỗi dòng kèm **gợi ý hành động**. Có thêm **điểm mạnh** của chi nhánh, 12 chỉ số chính so với kỳ trước.
 - **Biểu đồ:** biểu đồ mạng nhện so sánh 6 nhóm giữa các chi nhánh, doanh thu từng chi nhánh theo ngày / tháng.
 
+### 13. Hóa đơn điện tử (giả lập)
+- Admin → **Hóa đơn điện tử** (quyền quản lý đơn hàng). Mô phỏng hóa đơn GTGT có mã của cơ quan thuế theo NĐ 123/2020 và TT 78/2021, **không gửi lên cơ quan thuế thật**.
+- **Đánh số:** mẫu số 1, ký hiệu `C26TTS`, số hóa đơn **tăng liên tục** theo ký hiệu (bộ đếm nguyên tử, không trùng số kể cả phát hành đồng thời).
+- **Thông tin trên hóa đơn:** mã của CQT, **mã tra cứu**, chữ ký số giả lập (HMAC-SHA256, kiểm tra được "Signature Valid"), **số tiền bằng chữ**.
+- **Số liệu lấy đúng VAT đã tính khi đặt hàng:** từng dòng hàng (giá chưa thuế, chiết khấu, thuế suất), phí vận chuyển, tổng hợp theo thuế suất.
+- **Người mua:** công ty (tên, MST, địa chỉ, email khách nhập lúc thanh toán) hoặc cá nhân.
+- **Phát hành:** chỉ cho đơn **đã giao / đã bàn giao** và đã thu tiền.
+  - **1 đơn:** từ khung xử lý đơn.
+  - **Hàng loạt:** nút "Phát hành cho N đơn đã giao", tối đa 200 đơn / lần.
+  
+  Tự **gửi email** cho người mua kèm link tra cứu.
+- **Hủy hóa đơn** (bắt buộc lý do) và **lập hóa đơn thay thế**: sửa tên / MST / địa chỉ người mua; hóa đơn cũ chuyển "bị thay thế", liên kết với hóa đơn mới. Mỗi đơn chỉ có 1 hóa đơn đang hiệu lực.
+- **Bản thể hiện hóa đơn** in được / lưu PDF: dấu "ĐÃ HỦY" / "ĐÃ BỊ THAY THẾ", dấu chìm "GIẢ LẬP".
+- **Khách xem hóa đơn:** trong chi tiết đơn, hoặc **tra cứu công khai** tại `/tra-cuu-hoa-don` bằng mã tra cứu.
+- **Cấu hình:** Admin → Cấu hình hệ thống → tab **Hóa đơn điện tử**.
+  - **Nhà cung cấp:** **Giả lập** (mặc định) hoặc **Bkav eHoadon** (SOAP `ExecCommand`, dữ liệu GZip + AES-256-CBC theo PartnerToken `KEY:IV`; PartnerToken lưu mã hóa; có nút kiểm tra kết nối). Thêm nhà cung cấp mới: khai báo trong `backend/utils/einvoiceProviders.js`, giao diện tự hiện form.
+  - **Người bán:** tên, MST (kiểm tra định dạng), địa chỉ, điện thoại, email, tài khoản.
+  - **Ký hiệu:** mẫu số, ký hiệu (kiểm tra dạng `C26TAA`).
+  - **Tự động:** **tự xuất hóa đơn khi đơn giao thành công / bán tại quầy**, **tự gửi email**.
+  - **Bkav lỗi** thì hóa đơn **không** được tạo; hệ thống không tự chuyển sang giả lập.
+  - **Lưu ý:** bộ kết nối Bkav viết theo tài liệu tích hợp, cần tài khoản demo Bkav để kiểm chứng.
+
 ### Tài khoản demo nhân viên
 Trang đăng nhập có sẵn danh sách tài khoản demo theo vai trò (quản lý, bán hàng, kho, giao hàng, kỹ thuật viên) của từng chi nhánh. Mật khẩu demo của nhóm tài khoản nhân viên mẫu: `nhanvien123`. Sinh thêm nhân viên mẫu: `node seed/generateStaff.js --staff-only` (`--random-passwords --out=<file>` để tạo mật khẩu ngẫu nhiên và xuất ra file).
 

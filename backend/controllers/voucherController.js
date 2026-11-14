@@ -1,11 +1,16 @@
+// =====================================================================================================
+// controllers/voucherController.js - MÃ GIẢM GIÁ
+//   Khách: xem mã công khai, kiểm tra mã, gợi ý top 3 mã cho giỏ, ví voucher cá nhân
+//   Admin: danh sách / tạo / sửa / vô hiệu hóa mã (có kiểm tra dữ liệu chặt chẽ)
+// =====================================================================================================
 const Voucher = require('../models/Voucher');
 const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
-const { searchFilter } = require('../utils/search');
+const { searchFilter } = require('../utils/search'); // điều kiện tìm kiếm không dấu
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const { customerTier, voucherScope, parseScopeLists, activePromotions, applyPromotions } = require('../utils/promotions');
-const { getLoyaltyConfig } = require('../utils/loyalty');
+const { getLoyaltyConfig } = require('../utils/loyalty'); // danh sách hạng thành viên
 
 // @route GET /api/vouchers/active - danh sách voucher công khai đang áp dụng (mục 1.1.9)
 const getActiveVouchers = asyncHandler(async (req, res) => {
@@ -15,11 +20,11 @@ const getActiveVouchers = asyncHandler(async (req, res) => {
     isActive: true,
     startDate: { $lte: now },
     endDate: { $gte: now },
-    $or: [{ usageLimit: 0 }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }]
+    $or: [{ usageLimit: 0 }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }] // còn lượt
   }).select('code description discountType discountValue maxDiscountAmount minOrderValue endDate categoryIds productIds storeIds tierKeys').populate('categoryIds storeIds', 'name').populate('productIds', 'title slug').lean();
   const config = await getLoyaltyConfig();
-  const tierName = Object.fromEntries(config.tiers.map((t) => [t.key, t.name]));
-  vouchers.forEach((v) => { v.tierNames = (v.tierKeys || []).map((k) => tierName[k] || k); });
+  const tierName = Object.fromEntries(config.tiers.map((t) => [t.key, t.name])); // khóa hạng -> tên hạng
+  vouchers.forEach((v) => { v.tierNames = (v.tierKeys || []).map((k) => tierName[k] || k); }); // thêm tên hạng để hiển thị
   res.json({ data: vouchers });
 });
 
@@ -37,12 +42,12 @@ const validateVoucher = asyncHandler(async (req, res) => {
   // phạm vi của mã. Giỏ trống (gọi API trực tiếp) thì dùng orderValue gửi lên như trước.
   const cart = await Cart.findOne({ userId: req.account._id }).lean();
   const cartItems = cart?.items || [];
-  let base = orderValue;
-  let afterPromo = orderValue;
+  let base = orderValue; // số tiền dùng để tính mức giảm
+  let afterPromo = orderValue; // tổng sau khuyến mãi (để so đơn tối thiểu)
   if (cartItems.length) {
     const products = await Product.find({ _id: { $in: cartItems.map((i) => i.productId) } }).lean();
     const productMap = new Map(products.map((p) => [String(p._id), p]));
-    const items = cartItems.map((c) => {
+    const items = cartItems.map((c) => { // giá hiện tại từng dòng
       const product = productMap.get(String(c.productId));
       const variant = product?.variants?.find((v) => String(v._id) === String(c.variantId));
       return { productId: c.productId, quantity: c.quantity, unitPrice: variant?.effectivePrice ?? 0 };
@@ -50,21 +55,21 @@ const validateVoucher = asyncHandler(async (req, res) => {
     const tier = await customerTier(req.account._id);
     const storeId = req.body.storeId;
     const ctx = { storeId, tierKey: tier?.key || null };
-    const promo = applyPromotions(items, productMap, await activePromotions(), ctx);
+    const promo = applyPromotions(items, productMap, await activePromotions(), ctx); // khuyến mãi tự động
     const lineTotals = items.map((i, k) => i.unitPrice * i.quantity - promo.lineDiscounts[k]);
     afterPromo = lineTotals.reduce((a, b) => a + b, 0);
     base = afterPromo;
     // Chưa chọn chi nhánh thì chưa kiểm tra chi nhánh (kiểm tra lại khi đặt hàng)
     const check = voucherScope(storeId ? voucher : { ...voucher.toObject(), storeIds: [] }, items, productMap, lineTotals, ctx);
     if (check.error) return res.status(400).json({ message: check.error });
-    if (check.limited) base = check.eligibleTotal;
-  } else if (['storeIds', 'tierKeys', 'categoryIds', 'productIds'].some((f) => voucher[f]?.length)) {
+    if (check.limited) base = check.eligibleTotal; // mã giới hạn sản phẩm: chỉ tính trên các sản phẩm đó
+  } else if (['storeIds', 'tierKeys', 'categoryIds', 'productIds'].some((f) => voucher[f]?.length)) { // giỏ trống mà mã có giới hạn
     return res.status(400).json({ message: 'Giỏ hàng không có sản phẩm thuộc phạm vi áp dụng của mã này' });
   }
   if (afterPromo < voucher.minOrderValue) {
     return res.status(400).json({ message: `Đơn hàng tối thiểu ${voucher.minOrderValue.toLocaleString()}đ để áp dụng mã này` });
   }
-  if (voucher.perCustomerLimit > 0) {
+  if (voucher.perCustomerLimit > 0) { // giới hạn lượt mỗi khách
     const usedByCustomer = await Order.countDocuments({
       userId: req.account._id,
       voucherCode: voucher.code,
@@ -75,6 +80,7 @@ const validateVoucher = asyncHandler(async (req, res) => {
     }
   }
   const maxDiscount = typeof voucher.maxDiscountAmount === 'number' ? voucher.maxDiscountAmount : Infinity;
+  // Số tiền giảm DỰ KIẾN (chưa tính phí ship; số chính xác do placeOrder tính lúc đặt)
   const discountAmount =
     voucher.discountType === 'percent'
       ? Math.round(Math.min((base * voucher.discountValue) / 100, maxDiscount))
@@ -89,7 +95,7 @@ const suggestForCart = asyncHandler(async (req, res) => {
   const { suggestVouchers } = require('../utils/voucherSuggest');
   const cart = await Cart.findOne({ userId: req.account._id }).lean();
   const items = (cart?.items || []).map((i) => ({ productId: String(i.productId), variantId: String(i.variantId), quantity: i.quantity }));
-  const storeId = require('mongoose').isValidObjectId(req.query.storeId) ? req.query.storeId : undefined;
+  const storeId = require('mongoose').isValidObjectId(req.query.storeId) ? req.query.storeId : undefined; // storeId sai định dạng -> bỏ qua
   res.json({ data: await suggestVouchers({ userId: req.account._id, storeId, items }) });
 });
 
@@ -100,23 +106,25 @@ const myVouchers = asyncHandler(async (req, res) => {
   if (req.accountRole !== 'customer') return res.status(403).json({ message: 'Chỉ dành cho khách hàng' });
   const now = new Date();
   const config = await getLoyaltyConfig();
-  const tier = await customerTier(req.account._id);
-  const tierRank = Object.fromEntries(config.tiers.map((t, i) => [t.key, i]));
+  const tier = await customerTier(req.account._id); // hạng hiện tại
+  const tierRank = Object.fromEntries(config.tiers.map((t, i) => [t.key, i])); // khóa hạng -> thứ bậc (0 = thấp nhất)
   const tierName = Object.fromEntries(config.tiers.map((t) => [t.key, t.name]));
+  // Mã đang bật, chưa hết hạn (gồm cả mã sắp diễn ra), còn lượt
   const list = await Voucher.find({ isActive: true, endDate: { $gte: now }, $or: [{ usageLimit: 0 }, { $expr: { $lt: ['$usedCount', '$usageLimit'] } }] })
     .populate('categoryIds', 'name slug').populate('productIds', 'title slug').populate('storeIds', 'name').lean();
+  // Thống kê mã khách đã dùng: số lần, tổng tiền tiết kiệm, lần gần nhất, các đơn
   const usage = await Order.aggregate([
     { $match: { userId: req.account._id, voucherCode: { $nin: [null, ''] }, status: { $nin: ['cancelled', 'returned'] } } },
     { $group: { _id: '$voucherCode', n: { $sum: 1 }, saved: { $sum: { $ifNull: ['$voucherDiscount', 0] } }, last: { $max: '$createdAt' }, orders: { $push: { _id: '$_id', code: '$orderCode' } } } }
   ]);
   const usedBy = new Map(usage.map((u) => [u._id, u]));
-  const soon = new Date(now.getTime() + 3 * 86400000);
+  const soon = new Date(now.getTime() + 3 * 86400000); // mốc "sắp hết hạn" = 3 ngày nữa
   const out = { ready: [], expiring: [], upcoming: [], locked: [], used: [] };
   for (const v of list) {
-    const mine = usedBy.get(v.code)?.n || 0;
+    const mine = usedBy.get(v.code)?.n || 0; // số lần khách đã dùng mã này
     const left = v.perCustomerLimit > 0 ? v.perCustomerLimit - mine : null; // null = không giới hạn
-    if (left !== null && left <= 0) continue;
-    const item = {
+    if (left !== null && left <= 0) continue; // hết lượt của khách -> không hiện
+    const item = { // dữ liệu hiển thị
       code: v.code, description: v.description, discountType: v.discountType, discountValue: v.discountValue, maxDiscountAmount: v.maxDiscountAmount,
       minOrderValue: v.minOrderValue, startDate: v.startDate, endDate: v.endDate, myUsesLeft: left,
       remaining: v.usageLimit > 0 ? v.usageLimit - v.usedCount : null,
@@ -125,22 +133,23 @@ const myVouchers = asyncHandler(async (req, res) => {
       stores: (v.storeIds || []).map((s) => s.name),
       tiers: (v.tierKeys || []).map((k) => tierName[k] || k)
     };
-    if (v.tierKeys?.length && !(tier && v.tierKeys.includes(tier.key))) {
+    if (v.tierKeys?.length && !(tier && v.tierKeys.includes(tier.key))) { // mã dành cho hạng khác
       // Chỉ gợi ý "mở khóa" cho hạng CAO HƠN hạng hiện tại
-      const lowest = Math.min(...v.tierKeys.map((k) => tierRank[k] ?? 99));
+      const lowest = Math.min(...v.tierKeys.map((k) => tierRank[k] ?? 99)); // hạng thấp nhất được dùng mã
       if (tier && lowest > (tierRank[tier.key] ?? -1)) out.locked.push({ ...item, unlockTier: config.tiers[lowest]?.name });
       continue;
     }
-    if (v.startDate > now) out.upcoming.push(item);
-    else if (v.endDate <= soon) out.expiring.push(item);
-    else out.ready.push(item);
+    if (v.startDate > now) out.upcoming.push(item); // chưa bắt đầu
+    else if (v.endDate <= soon) out.expiring.push(item); // hết hạn trong 3 ngày
+    else out.ready.push(item); // dùng được ngay
   }
+  // Giá trị ước lượng để sắp xếp: mã tiền mặt = số tiền; mã % = trần giảm (không có trần thì ước theo đơn 100.000đ × %)
   const value = (v) => (v.discountType === 'fixed' ? v.discountValue : v.maxDiscountAmount || v.discountValue * 100000);
-  out.ready.sort((a, b) => value(b) - value(a));
-  out.expiring.sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
-  out.upcoming.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+  out.ready.sort((a, b) => value(b) - value(a)); // có lợi nhất trước
+  out.expiring.sort((a, b) => new Date(a.endDate) - new Date(b.endDate)); // sắp hết hạn trước
+  out.upcoming.sort((a, b) => new Date(a.startDate) - new Date(b.startDate)); // sắp bắt đầu trước
   out.used = usage.map((u) => ({ code: u._id, times: u.n, saved: u.saved, lastUsedAt: u.last, orders: u.orders.slice(-3) })).sort((a, b) => new Date(b.lastUsedAt) - new Date(a.lastUsedAt));
-  res.json({ data: { ...out, tier, totalSaved: usage.reduce((s, u) => s + u.saved, 0) } });
+  res.json({ data: { ...out, tier, totalSaved: usage.reduce((s, u) => s + u.saved, 0) } }); // totalSaved = tổng tiền đã tiết kiệm
 });
 
 // ---------- ADMIN ----------
@@ -148,12 +157,12 @@ const myVouchers = asyncHandler(async (req, res) => {
 const getVouchers = asyncHandler(async (req, res) => {
   const { q, state } = req.query;
   const now = new Date();
-  const filter = { ...searchFilter(q) };
-  if (state === 'running') Object.assign(filter, { isActive: true, startDate: { $lte: now }, endDate: { $gte: now } });
-  if (state === 'upcoming') Object.assign(filter, { isActive: true, startDate: { $gt: now } });
-  if (state === 'expired') filter.endDate = { $lt: now };
-  if (state === 'disabled') filter.isActive = false;
-  const vouchers = await Voucher.find(filter).sort({ createdAt: -1 })
+  const filter = { ...searchFilter(q) }; // tìm theo từ khóa
+  if (state === 'running') Object.assign(filter, { isActive: true, startDate: { $lte: now }, endDate: { $gte: now } }); // đang chạy
+  if (state === 'upcoming') Object.assign(filter, { isActive: true, startDate: { $gt: now } }); // sắp chạy
+  if (state === 'expired') filter.endDate = { $lt: now }; // đã hết hạn
+  if (state === 'disabled') filter.isActive = false; // đã tắt
+  const vouchers = await Voucher.find(filter).sort({ createdAt: -1 }) // mới nhất trước
     .populate('categoryIds storeIds', 'name')
     .populate('productIds', 'title');
   res.json({ data: vouchers });
@@ -163,14 +172,14 @@ const getVouchers = asyncHandler(async (req, res) => {
 // (usedCount), giảm > 100%, giá trị âm, ngày kết thúc trước ngày bắt đầu, lỗi trùng mã thành lỗi 500.
 // current = mã đang sửa (gửi trường nào đổi trường đó). Trả về { data } hoặc { error }.
 async function parseVoucher(body, current = null) {
-  const merged = { ...(current ? current.toObject() : {}), ...body };
-  const num = (v) => (v === '' || v === null || v === undefined ? undefined : Number(v));
-  const data = {};
+  const merged = { ...(current ? current.toObject() : {}), ...body }; // dữ liệu cũ + dữ liệu mới gửi lên
+  const num = (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)); // ô trống -> undefined
+  const data = {}; // CHỈ các trường được phép (usedCount không bao giờ lấy từ body)
   const code = String(merged.code ?? '').trim().toUpperCase();
   if (!/^[A-Z0-9_-]{3,30}$/.test(code)) return { error: 'Mã gồm 3 - 30 ký tự: chữ không dấu, số, "-" hoặc "_"' };
   data.code = code;
-  data.description = String(merged.description ?? '').trim().slice(0, 300);
-  if (!['percent', 'fixed'].includes(merged.discountType)) return { error: 'Loại giảm giá không hợp lệ' };
+  data.description = String(merged.description ?? '').trim().slice(0, 300); // mô tả tối đa 300 ký tự
+  if (!['percent', 'fixed'].includes(merged.discountType)) return { error: 'Loại giảm giá không hợp lệ' }; // % hoặc số tiền
   data.discountType = merged.discountType;
   const value = num(merged.discountValue);
   if (!Number.isInteger(value) || value <= 0) return { error: 'Mức giảm phải là số nguyên lớn hơn 0' };
@@ -183,26 +192,27 @@ async function parseVoucher(body, current = null) {
   } else {
     data.maxDiscountAmount = undefined; // chỉ dùng cho giảm theo %
   }
+  // 3 trường số nguyên >= 0 (0 = không giới hạn / không yêu cầu)
   for (const [field, label] of [['minOrderValue', 'Giá trị đơn tối thiểu'], ['usageLimit', 'Tổng lượt dùng'], ['perCustomerLimit', 'Lượt dùng mỗi khách']]) {
     const v = num(merged[field]) ?? 0;
     if (!Number.isInteger(v) || v < 0) return { error: `${label} phải là số nguyên ≥ 0` };
     data[field] = v;
   }
-  if (current && data.usageLimit > 0 && data.usageLimit < current.usedCount) {
+  if (current && data.usageLimit > 0 && data.usageLimit < current.usedCount) { // không hạ tổng lượt xuống dưới số đã dùng
     return { error: `Mã đã được dùng ${current.usedCount} lượt, tổng lượt dùng không được nhỏ hơn số này` };
   }
-  const start = merged.startDate ? new Date(merged.startDate) : new Date();
-  const end = merged.endDate ? new Date(merged.endDate) : null;
+  const start = merged.startDate ? new Date(merged.startDate) : new Date(); // không nhập ngày bắt đầu = bắt đầu ngay
+  const end = merged.endDate ? new Date(merged.endDate) : null; // ngày kết thúc bắt buộc
   if (Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return { error: 'Ngày bắt đầu / kết thúc không hợp lệ' };
   if (end <= start) return { error: 'Ngày kết thúc phải sau ngày bắt đầu' };
   data.startDate = start;
   data.endDate = end;
   if (merged.isActive !== undefined && typeof merged.isActive !== 'boolean') return { error: 'Trạng thái không hợp lệ' };
-  data.isActive = merged.isActive !== false;
-  const lists = parseScopeLists(merged, ['categoryIds', 'productIds', 'storeIds']);
+  data.isActive = merged.isActive !== false; // mặc định bật
+  const lists = parseScopeLists(merged, ['categoryIds', 'productIds', 'storeIds']); // phạm vi áp dụng
   if (lists.error) return { error: lists.error };
   Object.assign(data, lists.data);
-  if (data.tierKeys.length) {
+  if (data.tierKeys.length) { // hạng thành viên phải có trong cấu hình
     const config = await getLoyaltyConfig();
     const known = new Set(config.tiers.map((t) => t.key));
     if (data.tierKeys.some((k) => !known.has(k))) return { error: 'Hạng thành viên không tồn tại' };
@@ -210,10 +220,12 @@ async function parseVoucher(body, current = null) {
   return { data };
 }
 
+// Mã đã tồn tại chưa (bỏ qua chính mã đang sửa)
 async function codeTaken(code, exceptId) {
   return Voucher.exists({ code, ...(exceptId ? { _id: { $ne: exceptId } } : {}) });
 }
 
+// @route POST /api/vouchers (admin)
 const createVoucher = asyncHandler(async (req, res) => {
   const { data, error } = await parseVoucher(req.body);
   if (error) return res.status(400).json({ message: error });
@@ -222,6 +234,7 @@ const createVoucher = asyncHandler(async (req, res) => {
   res.status(201).json({ data: voucher });
 });
 
+// @route PUT /api/vouchers/:id (admin)
 const updateVoucher = asyncHandler(async (req, res) => {
   const voucher = await Voucher.findById(req.params.id);
   if (!voucher) return res.status(404).json({ message: 'Không tìm thấy voucher' });
@@ -230,11 +243,12 @@ const updateVoucher = asyncHandler(async (req, res) => {
   // Đổi mã khi đã có đơn dùng mã cũ sẽ làm sai giới hạn lượt / khách (đếm theo voucherCode trên đơn)
   if (data.code !== voucher.code && voucher.usedCount > 0) return res.status(400).json({ message: 'Mã đã có đơn sử dụng, không đổi được tên mã' });
   if (data.code !== voucher.code && (await codeTaken(data.code, voucher._id))) return res.status(409).json({ message: `Mã ${data.code} đã tồn tại` });
-  Object.assign(voucher, data);
+  Object.assign(voucher, data); // chép các trường hợp lệ vào bản ghi
   await voucher.save();
   res.json({ data: voucher });
 });
 
+// @route DELETE /api/vouchers/:id (admin) - không xóa hẳn (đơn cũ còn tham chiếu mã), chỉ vô hiệu hóa
 const deleteVoucher = asyncHandler(async (req, res) => {
   const voucher = await Voucher.findById(req.params.id);
   if (!voucher) return res.status(404).json({ message: 'Không tìm thấy voucher' });

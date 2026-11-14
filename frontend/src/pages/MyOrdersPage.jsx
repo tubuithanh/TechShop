@@ -7,6 +7,7 @@ import { useCart } from '../store/CartContext';
 import { orderLabel, orderMethod, money } from '../utils/orderWorkflow';
 import { placeholderImage } from '../utils/placeholderImage';
 import ClaimPosOrder from '../components/ClaimPosOrder';
+import { orderDateTime, timeAgo } from '../utils/orderTime';
 
 // Tab theo góc nhìn khách (gom các trạng thái kỹ thuật - khớp MY_ORDER_GROUPS ở backend)
 const TABS = [
@@ -177,7 +178,7 @@ export default function MyOrdersPage() {
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center gap-2 mb-2 small">
                     <span className="text-muted text-truncate">
-                      <b className="text-body">#{o.orderCode}</b> · {new Date(o.createdAt).toLocaleDateString('vi-VN')} · {orderMethod(o)} · {o.storeId?.name}
+                      <b className="text-body">#{o.orderCode}</b> · {orderDateTime(o.createdAt)} · {orderMethod(o)} · {o.storeId?.name}
                     </span>
                     <Badge bg={statusVariant[o.status] || 'secondary'} className="flex-shrink-0">{orderLabel(o)}</Badge>
                   </div>

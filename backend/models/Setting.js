@@ -47,12 +47,16 @@ const settingSchema = new mongoose.Schema(
     // Chống lạm dụng & tấn công dồn dập (giới hạn tần suất gọi API) - chỉ admin xem/đổi qua /api/settings/security,
     // KHÔNG trả về ở GET /api/settings công khai
     rateLimitEnabled: { type: Boolean, default: true, select: false },
+    // Hiện danh sách tài khoản demo ở trang đăng nhập (undefined = bật khi local, tắt trên production)
+    showDemoAccounts: { type: Boolean, default: undefined, select: false },
     // Đã nạp 3 slide mặc định cho trang chủ (chỉ nạp 1 lần - admin xóa hết slide thì không tự tạo lại)
     homeSlidesSeeded: { type: Boolean, default: false, select: false },
     // Số lần tối đa mỗi IP / 15 phút cho từng nhóm (trống = mặc định trong middlewares/rateLimits.js)
     rateLimits: { type: mongoose.Schema.Types.Mixed, default: undefined, select: false },
     // Ngưỡng (phút) coi là QUÁ HẠN cho từng nhóm việc ở trang Đơn hàng -> Việc cần làm (controllers/orderInboxController.js)
     orderSla: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    // Hóa đơn điện tử giả lập: thông tin người bán + ký hiệu (utils/einvoice.js)
+    einvoice: { type: mongoose.Schema.Types.Mixed, default: undefined },
 
     maintenanceMode: { type: Boolean, default: false },
     maintenanceMessage: {

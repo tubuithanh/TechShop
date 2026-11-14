@@ -1,5 +1,7 @@
+// components/PrivateRoute.jsx - "người gác cổng" cho các trang cần đăng nhập. Cách dùng trong App.jsx:
+//   <PrivateRoute roles={['admin','staff']} permissionPath="/admin/orders"><AdminOrdersPage /></PrivateRoute>
 import { useEffect, useRef } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom'; // Navigate = chuyển trang ngay khi render
 import { useAuth } from '../store/AuthContext';
 import { firstAdminPath, hasPagePermission } from '../utils/permissions';
 
@@ -8,32 +10,32 @@ import { firstAdminPath, hasPagePermission } from '../utils/permissions';
 // role='staff' (admin luôn qua được, customer bị chặn ở bước roles phía trên rồi).
 export default function PrivateRoute({ children, roles, permissionPath }) {
   const { user, loading } = useAuth();
-  const location = useLocation();
-  const denied = Boolean(user && permissionPath && !hasPagePermission(user, permissionPath));
+  const location = useLocation(); // trang đang mở
+  const denied = Boolean(user && permissionPath && !hasPagePermission(user, permissionPath)); // thiếu quyền?
   // Bị chặn ở Dashboard (/admin) nhưng còn trang quản trị khác được vào (VD nhân viên giao hàng) -> chuyển
   // thẳng tới trang đó, không báo lỗi
   const insteadPath = denied && permissionPath === '/admin' ? firstAdminPath(user) : null;
   const deniedByPermission = denied && !insteadPath;
   // Chỉ báo đúng 1 lần cho mỗi lượt "bị chặn" (không phải mỗi lần render) - tránh alert() lặp lại
   // nhiều lần nếu component re-render trước khi điều hướng thực sự xảy ra.
-  const hasAlerted = useRef(false);
+  const hasAlerted = useRef(false); // useRef: giữ giá trị qua các lần render mà không gây render lại
 
   useEffect(() => {
     if (deniedByPermission && !hasAlerted.current) {
       hasAlerted.current = true;
       alert('Bạn không có quyền truy cập chức năng này. Vui lòng liên hệ quản trị viên nếu cần cấp thêm quyền.');
     }
-    if (!deniedByPermission) hasAlerted.current = false;
+    if (!deniedByPermission) hasAlerted.current = false; // có quyền lại -> lần bị chặn sau vẫn báo
   }, [deniedByPermission]);
 
-  if (loading) return <div className="text-center py-5">Đang tải...</div>;
+  if (loading) return <div className="text-center py-5">Đang tải...</div>; // đang khôi phục phiên -> chưa quyết định
   // Ghi lại trang đang mở để đăng nhập xong quay về đúng trang đó (không về trang chủ)
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />; // sai vai trò
   // Điều hướng về trang chủ (không phải /admin) khi thiếu quyền - nếu redirect về /admin và chính
   // /admin (Dashboard) cũng nằm trong permissionPath bị chặn, sẽ tạo vòng lặp redirect vô hạn.
   if (insteadPath) return <Navigate to={insteadPath} replace />;
   if (deniedByPermission) return <Navigate to="/" replace />;
 
-  return children;
+  return children; // đủ điều kiện -> hiển thị trang
 }

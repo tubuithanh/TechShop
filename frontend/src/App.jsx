@@ -1,16 +1,17 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { AuthProvider, useAuth } from './store/AuthContext';
-import { CartProvider } from './store/CartContext';
-import { SettingsProvider, useSettings } from './store/SettingsContext';
+// App.jsx - xem chú thích từng dòng bên dưới
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'; // định tuyến: URL -> trang
+import { AuthProvider, useAuth } from './store/AuthContext'; // trạng thái đăng nhập
+import { CartProvider } from './store/CartContext'; // giỏ hàng
+import { SettingsProvider, useSettings } from './store/SettingsContext'; // cấu hình website (tên, màu, bảo trì...)
 
 import Header from './components/Header';
 import Footer from './components/Footer';
-import PrivateRoute from './components/PrivateRoute';
-import ChatWidget from './components/ChatWidget';
-import CompareBar from './components/CompareBar';
+import PrivateRoute from './components/PrivateRoute'; // chặn trang cần đăng nhập / quyền
+import ChatWidget from './components/ChatWidget'; // khung chat hỗ trợ góc màn hình
+import CompareBar from './components/CompareBar'; // thanh so sánh sản phẩm
 import NotFoundPage from './pages/NotFoundPage';
 import MobileBottomNav from './components/MobileBottomNav';
-import MaintenancePage from './pages/MaintenancePage';
+import MaintenancePage from './pages/MaintenancePage'; // trang "đang bảo trì"
 
 import HomePage from './pages/HomePage';
 import ProductListPage from './pages/ProductListPage';
@@ -44,7 +45,7 @@ import MyWarrantiesPage from './pages/MyWarrantiesPage';
 import MyVouchersPage from './pages/account/MyVouchersPage';
 import NotificationsPage from './pages/account/NotificationsPage';
 
-import AdminLayout from './pages/admin/AdminLayout';
+import AdminLayout from './pages/admin/AdminLayout'; // khung trang quản trị (menu trái + thanh trên)
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
 import AdminPromotionsPage from './pages/admin/AdminPromotionsPage';
@@ -55,6 +56,9 @@ import AdminStaffPerformancePage from './pages/admin/AdminStaffPerformancePage';
 import AdminStaffReportsPage from './pages/admin/AdminStaffReportsPage';
 import AdminExpressPage from './pages/admin/AdminExpressPage';
 import AdminStoreHealthPage from './pages/admin/AdminStoreHealthPage';
+import AdminEInvoicesPage from './pages/admin/AdminEInvoicesPage';
+import AdminWorkspacePage from './pages/admin/AdminWorkspacePage';
+import EInvoiceLookupPage from './pages/EInvoiceLookupPage';
 import { MyReportPage, StaffReportDetailPage } from './pages/admin/StaffReportPages';
 import AdminProductsPage from './pages/admin/AdminProductsPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
@@ -69,7 +73,7 @@ import AdminAuditLogPage from './pages/admin/AdminAuditLogPage';
 import AdminLocationsPage from './pages/admin/AdminLocationsPage';
 import AdminSlidesPage from './pages/admin/AdminSlidesPage';
 import SeasonalEffect from './components/SeasonalEffect';
-import TitleManager from './components/TitleManager';
+import TitleManager from './components/TitleManager'; // đổi tiêu đề tab trình duyệt theo trang
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminPermissionGroupsPage from './pages/admin/AdminPermissionGroupsPage';
@@ -80,20 +84,20 @@ import AdminPosPage from './pages/admin/AdminPosPage';
 // Chặn truy cập toàn site khi bật chế độ bảo trì (Admin > Cấu hình hệ thống), trừ trang /login
 // (để admin/staff vẫn đăng nhập được và tự tắt bảo trì) và các tài khoản admin/staff đã đăng nhập.
 function MaintenanceGate({ children }) {
-  const { settings, loading: settingsLoading } = useSettings();
+  const { settings, loading: settingsLoading } = useSettings(); // đổi tên biến loading để không trùng
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
 
-  if (settingsLoading || authLoading) return null;
+  if (settingsLoading || authLoading) return null; // chưa biết cấu hình / người dùng -> chưa vẽ gì
 
-  const isStaffOrAdmin = user && ['admin', 'staff'].includes(user.role);
-  if (settings.maintenanceMode && !isStaffOrAdmin && !['/login', '/zalo-finish'].includes(location.pathname)) {
+  const isStaffOrAdmin = user && ['admin', 'staff'].includes(user.role); // nhân viên / admin vẫn vào được khi bảo trì
+  if (settings.maintenanceMode && !isStaffOrAdmin && !['/login', '/zalo-finish'].includes(location.pathname)) { // bảo trì: khách chỉ thấy trang bảo trì (trừ trang đăng nhập)
     return <MaintenancePage message={settings.maintenanceMessage} />;
   }
   return children;
 }
 
-function StorefrontLayout({ children }) {
+function StorefrontLayout({ children }) { // khung trang bán hàng: đầu trang + nội dung + chân trang
   const { settings } = useSettings();
   return (
     <div className="d-flex flex-column min-vh-100 bg-light site-body">
@@ -130,6 +134,7 @@ export default function App() {
                 <Route path="/zalo-finish" element={<ZaloFinishPage />} />
                 <Route path="/terms" element={<StorefrontLayout><TermsPage /></StorefrontLayout>} />
                 <Route path="/privacy" element={<StorefrontLayout><PrivacyPage /></StorefrontLayout>} />
+                <Route path="/tra-cuu-hoa-don" element={<StorefrontLayout><EInvoiceLookupPage /></StorefrontLayout>} />
                 <Route path="/tra-cuu-bao-hanh" element={<StorefrontLayout><WarrantyLookupPage /></StorefrontLayout>} />
                 <Route path="/chinh-sach-doi-tra" element={<StorefrontLayout><ReturnPolicyPage /></StorefrontLayout>} />
                 <Route path="/chinh-sach-bao-hanh" element={<StorefrontLayout><WarrantyPolicyPage /></StorefrontLayout>} />
@@ -146,7 +151,9 @@ export default function App() {
                   path="/checkout"
                   element={
                     <StorefrontLayout>
-                      <PrivateRoute>
+                      {/* SỬA LỖI: trước đây mọi tài khoản đăng nhập đều vào được (cả nhân viên / admin) nhưng backend chỉ cho
+                          KHÁCH HÀNG có giỏ hàng và đặt hàng -> nhân viên vào chỉ thấy lỗi. Nay chỉ khách hàng. */}
+                      <PrivateRoute roles={['customer']}>
                         <CheckoutPage />
                       </PrivateRoute>
                     </StorefrontLayout>
@@ -234,6 +241,8 @@ export default function App() {
                   <Route path="stores" element={<PrivateRoute roles={['admin']}><AdminStoresPage /></PrivateRoute>} />
                   <Route path="staff/:id" element={<PrivateRoute roles={['admin']}><AdminStaffDetailPage /></PrivateRoute>} />
                   {/* Báo cáo nhân viên: backend tự chặn theo phạm vi (admin / quản lý chi nhánh / chính mình) */}
+                  <Route path="workspace" element={<PrivateRoute roles={['admin', 'staff']}><AdminWorkspacePage /></PrivateRoute>} />
+                  <Route path="einvoices" element={<PrivateRoute permissionPath="/admin/einvoices"><AdminEInvoicesPage /></PrivateRoute>} />
                   <Route path="store-health" element={<PrivateRoute roles={['admin', 'staff']}><AdminStoreHealthPage /></PrivateRoute>} />
                   <Route path="express" element={<PrivateRoute permissionPath="/admin/express"><AdminExpressPage /></PrivateRoute>} />
                   <Route path="staff-reports" element={<PrivateRoute roles={['admin', 'staff']}><AdminStaffReportsPage /></PrivateRoute>} />

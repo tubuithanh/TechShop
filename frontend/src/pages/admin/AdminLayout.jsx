@@ -3,11 +3,13 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Dropdown, Offcanvas } from 'react-bootstrap';
 import {
   Speedometer2,
+  Briefcase,
   GraphUpArrow,
   Megaphone,
   JournalCheck,
   Trophy,
   HeartPulse,
+  FileEarmarkText,
   BarChartLine,
   PersonLinesFill,
   BoxSeam,
@@ -37,13 +39,14 @@ import {
   ChevronRight
 } from 'react-bootstrap-icons';
 import { useAuth } from '../../store/AuthContext';
-import { getWorkingStore, setWorkingStore } from '../../services/api';
+import { getWorkingStore, setWorkingStore } from '../../services/api'; // chi nhánh đang làm việc (localStorage)
 import { useSettings } from '../../store/SettingsContext';
-import { hasPagePermission } from '../../utils/permissions';
+import { hasPagePermission, isStoreManager } from '../../utils/permissions';
 import { orderService } from '../../services/orderService';
 import { chatService } from '../../services/chatService';
 import api from '../../services/api';
-import { applyColorMode } from '../../utils/colorMode';
+import ErrorBoundary from '../../components/ErrorBoundary'; // bắt lỗi giao diện của từng trang con
+import { applyColorMode } from '../../utils/colorMode'; // chế độ sáng / tối của trang bán hàng
 import './admin.css';
 
 // Menu chia nhóm. Mỗi mục:
@@ -54,11 +57,13 @@ const SECTIONS = [
   {
     title: 'Bán hàng',
     items: [
-      { path: '/admin', label: 'Tổng quan', icon: Speedometer2, perm: true },
+      { path: '/admin/workspace', label: 'Dashboard', icon: Briefcase, everyone: true },
+      { path: '/admin', label: 'Thống kê', icon: Speedometer2, perm: true },
       { path: '/admin/analytics', label: 'Phân tích', icon: GraphUpArrow, perm: true },
       { path: '/admin/store-health', label: 'Sức khỏe chi nhánh', icon: HeartPulse, storeManager: true },
       { path: '/admin/orders', label: 'Đơn hàng', icon: ReceiptCutoff, perm: true, badge: 'orders' },
       { path: '/admin/pos', label: 'Bán tại quầy (POS)', icon: Shop, perm: true },
+      { path: '/admin/einvoices', label: 'Hóa đơn điện tử', icon: FileEarmarkText, perm: true },
       { path: '/admin/deliveries', label: 'Phân công giao hàng', icon: Truck, perm: true, badge: 'deliveries' },
       { path: '/admin/express', label: 'Giao hỏa tốc 2 giờ', icon: LightningCharge, perm: true },
       { path: '/admin/my-deliveries', label: 'Đơn tôi cần giao', icon: Bicycle, perm: true, staffOnly: true },
@@ -106,10 +111,10 @@ const SECTIONS = [
   }
 ];
 
-const COLLAPSE_KEY = 'admin.sidebarCollapsed';
+const COLLAPSE_KEY = 'admin.sidebarCollapsed'; // nhớ trạng thái thu gọn menu
 const readCollapsed = () => {
   try {
-    return localStorage.getItem(COLLAPSE_KEY) === '1';
+    return localStorage.getItem(COLLAPSE_KEY) === '1'; // "1" = đang thu gọn
   } catch {
     return false;
   }
@@ -118,8 +123,8 @@ const readCollapsed = () => {
 // Chi nhánh đang làm việc: quản lý nhiều chi nhánh chọn chi nhánh để thao tác; nhân viên đang điều chuyển tạm
 // thời thấy nhãn chi nhánh được điều chuyển tới. Đổi chi nhánh -> tải lại trang để mọi dữ liệu theo chi nhánh mới.
 function WorkingStoreSwitcher({ user }) {
-  const scope = user?.storeScope;
-  if (!scope || user.role !== 'staff') return null;
+  const scope = user?.storeScope; // phạm vi chi nhánh do backend tính (đăng nhập / auth/me)
+  if (!scope || user.role !== 'staff') return null; // admin không cần chọn chi nhánh
   const stores = scope.stores || [];
   const transfer = scope.transfer;
   const transferLabel = transfer && (
@@ -127,7 +132,7 @@ function WorkingStoreSwitcher({ user }) {
       Điều chuyển đến {new Date(transfer.endDate).toLocaleDateString('vi-VN')}
     </span>
   );
-  if (stores.length <= 1) {
+  if (stores.length <= 1) { // 0-1 chi nhánh -> chỉ hiện nhãn, không có ô chọn
     return stores.length === 1 ? (
       <span className="d-none d-md-inline-flex align-items-center gap-2 small text-muted">
         <Shop /> {stores[0].name} {transferLabel}
@@ -135,8 +140,8 @@ function WorkingStoreSwitcher({ user }) {
     ) : null;
   }
   const change = (id) => {
-    setWorkingStore(id);
-    window.location.reload();
+    setWorkingStore(id); // lưu chi nhánh mới (gửi qua header X-Store-Id)
+    window.location.reload(); // tải lại để mọi dữ liệu theo chi nhánh mới
   };
   return (
     <span className="d-inline-flex align-items-center gap-2">
@@ -157,54 +162,56 @@ function WorkingStoreSwitcher({ user }) {
 
 function canSee(user, item) {
   const isAdmin = user?.role === 'admin';
-  if (item.admin) return isAdmin;
+  if (item.admin) return isAdmin; // mục chỉ admin
+  if (item.everyone) return isAdmin || user?.role === 'staff'; // Dashboard: mọi tài khoản quản trị / nhân viên
   // Báo cáo nhân viên: admin + quản lý chi nhánh; Báo cáo của tôi: mọi nhân viên
-  if (item.manager) return isAdmin || user?.directReports > 0 || (user?.managedStoreIds || []).length > 0 || /quản lý/i.test(user?.title || '');
+  // SỬA LỖI: trước đây chỉ chức danh chứa "quản lý" -> "Cửa hàng trưởng" không thấy menu dù backend cho xem (giai đoạn 5)
+  if (item.manager) return isAdmin || user?.directReports > 0 || (user?.managedStoreIds || []).length > 0 || /quản lý/i.test(user?.title || '') || isStoreManager(user);
   if (item.self) return user?.role === 'staff';
-  // Sức khỏe chi nhánh: admin + quản lý chi nhánh (không gồm trưởng nhóm chỉ có cấp dưới)
-  if (item.storeManager) return isAdmin || (user?.managedStoreIds || []).length > 0 || /quản lý/i.test(user?.title || '');
+  // Sức khỏe chi nhánh (tài chính): CHỈ admin hoặc trưởng cửa hàng (dùng chung isStoreManager, khớp backend/utils/staffRole.js)
+  if (item.storeManager) return isAdmin || isStoreManager(user);
   // "Đơn tôi cần giao" chỉ dành cho nhân viên giao hàng - quản trị viên không được phân công giao hàng
-  if (item.staffOnly && isAdmin) return false;
-  return hasPagePermission(user, item.path);
+  if (item.staffOnly && isAdmin) return false; // admin không có "đơn tôi cần giao"
+  return hasPagePermission(user, item.path); // còn lại: theo nhóm quyền
 }
 
-const isActive = (pathname, path) => (path === '/admin' ? pathname === '/admin' : pathname === path || pathname.startsWith(`${path}/`));
+const isActive = (pathname, path) => (path === '/admin' ? pathname === '/admin' : pathname === path || pathname.startsWith(`${path}/`)); // /admin chỉ sáng đúng trang chủ quản trị; trang khác sáng cả trang con
 
 // Số đếm trên menu: đơn chờ xác nhận + đơn giao tận nơi chưa phân công + hội thoại chat đang chờ. Làm mới mỗi 60s và khi đổi trang.
 function useMenuBadges(user, pathname) {
   const [badges, setBadges] = useState({});
-  const canOrders = hasPagePermission(user, '/admin/orders');
+  const canOrders = hasPagePermission(user, '/admin/orders'); // chỉ đếm những gì người dùng được xem
   const canChat = hasPagePermission(user, '/admin/chat');
   const canDeliveries = hasPagePermission(user, '/admin/deliveries');
   useEffect(() => {
-    let alive = true;
+    let alive = true; // rời trang trước khi API trả về -> không cập nhật state
     const load = async () => {
       const next = {};
       await Promise.all([
         canOrders &&
           orderService
-            .getAllOrdersAdmin({ status: 'pending', limit: 1 })
+            .getAllOrdersAdmin({ status: 'pending', limit: 1 }) // limit 1: chỉ cần tổng số
             .then((r) => (next.orders = r.total || 0))
             .catch(() => {}),
         // Đơn đã xác nhận cần giao tận nơi nhưng chưa phân công shipper / đơn vị vận chuyển (đúng chi nhánh của người xem)
         canDeliveries &&
           api
-            .get('/deliveries', { params: { view: 'pending', limit: 1 } })
+            .get('/deliveries', { params: { view: 'pending', limit: 1 } }) // đơn chưa phân công giao
             .then((r) => (next.deliveries = r.data.total || 0))
             .catch(() => {}),
         canChat &&
           chatService
-            .getConversations('waiting', 1)
+            .getConversations('waiting', 1) // chat đang chờ
             .then((r) => (next.chat = r.counts?.waiting ?? r.total ?? 0))
             .catch(() => {})
       ]);
       if (alive) setBadges(next);
     };
     load();
-    const t = setInterval(load, 60000);
+    const t = setInterval(load, 60000); // làm mới mỗi 60 giây
     return () => {
       alive = false;
-      clearInterval(t);
+      clearInterval(t); // dọn bộ hẹn giờ khi rời / đổi trang
     };
   }, [canOrders, canChat, canDeliveries, pathname]);
   return badges;
@@ -270,12 +277,12 @@ function QuickSearch({ items }) {
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
   const ref = useRef(null);
-  const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
-  const results = q.trim() ? items.filter((m) => norm(`${m.section} ${m.label}`).includes(norm(q.trim()))).slice(0, 8) : [];
+  const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase(); // bỏ dấu để tìm "don hang" ra "Đơn hàng"
+  const results = q.trim() ? items.filter((m) => norm(`${m.section} ${m.label}`).includes(norm(q.trim()))).slice(0, 8) : []; // tối đa 8 kết quả
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) {
+      if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) { // Ctrl+K (Mac: Cmd+K)
         e.preventDefault();
         ref.current?.focus();
       }
@@ -345,20 +352,20 @@ export default function AdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const sections = useMemo(
-    () => SECTIONS.map((s) => ({ ...s, items: s.items.filter((m) => canSee(user, m)) })).filter((s) => s.items.length),
+    () => SECTIONS.map((s) => ({ ...s, items: s.items.filter((m) => canSee(user, m)) })).filter((s) => s.items.length), // lọc mục theo quyền, bỏ nhóm rỗng
     [user]
   );
-  const flatItems = useMemo(() => sections.flatMap((s) => s.items.map((m) => ({ ...m, section: s.title }))), [sections]);
-  const current = flatItems.find((m) => isActive(pathname, m.path));
+  const flatItems = useMemo(() => sections.flatMap((s) => s.items.map((m) => ({ ...m, section: s.title }))), [sections]); // danh sách phẳng cho ô tìm nhanh
+  const current = flatItems.find((m) => isActive(pathname, m.path)); // trang hiện tại (breadcrumb)
   const badges = useMenuBadges(user, pathname);
 
-  useEffect(() => setMobileOpen(false), [pathname]);
+  useEffect(() => setMobileOpen(false), [pathname]); // đổi trang -> đóng menu mobile
 
   // Trang quản trị luôn dùng giao diện sáng (kể cả modal/menu render ra ngoài khung) - rời trang quản trị thì
   // trả lại chế độ sáng/tối khách đã chọn ở trang bán hàng
   useEffect(() => {
-    document.documentElement.setAttribute('data-bs-theme', 'light');
-    return () => applyColorMode();
+    document.documentElement.setAttribute('data-bs-theme', 'light'); // trang quản trị luôn giao diện sáng
+    return () => applyColorMode(); // rời trang quản trị -> trả lại chế độ khách đã chọn
   }, []);
 
   const toggleCollapsed = () =>
@@ -372,11 +379,11 @@ export default function AdminLayout() {
     });
 
   const handleLogout = async () => {
-    await logout();
+    await logout(); // xóa phiên (AuthContext)
     navigate('/login');
   };
 
-  const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.groupIds?.[0]?.name || 'Nhân viên';
+  const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.groupIds?.[0]?.name || 'Nhân viên'; // nhãn vai trò: tên nhóm quyền đầu tiên
 
   return (
     <div className={`admin-shell${collapsed ? ' is-collapsed' : ''}`} data-bs-theme="light">
@@ -464,7 +471,7 @@ export default function AdminLayout() {
         </header>
 
         <main className="admin-main">
-          <Outlet />
+          <ErrorBoundary resetKey={pathname}><Outlet /></ErrorBoundary>
         </main>
       </div>
     </div>

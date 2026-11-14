@@ -14,31 +14,31 @@ const DEFAULT_TIERS = [
   { key: 'vang', name: 'Vàng', minPoints: 2000, color: '#d4a017' },
   { key: 'kim_cuong', name: 'Kim cương', minPoints: 5000, color: '#3fa7d6' }
 ];
-const DEFAULT_CONFIG = { enabled: true, pointValue: 10000, tiers: DEFAULT_TIERS };
-const MIN_TIERS = 2;
-const MAX_TIERS = 6;
-const COLOR_RE = /^#[0-9a-f]{6}$/i;
+const DEFAULT_CONFIG = { enabled: true, pointValue: 10000, tiers: DEFAULT_TIERS }; // mặc định: bật, 10.000đ = 1 điểm
+const MIN_TIERS = 2; // ít nhất 2 hạng
+const MAX_TIERS = 6; // nhiều nhất 6 hạng
+const COLOR_RE = /^#[0-9a-f]{6}$/i; // màu dạng #rrggbb
 
 // "Kim cương" -> "kim_cuong" (khóa ổn định của hạng)
 const slugKey = (name) =>
   String(name)
-    .normalize('NFD')
+    .normalize('NFD') // tách dấu khỏi chữ
     .replace(/[̀-ͯ]/g, '')
-    .replace(/[đĐ]/g, 'd')
+    .replace(/[đĐ]/g, 'd') // đ -> d
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/[^a-z0-9]+/g, '_') // ký tự khác -> "_"
     .replace(/^_+|_+$/g, '')
     .slice(0, 30);
 
 // Cấu hình đang lưu (có thể thiếu / dữ liệu cũ) -> cấu hình dùng được, thiếu gì lấy mặc định
 function effectiveConfig(raw) {
-  const tiers = Array.isArray(raw?.tiers) && raw.tiers.length >= MIN_TIERS ? raw.tiers : DEFAULT_TIERS;
+  const tiers = Array.isArray(raw?.tiers) && raw.tiers.length >= MIN_TIERS ? raw.tiers : DEFAULT_TIERS; // thiếu / lỗi -> hạng mặc định
   return {
-    enabled: raw?.enabled !== false,
-    pointValue: Number.isInteger(raw?.pointValue) && raw.pointValue > 0 ? raw.pointValue : DEFAULT_CONFIG.pointValue,
+    enabled: raw?.enabled !== false, // mặc định bật
+    pointValue: Number.isInteger(raw?.pointValue) && raw.pointValue > 0 ? raw.pointValue : DEFAULT_CONFIG.pointValue, // tỷ lệ hợp lệ hoặc mặc định
     tiers: tiers
       .map((t) => ({ key: t.key, name: t.name, minPoints: t.minPoints, color: t.color }))
-      .sort((a, b) => a.minPoints - b.minPoints)
+      .sort((a, b) => a.minPoints - b.minPoints) // sắp theo ngưỡng tăng dần
   };
 }
 
@@ -46,7 +46,7 @@ function effectiveConfig(raw) {
 // Trả về { config } hoặc { error }.
 function parseLoyaltyConfig(input, current = DEFAULT_CONFIG) {
   if (!input || typeof input !== 'object') return { error: 'Dữ liệu không hợp lệ' };
-  const config = effectiveConfig(current);
+  const config = effectiveConfig(current); // bắt đầu từ cấu hình hiện tại
 
   if (input.enabled !== undefined) {
     if (typeof input.enabled !== 'boolean') return { error: 'Giá trị bật/tắt không hợp lệ' };
@@ -54,7 +54,7 @@ function parseLoyaltyConfig(input, current = DEFAULT_CONFIG) {
   }
   if (input.pointValue !== undefined) {
     const v = Number(input.pointValue);
-    if (!Number.isInteger(v) || v < 1000 || v > 10000000) return { error: 'Số tiền cho 1 điểm phải là số nguyên từ 1.000đ đến 10.000.000đ' };
+    if (!Number.isInteger(v) || v < 1000 || v > 10000000) return { error: 'Số tiền cho 1 điểm phải là số nguyên từ 1.000đ đến 10.000.000đ' }; // 1.000đ - 10 triệu đồng / điểm
     config.pointValue = v;
   }
   if (input.tiers !== undefined) {
@@ -64,24 +64,24 @@ function parseLoyaltyConfig(input, current = DEFAULT_CONFIG) {
     const tiers = [];
     for (const [i, t] of input.tiers.entries()) {
       const label = `Hạng ${i + 1}`;
-      const name = typeof t?.name === 'string' ? t.name.trim().replace(/\s+/g, ' ') : '';
+      const name = typeof t?.name === 'string' ? t.name.trim().replace(/\s+/g, ' ') : ''; // gộp khoảng trắng thừa
       if (!name || name.length > 30) return { error: `${label}: tên từ 1 đến 30 ký tự` };
       const minPoints = Number(t.minPoints);
       if (!Number.isInteger(minPoints) || minPoints < 0 || minPoints > 100000000) return { error: `${label} (${name}): ngưỡng điểm phải là số nguyên ≥ 0` };
       const color = typeof t.color === 'string' && COLOR_RE.test(t.color) ? t.color.toLowerCase() : null;
       if (!color) return { error: `${label} (${name}): màu không hợp lệ (dạng #rrggbb)` };
-      const key = (typeof t.key === 'string' && /^[a-z0-9_]{1,30}$/.test(t.key) ? t.key : slugKey(name)) || `hang_${i + 1}`;
+      const key = (typeof t.key === 'string' && /^[a-z0-9_]{1,30}$/.test(t.key) ? t.key : slugKey(name)) || `hang_${i + 1}`; // giữ khóa cũ (voucher theo hạng vẫn đúng khi đổi tên)
       tiers.push({ key, name, minPoints, color });
     }
     // Ngưỡng tăng dần theo đúng thứ tự gửi lên, hạng đầu từ 0 điểm (mọi khách đều có hạng)
-    if (tiers[0].minPoints !== 0) return { error: `Hạng thấp nhất (${tiers[0].name}) phải bắt đầu từ 0 điểm` };
+    if (tiers[0].minPoints !== 0) return { error: `Hạng thấp nhất (${tiers[0].name}) phải bắt đầu từ 0 điểm` }; // hạng thấp nhất từ 0 điểm
     for (let i = 1; i < tiers.length; i++) {
-      if (tiers[i].minPoints <= tiers[i - 1].minPoints) {
+      if (tiers[i].minPoints <= tiers[i - 1].minPoints) { // ngưỡng phải tăng dần
         return { error: `Ngưỡng điểm phải tăng dần: ${tiers[i].name} (${tiers[i].minPoints}) phải lớn hơn ${tiers[i - 1].name} (${tiers[i - 1].minPoints})` };
       }
     }
     const lower = (s) => s.toLowerCase();
-    if (new Set(tiers.map((t) => lower(t.name))).size !== tiers.length) return { error: 'Tên hạng không được trùng nhau' };
+    if (new Set(tiers.map((t) => lower(t.name))).size !== tiers.length) return { error: 'Tên hạng không được trùng nhau' }; // tên không trùng (không phân biệt hoa thường)
     if (new Set(tiers.map((t) => t.key)).size !== tiers.length) return { error: 'Tên hạng quá giống nhau, vui lòng đặt tên khác' };
     config.tiers = tiers;
   }
@@ -89,34 +89,34 @@ function parseLoyaltyConfig(input, current = DEFAULT_CONFIG) {
 }
 
 function pointsForOrder(order, config = DEFAULT_CONFIG) {
-  if (!config.enabled) return 0;
-  const paid = (Number(order.itemsTotal) || 0) - (Number(order.discountAmount) || 0);
-  return paid > 0 ? Math.floor(paid / config.pointValue) : 0;
+  if (!config.enabled) return 0; // tắt tích điểm
+  const paid = (Number(order.itemsTotal) || 0) - (Number(order.discountAmount) || 0); // tiền hàng thực trả (không tính phí ship)
+  return paid > 0 ? Math.floor(paid / config.pointValue) : 0; // làm tròn xuống
 }
 
 function tierFor(points, config = DEFAULT_CONFIG) {
   const tiers = config.tiers;
-  const p = Math.max(0, Number(points) || 0);
+  const p = Math.max(0, Number(points) || 0); // điểm không âm
   let index = 0;
   tiers.forEach((t, i) => {
-    if (p >= t.minPoints) index = i;
+    if (p >= t.minPoints) index = i; // hạng cao nhất mà điểm đạt tới
   });
-  const next = tiers[index + 1] || null;
+  const next = tiers[index + 1] || null; // hạng kế tiếp (null = đã cao nhất)
   return {
     ...tiers[index],
     points: p,
-    next: next ? { key: next.key, name: next.name, minPoints: next.minPoints, pointsNeeded: next.minPoints - p } : null
+    next: next ? { key: next.key, name: next.name, minPoints: next.minPoints, pointsNeeded: next.minPoints - p } : null // còn thiếu bao nhiêu điểm
   };
 }
 
 // Biểu thức MongoDB: điểm của khách -> khóa hạng (dùng cho thống kê / xem trước khi đổi ngưỡng)
 function tierKeyExpr(tiers, field = '$loyaltyPoints') {
   const points = { $ifNull: [field, 0] };
-  const desc = [...tiers].sort((a, b) => b.minPoints - a.minPoints);
+  const desc = [...tiers].sort((a, b) => b.minPoints - a.minPoints); // xét từ hạng cao xuống
   return {
     $switch: {
-      branches: desc.slice(0, -1).map((t) => ({ case: { $gte: [points, t.minPoints] }, then: t.key })),
-      default: desc[desc.length - 1].key
+      branches: desc.slice(0, -1).map((t) => ({ case: { $gte: [points, t.minPoints] }, then: t.key })), // điểm >= ngưỡng -> hạng đó
+      default: desc[desc.length - 1].key // không đạt hạng nào -> hạng thấp nhất
     }
   };
 }
@@ -124,7 +124,7 @@ function tierKeyExpr(tiers, field = '$loyaltyPoints') {
 // Cấu hình hiện tại (đọc mỗi lần - 1 bản ghi nhỏ, đổi trong trang quản trị là áp dụng ngay)
 async function getLoyaltyConfig() {
   const Setting = require('../models/Setting');
-  const setting = await Setting.findOne().select('loyalty').lean();
+  const setting = await Setting.findOne().select('loyalty').lean(); // chỉ đọc phần cấu hình thành viên
   return effectiveConfig(setting?.loyalty);
 }
 

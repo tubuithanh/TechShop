@@ -9,32 +9,32 @@ const mongoose = require('mongoose');
 // fn(session) có thể bị chạy lại nhiều lần khi MongoDB báo xung đột tạm thời (VD 2 đơn cùng trừ 1 dòng tồn
 // kho): mọi thao tác ghi trong lần chạy hỏng đã được hủy, nên fn không được làm việc "ra ngoài" như gửi email,
 // tạo thông báo hay đẩy Socket.IO - những việc đó làm SAU khi withTransaction trả kết quả.
-let supported = null;
+let supported = null; // null = chưa kiểm tra; kiểm tra 1 lần rồi nhớ kết quả
 
 async function transactionsSupported() {
-  if (process.env.MONGO_TRANSACTIONS === 'off') return false;
+  if (process.env.MONGO_TRANSACTIONS === 'off') return false; // ép tắt
   if (supported === null) {
     try {
-      const hello = await mongoose.connection.db.admin().command({ hello: 1 });
-      supported = Boolean(hello.setName || hello.msg === 'isdbgrid');
+      const hello = await mongoose.connection.db.admin().command({ hello: 1 }); // hỏi MongoDB về kiểu triển khai
+      supported = Boolean(hello.setName || hello.msg === 'isdbgrid'); // có tên replica set, hoặc là cụm phân mảnh (mongos)
     } catch {
-      supported = false;
+      supported = false; // không hỏi được -> coi như không hỗ trợ
     }
   }
   return supported;
 }
 
 async function withTransaction(fn) {
-  if (!(await transactionsSupported())) return fn(null);
-  const session = await mongoose.startSession();
+  if (!(await transactionsSupported())) return fn(null); // không hỗ trợ -> chạy thường, session = null
+  const session = await mongoose.startSession(); // mở phiên
   try {
     let result;
-    await session.withTransaction(async () => {
+    await session.withTransaction(async () => { // tự commit khi xong, tự hủy + chạy lại khi lỗi tạm thời
       result = await fn(session);
     });
     return result;
   } finally {
-    await session.endSession();
+    await session.endSession(); // luôn đóng phiên (kể cả khi lỗi)
   }
 }
 
@@ -42,8 +42,8 @@ async function withTransaction(fn) {
 class BusinessError extends Error {
   constructor(status, message) {
     super(message);
-    this.status = status;
-    this.statusCode = status;
+    this.status = status; // mã HTTP (400, 409...)
+    this.statusCode = status; // errorHandler đọc trường này
   }
 }
 

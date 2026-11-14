@@ -9,23 +9,23 @@ import { placeholderImage } from '../../utils/placeholderImage';
 import OrderReceipt from '../../components/admin/OrderReceipt';
 import VatBreakdown from '../../components/VatBreakdown';
 
-const HOLD_KEY = 'pos.heldCarts';
+const HOLD_KEY = 'pos.heldCarts'; // đơn lưu tạm (trong trình duyệt của quầy)
 const readHeld = () => { try { return JSON.parse(localStorage.getItem(HOLD_KEY) || '[]'); } catch { return []; } };
 const writeHeld = (list) => { try { localStorage.setItem(HOLD_KEY, JSON.stringify(list)); } catch { /* bộ nhớ trình duyệt bị chặn */ } };
-const PHONE_RE = /^(0|\+84)(3|5|7|8|9)\d{8}$/;
+const PHONE_RE = /^(0|\+84)(3|5|7|8|9)\d{8}$/; // số di động Việt Nam
 
 // Gợi ý mệnh giá khách đưa: đúng số tiền + làm tròn lên các mốc 50k / 100k / 500k / 1tr
 function cashSuggestions(total) {
   if (!total) return [];
-  const ups = [50000, 100000, 500000, 1000000].map((step) => Math.ceil(total / step) * step);
-  return [...new Set([total, ...ups])].filter((v) => v >= total).slice(0, 5);
+  const ups = [50000, 100000, 500000, 1000000].map((step) => Math.ceil(total / step) * step); // làm tròn lên từng mệnh giá
+  return [...new Set([total, ...ups])].filter((v) => v >= total).slice(0, 5); // bỏ trùng, tối đa 5 gợi ý
 }
 
 // BÁN HÀNG TẠI QUẦY: lưới sản phẩm (tìm / quét mã / lọc danh mục) + giỏ hàng cố định bên phải,
 // tự tính tiền (khuyến mãi, voucher, VAT), tiền khách đưa & tiền thừa, lưu tạm đơn, phím tắt, ca bán hôm nay.
 export default function AdminPosPage() {
   const { user } = useAuth();
-  const scoped = user?.role === 'staff' && user?.storeId;
+  const scoped = user?.role === 'staff' && user?.storeId; // nhân viên: khóa vào chi nhánh đang làm
   const [storeId, setStoreId] = useState(scoped ? (user.storeId._id || user.storeId) : '');
   const [stores, setStores] = useState([]);
   const [q, setQ] = useState('');
@@ -61,23 +61,23 @@ export default function AdminPosPage() {
   const [offers, setOffers] = useState(null);
   const [showCodeInput, setShowCodeInput] = useState(false);
   const manualVoucher = useRef(false); // thu ngân tự chọn / bỏ mã -> không tự đổi nữa
-  const request = useRef(null);
-  const inFlight = useRef(false);
+  const request = useRef(null); // yêu cầu thanh toán đang chờ kết quả (giữ nguyên khi thử lại)
+  const inFlight = useRef(false); // chặn bấm thanh toán 2 lần
   const searchRef = useRef(null);
   const customerRef = useRef(null);
   const payRef = useRef(null);
-  const locked = busy || Boolean(request.current);
+  const locked = busy || Boolean(request.current); // khóa sửa giỏ khi đang / chưa rõ kết quả thanh toán
 
   useEffect(() => { storeService.getStores().then(setStores).catch(() => setError('Không tải được chi nhánh')); }, []);
   const loadToday = useCallback(() => api.get('/orders/pos/today').then((r) => setToday(r.data.data)).catch(() => {}), []);
-  useEffect(() => { loadToday(); }, [loadToday, receipt]);
+  useEffect(() => { loadToday(); }, [loadToday, receipt]); // xong 1 đơn -> cập nhật doanh số ca
 
   // Danh mục sản phẩm còn hàng tại chi nhánh
   useEffect(() => {
     let live = true;
     if (!storeId) { setCatalog([]); return undefined; }
     setLoadingCatalog(true);
-    const timer = setTimeout(() => api.get('/orders/pos/catalog', { params: { storeId, q } })
+    const timer = setTimeout(() => api.get('/orders/pos/catalog', { params: { storeId, q } }) // chờ 250ms sau khi gõ mới tìm
       .then((r) => live && setCatalog(r.data.data))
       .catch(() => live && setError('Không tải được tồn kho'))
       .finally(() => live && setLoadingCatalog(false)), 250);
@@ -86,18 +86,18 @@ export default function AdminPosPage() {
 
   useEffect(() => {
     let live = true;
-    if (customerQuery.trim().length < 3) { setCustomers([]); return undefined; }
+    if (customerQuery.trim().length < 3) { setCustomers([]); return undefined; } // gõ ít nhất 3 ký tự mới tìm khách
     const timer = setTimeout(() => api.get('/orders/pos/customers', { params: { q: customerQuery } }).then((r) => live && setCustomers(r.data.data)).catch(() => live && setCustomers([])), 300);
     return () => { live = false; clearTimeout(timer); };
   }, [customerQuery]);
 
   const categories = useMemo(() => {
     const map = new Map();
-    for (const p of catalog) if (p.category) map.set(p.category, (map.get(p.category) || 0) + 1);
+    for (const p of catalog) if (p.category) map.set(p.category, (map.get(p.category) || 0) + 1); // đếm sản phẩm theo danh mục
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [catalog]);
   const shown = category ? catalog.filter((p) => p.category === category) : catalog;
-  const inCart = useMemo(() => new Map(items.map((i) => [i.variantId, i.quantity])), [items]);
+  const inCart = useMemo(() => new Map(items.map((i) => [i.variantId, i.quantity])), [items]); // số lượng đã có trong giỏ theo phiên bản
 
   // Tự tính tiền (khuyến mãi, voucher, VAT) mỗi khi giỏ / khách / voucher đổi
   useEffect(() => {
@@ -107,19 +107,19 @@ export default function AdminPosPage() {
     const timer = setTimeout(async () => {
       setQuoting(true);
       try {
-        const r = await api.post('/orders/pos/quote', { clientRequestId: crypto.randomUUID(), storeId, userId: customer?._id, fullName, phone, paymentMode, voucherCode, items: items.map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })) });
+        const r = await api.post('/orders/pos/quote', { clientRequestId: crypto.randomUUID(), storeId, userId: customer?._id, fullName, phone, paymentMode, voucherCode, items: items.map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })) }); // backend tính tiền (khuyến mãi, mã, VAT) - không tạo đơn
         if (live) setQuote(r.data.data);
       } catch (err) {
         if (live) setQuoteError(err.response?.data?.message || 'Không tính được tổng tiền');
       } finally { if (live) setQuoting(false); }
-    }, 450);
+    }, 450); // chờ 450ms sau thay đổi cuối mới tính
     return () => { live = false; clearTimeout(timer); };
   }, [storeId, items, voucherCode, customer, requote]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showFlash = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 1500); };
   const add = (product) => {
     const cur = inCart.get(product.variantId) || 0;
-    if (cur >= product.stock) return showFlash(`Chỉ còn ${product.stock} sản phẩm "${product.title}"`);
+    if (cur >= product.stock) return showFlash(`Chỉ còn ${product.stock} sản phẩm "${product.title}"`); // không vượt tồn kho
     setItems((old) => {
       const found = old.find((x) => x.variantId === product.variantId);
       if (found) return old.map((x) => (x.variantId === product.variantId ? { ...x, quantity: Math.min(x.stock, x.quantity + 1) } : x));
@@ -127,24 +127,25 @@ export default function AdminPosPage() {
     });
     showFlash(`+1 ${product.title} · ${product.label}`);
   };
-  const setQty = (variantId, qty) => setItems((old) => old.flatMap((x) => (x.variantId !== variantId ? [x] : qty <= 0 ? [] : [{ ...x, quantity: Math.min(x.stock, Math.min(100, qty)) }])));
+  const setQty = (variantId, qty) => setItems((old) => old.flatMap((x) => (x.variantId !== variantId ? [x] : qty <= 0 ? [] : [{ ...x, quantity: Math.min(x.stock, Math.min(100, qty)) }]))); // qty <= 0 -> bỏ dòng; tối đa tồn kho và 100
   const clearCart = () => { setPhoneInfo(null); setCreateAccount(true); setEmail(''); setItems([]); setVoucher(''); setCashGiven(''); setNote(''); setCustomer(null); setName(''); setPhone(''); setCustomerQuery(''); };
 
   // Quét mã / Enter: thêm ngay kết quả đầu tiên (máy quét mã vạch gõ tên + Enter)
   const onSearchKey = (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); if (shown[0]) { add(shown[0]); setQ(''); } }
+    if (e.key === 'Enter') { e.preventDefault(); if (shown[0]) { add(shown[0]); setQ(''); } } // máy quét mã vạch: gõ mã + Enter -> thêm ngay
     if (e.key === 'Escape') setQ('');
   };
 
   // Gõ đủ SĐT -> tra ngay: thành viên thì tự chọn, khách cũ / khách mới thì gợi ý tạo thẻ thành viên
   useEffect(() => {
-    const p = phone.replace(/s/g, '');
-    if (customer || !PHONE_RE.test(p)) { setPhoneInfo(null); return undefined; }
+    // SỬA LỖI: trước đây /s/g (xóa chữ "s") thay vì /\s/g (xóa khoảng trắng) -> nhập "090 123 4567" không bao giờ tra được
+    const p = phone.replace(/\s/g, '');
+    if (customer || !PHONE_RE.test(p)) { setPhoneInfo(null); return undefined; } // đã chọn khách / SĐT chưa đủ -> không tra
     let live = true;
     const t = setTimeout(() => api.get('/orders/pos/lookup-phone', { params: { phone: p } }).then((r) => {
       if (!live) return;
       const info = r.data.data;
-      if (info.status === 'member') { pickCustomer(info.customer); showFlash('Đã nhận diện thành viên ' + info.customer.displayName); return; }
+      if (info.status === 'member') { pickCustomer(info.customer); showFlash('Đã nhận diện thành viên ' + info.customer.displayName); return; } // thành viên -> tự chọn
       setPhoneInfo(info);
       if (info.status === 'returning' && !fullName.trim()) setName(info.guest.name || '');
     }).catch(() => {}), 300);
@@ -159,9 +160,9 @@ export default function AdminPosPage() {
         if (!live) return;
         const data = r.data.data;
         setOffers(data);
-        const best = data.eligible[0];
+        const best = data.eligible[0]; // mã có lợi nhất
         const current = voucherCode.trim().toUpperCase();
-        const stillOk = !current || data.eligible.some((v) => v.code === current);
+        const stillOk = !current || data.eligible.some((v) => v.code === current); // mã đang áp còn dùng được?
         if (!manualVoucher.current && best && current !== best.code) { setVoucher(best.code); showFlash('Đã tự áp mã ' + best.code + ' (−' + money(best.amount) + ')'); }
         else if (!stillOk && !showCodeInput) { setVoucher(best?.code || ''); if (best) showFlash('Mã cũ không còn dùng được, đổi sang ' + best.code); }
       })
@@ -178,7 +179,7 @@ export default function AdminPosPage() {
   // Lưu tạm đơn (khách đi lấy thêm đồ, thanh toán sau)
   const holdCart = () => {
     if (!items.length) return;
-    const next = [{ id: Date.now(), at: new Date().toISOString(), storeId, items, customer, fullName, phone, voucherCode, note }, ...held].slice(0, 10);
+    const next = [{ id: Date.now(), at: new Date().toISOString(), storeId, items, customer, fullName, phone, voucherCode, note }, ...held].slice(0, 10); // tối đa 10 đơn lưu tạm
     setHeld(next); writeHeld(next); clearCart(); showFlash('Đã lưu tạm đơn');
   };
   const resumeCart = (h) => {
@@ -186,28 +187,28 @@ export default function AdminPosPage() {
     const rest = held.filter((x) => x.id !== h.id);
     const next = items.length ? [{ id: Date.now(), at: new Date().toISOString(), storeId, items, customer, fullName, phone, voucherCode, note }, ...rest] : rest;
     setHeld(next); writeHeld(next);
-    setStoreId(scoped ? storeId : h.storeId); setItems(h.items); setCustomer(h.customer); setName(h.fullName); setPhone(h.phone); setVoucher(h.voucherCode || ''); setNote(h.note || '');
+    setStoreId(scoped ? storeId : h.storeId); setItems(h.items); setCustomer(h.customer); setName(h.fullName); setPhone(h.phone); setVoucher(h.voucherCode || ''); setNote(h.note || ''); // nhân viên không đổi được chi nhánh
   };
   const dropHeld = (id) => { const next = held.filter((x) => x.id !== id); setHeld(next); writeHeld(next); };
 
-  const total = quote?.grandTotal ?? items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const given = Number(String(cashGiven).replace(/\D/g, '')) || 0;
-  const change = given - total;
+  const total = quote?.grandTotal ?? items.reduce((s, i) => s + i.price * i.quantity, 0); // ưu tiên số backend tính
+  const given = Number(String(cashGiven).replace(/\D/g, '')) || 0; // tiền khách đưa (bỏ dấu chấm, chữ)
+  const change = given - total; // tiền thối
   const phoneOk = PHONE_RE.test(phone.replace(/\s/g, ''));
   // Khách lẻ không cần tên/SĐT; nhập SĐT thì phải đúng. Không nhập tiền khách đưa = khách đưa đủ
   const phoneValid = !phone.trim() || phoneOk;
-  const ready = items.length && quote && phoneValid && (!customer || phoneOk) && (paymentMode !== 'cash' || !given || given >= total);
+  const ready = items.length && quote && phoneValid && (!customer || phoneOk) && (paymentMode !== 'cash' || !given || given >= total); // đủ điều kiện bấm thanh toán
 
   const submit = async (e) => {
     e?.preventDefault();
-    if (inFlight.current || !ready) return;
+    if (inFlight.current || !ready) return; // đang gửi / chưa đủ điều kiện
     inFlight.current = true; setBusy(true); setError('');
-    if (!request.current) request.current = { clientRequestId: crypto.randomUUID(), storeId, userId: customer?._id || null, fullName: fullName.trim() || 'Khách lẻ', phone: phone.replace(/\s/g, ''), paymentMode, paymentConfirmed: true, voucherCode, ...(!customer && phoneInfo && phoneOk && createAccount ? { createAccount: true, accountConsent: true, email: email.trim() || undefined } : {}), note: [note, paymentMode === 'cash' && given ? `Khách đưa ${money(given)}, thối ${money(Math.max(0, change))}` : ''].filter(Boolean).join(' · '), expectedTotal: quote?.grandTotal, expectedVatRate: quote?.vat?.rate, expectedVatFingerprint: quote?.vatFingerprint, items: items.map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })) };
+    if (!request.current) request.current = { clientRequestId: crypto.randomUUID(), storeId, userId: customer?._id || null, fullName: fullName.trim() || 'Khách lẻ', phone: phone.replace(/\s/g, ''), paymentMode, paymentConfirmed: true, voucherCode, ...(!customer && phoneInfo && phoneOk && createAccount ? { createAccount: true, accountConsent: true, email: email.trim() || undefined } : {}), note: [note, paymentMode === 'cash' && given ? `Khách đưa ${money(given)}, thối ${money(Math.max(0, change))}` : ''].filter(Boolean).join(' · '), expectedTotal: quote?.grandTotal, expectedVatRate: quote?.vat?.rate, expectedVatFingerprint: quote?.vatFingerprint, items: items.map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })) }; // mã yêu cầu duy nhất: lỗi mạng bấm lại -> gửi ĐÚNG mã cũ, backend không tạo đơn trùng
     try {
-      const result = await api.post('/orders/pos', request.current);
+      const result = await api.post('/orders/pos', request.current); // tạo đơn + trừ kho + thu tiền
       setReceipt({ ...result.data.data, storeId: stores.find((s) => s._id === storeId) || { name: user?.storeId?.name }, cashGiven: given, change: Math.max(0, change) });
       if (result.data.data.newAccount) setWelcome({ name: fullName, ...result.data.data.newAccount });
-      request.current = null; clearCart(); searchRef.current?.focus();
+      request.current = null; clearCart(); searchRef.current?.focus(); // xong -> giỏ mới, con trỏ về ô tìm hàng
     } catch (err) {
       setError(err.response?.data?.message || 'Chưa rõ kết quả. Bấm thử lại để kiểm tra cùng yêu cầu, không tạo đơn trùng.');
       if ([400, 403, 404, 409, 503].includes(err.response?.status)) { request.current = null; setRequote((n) => n + 1); } // tính lại tiền (giá / tồn kho có thể đã đổi)
@@ -217,10 +218,10 @@ export default function AdminPosPage() {
   // Phím tắt: F2 tìm hàng, F4 tìm khách, F8 lưu tạm, F9 thanh toán
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'F2') { e.preventDefault(); searchRef.current?.focus(); }
+      if (e.key === 'F2') { e.preventDefault(); searchRef.current?.focus(); } // F2: tìm hàng
       else if (e.key === 'F4') { e.preventDefault(); customerRef.current?.focus(); }
       else if (e.key === 'F8') { e.preventDefault(); holdCart(); }
-      else if (e.key === 'F9') { e.preventDefault(); submit(); }
+      else if (e.key === 'F9') { e.preventDefault(); submit(); } // F9: thanh toán
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

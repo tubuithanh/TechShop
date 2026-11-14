@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
   return (
     <div>
       <div className="mb-4 fade-in-up">
-        <h1 className="fs-4 fw-bold mb-1">{scopedStoreName ? `Tổng quan chi nhánh ${scopedStoreName}` : 'Tổng quan hệ thống'}</h1>
+        <h1 className="fs-4 fw-bold mb-1">{scopedStoreName ? `Thống kê chi nhánh ${scopedStoreName}` : 'Thống kê hệ thống'}</h1>
         <p className="text-muted small mb-0">
           {scopedStoreName
             ? 'Đơn hàng và doanh thu của chi nhánh bạn phụ trách (khách hàng, sản phẩm, bán chạy: số liệu toàn hệ thống)'

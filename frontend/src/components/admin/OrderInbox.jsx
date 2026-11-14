@@ -5,6 +5,7 @@ import api from '../../services/api';
 import AdminPagination from './AdminPagination';
 import { orderMethod } from '../../utils/orderWorkflow';
 import AuditStamp from './AuditStamp';
+import { orderDateTime, timeAgo } from '../../utils/orderTime';
 
 const formatVND = (v) => (v || 0).toLocaleString('vi-VN') + 'đ';
 
@@ -123,6 +124,7 @@ export default function OrderInbox({ renderActions, onDetails, onOpen, reloadKey
                     <td className="p-3">
                       <Button variant="link" size="sm" className="p-0" onClick={() => onDetails(o)}>{o.orderCode}</Button>
                       <div className="small text-muted">{orderMethod(o)}</div>
+                      <div className="small text-muted text-nowrap" title={new Date(o.createdAt).toLocaleString('vi-VN')}>Đặt {orderDateTime(o.createdAt)}</div>
                     </td>
                     <td className="p-3">
                       {o.deliveryAddress?.fullName || o.userId?.displayName}

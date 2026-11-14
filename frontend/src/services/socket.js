@@ -1,3 +1,4 @@
+// services/socket.js - kết nối thời gian thực (Socket.IO) tới backend: cập nhật đơn hàng, thông báo, chat.
 import { io } from 'socket.io-client';
 import { getAccessToken } from './api';
 
@@ -6,16 +7,16 @@ import { getAccessToken } from './api';
 // để trống -> cùng địa chỉ trang, Vite chuyển tiếp /socket.io sang backend (vite.config.js).
 // Trước đây cả 3 nơi gọi io('/') nên trên production luôn kết nối nhầm vào tên miền của frontend.
 const apiUrl = import.meta.env.VITE_API_URL;
-const SOCKET_URL = apiUrl && /^https?:\/\//.test(apiUrl) ? new URL(apiUrl).origin : undefined;
+const SOCKET_URL = apiUrl && /^https?:\/\//.test(apiUrl) ? new URL(apiUrl).origin : undefined; // undefined = cùng địa chỉ trang
 
 // auth dạng hàm: mỗi lần (tự) kết nối lại đều gửi access token MỚI NHẤT - token 15 phút đã được làm mới,
 // hoặc server vừa ngắt kết nối vì đổi mật khẩu / khóa tài khoản.
 export function connectSocket() {
   const socket = io(SOCKET_URL, { auth: (cb) => cb({ token: getAccessToken() }), withCredentials: true });
-  // Server chủ động ngắt (khóa tài khoản / đổi mật khẩu) thì client KHÔNG tự kết nối lại - kết nối lại bằng token
-  // hiện tại: tài khoản đã khóa chỉ còn kết nối ẩn danh, thiết bị vừa đổi mật khẩu vào lại đúng phòng của mình.
+  // Server chủ động ngắt ('io server disconnect') thì Socket.IO KHÔNG tự kết nối lại -> tự kết nối lại sau 1 giây
+  // bằng token hiện tại: tài khoản đã khóa chỉ còn kết nối ẩn danh, thiết bị vừa đổi mật khẩu vào lại đúng phòng của mình.
   socket.on('disconnect', (reason) => {
     if (reason === 'io server disconnect') setTimeout(() => socket.connect(), 1000);
   });
-  return socket;
+  return socket; // nơi gọi tự socket.on('order:statusUpdated', ...) và socket.disconnect() khi rời trang
 }

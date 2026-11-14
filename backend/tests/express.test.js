@@ -88,3 +88,28 @@ test('EXP-2: Từ chối khi ngoài bán kính, giỏ có sản phẩm không th
   // Quản lý không mở được khung cho chi nhánh khác / bán kính > 20 km
   expect((await c.openWindow({ radiusKm: 25 })).status).toBe(400);
 });
+
+test('EXP-3: Khách hủy đơn hỏa tốc -> trả lại suất; khách không tự hủy được khi cửa hàng đang chuẩn bị hàng', async () => {
+  const c = await fixture();
+  const w = (await c.openWindow({ maxOrders: 1 })).body.data;
+  await c.addToCart(c.fast);
+  const o = (await c.order({ ...NEAR, windowId: w._id })).body.data;
+  expect((await ExpressWindow.findById(w._id)).ordersCount).toBe(1);
+
+  // Đang chuẩn bị -> khách không tự hủy (nhân viên vẫn hủy được)
+  await Order.updateOne({ _id: o._id }, { status: 'processing' });
+  const blocked = await auth(request(app).put(`/api/orders/${o._id}/cancel`), c.reg.accessToken).send({ reason: 'Đổi ý' });
+  expect(blocked.status).toBe(400);
+  expect(blocked.body.message).toMatch(/liên hệ cửa hàng/);
+
+  await Order.updateOne({ _id: o._id }, { status: 'confirmed' });
+  const ok = await auth(request(app).put(`/api/orders/${o._id}/cancel`), c.reg.accessToken).send({ reason: { $ne: 1 } }); // lý do sai kiểu -> dùng mặc định
+  expect(ok.status).toBe(200);
+  expect(ok.body.data.cancelReason).toBe('Khách hàng yêu cầu hủy');
+  expect((await ExpressWindow.findById(w._id)).ordersCount).toBe(0); // suất được trả lại
+
+  // Nhân viên hủy đơn phải có lý do
+  await c.addToCart(c.fast);
+  const o2 = (await c.order({ ...NEAR, windowId: w._id })).body.data;
+  expect((await auth(request(app).put(`/api/orders/${o2._id}/status`), c.mgrToken).send({ status: 'cancelled' })).status).toBe(400);
+});

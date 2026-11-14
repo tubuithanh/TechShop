@@ -24,16 +24,16 @@ function formatVND(value) {
 }
 
 export default function CheckoutPage() {
-  const { cart, totalAmount, refreshCart } = useCart();
+  const { cart, totalAmount, refreshCart } = useCart(); // giỏ hàng + tổng tạm tính
   const { user } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
-  const [stores, setStores] = useState([]);
+  const [stores, setStores] = useState([]); // chi nhánh + đủ hàng hay không
   const [selectedStoreId, setSelectedStoreId] = useState('');
 
-  const savedAddresses = user?.addresses || [];
-  const defaultAddress = savedAddresses.find((a) => a.isDefault) || savedAddresses[0];
+  const savedAddresses = user?.addresses || []; // sổ địa chỉ của khách
+  const defaultAddress = savedAddresses.find((a) => a.isDefault) || savedAddresses[0]; // địa chỉ mặc định (không có thì địa chỉ đầu)
   const [address, setAddress] = useState({
     fullName: user?.displayName || '',
     phone: user?.phoneNumber || '',
@@ -47,7 +47,7 @@ export default function CheckoutPage() {
   const [addressChoice, setAddressChoice] = useState(defaultAddress?._id || 'new');
   const chooseAddress = (choice) => {
     setAddressChoice(choice);
-    const a = savedAddresses.find((x) => x._id === choice);
+    const a = savedAddresses.find((x) => x._id === choice); // 'new' -> không tìm thấy -> để trống cho khách nhập
     setAddress((cur) => ({
       ...cur,
       addressLine1: a?.addressLine1 || '',
@@ -59,7 +59,7 @@ export default function CheckoutPage() {
   };
   // Thông tin tài khoản tải xong SAU khi trang đã mở (tải lại trang) -> chọn sẵn địa chỉ mặc định
   useEffect(() => {
-    if (defaultAddress && addressChoice === 'new' && !address.addressLine1) chooseAddress(defaultAddress._id);
+    if (defaultAddress && addressChoice === 'new' && !address.addressLine1) chooseAddress(defaultAddress._id); // chọn sẵn địa chỉ mặc định khi user vừa tải xong
     if (user && !address.fullName && !address.phone) {
       setAddress((cur) => ({ ...cur, fullName: user.displayName || '', phone: user.phoneNumber || '' }));
     }
@@ -68,7 +68,7 @@ export default function CheckoutPage() {
   const [deliveryMethod, setDeliveryMethod] = useState('home_delivery');
   // Giao hỏa tốc đang chọn: { windowId, lat, lng, fee, store } (null = giao thường)
   const [express, setExpress] = useState(null);
-  const [paymentMode, setPaymentMode] = useState('cod');
+  const [paymentMode, setPaymentMode] = useState('cod'); // mặc định trả tiền khi nhận hàng
   const [wantInvoice, setWantInvoice] = useState(false);
   const [invoice, setInvoice] = useState({ companyName: '', taxCode: '', address: '', email: '' });
   // Cổng thanh toán online đã cấu hình trên máy chủ (cổng chưa cấu hình thì ẩn lựa chọn)
@@ -76,26 +76,26 @@ export default function CheckoutPage() {
   useEffect(() => {
     paymentService
       .getMethods()
-      .then(setMethods)
+      .then(setMethods) // cổng nào dùng được
       .catch(() => setMethods((m) => ({ ...m, vnpay: false, momo: false })));
   }, []);
   const [voucherCode, setVoucherCode] = useState('');
   // Mã đã áp dụng thành công + bản xem trước tổng tiền do backend tính (khuyến mãi tự động, mã, VAT)
   const [appliedCode, setAppliedCode] = useState('');
-  const [quote, setQuote] = useState(null);
+  const [quote, setQuote] = useState(null); // tổng tiền do backend tính (nguồn chính xác)
   const [voucherMsg, setVoucherMsg] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Chọn sẵn chi nhánh ĐỦ HÀNG cho cả giỏ (API xếp chi nhánh đủ hàng lên đầu); tải lại khi giỏ thay đổi
-  const cartKey = (cart.items || []).map((i) => `${i.variantId}x${i.quantity}`).join(',');
+  const cartKey = (cart.items || []).map((i) => `${i.variantId}x${i.quantity}`).join(','); // chuỗi đại diện giỏ: giỏ đổi -> chuỗi đổi -> tính lại
   useEffect(() => {
     if (!cartKey) return;
     cartService
       .getStores()
       .then((data) => {
         setStores(data);
-        setSelectedStoreId((cur) => (data.some((s) => s._id === cur && s.enough) ? cur : data[0]?._id || ''));
+        setSelectedStoreId((cur) => (data.some((s) => s._id === cur && s.enough) ? cur : data[0]?._id || '')); // giữ chi nhánh đang chọn nếu vẫn đủ hàng, không thì chọn chi nhánh đầu (đủ hàng)
       })
       .catch(() => setStores([]));
   }, [cartKey]);
@@ -106,16 +106,16 @@ export default function CheckoutPage() {
   // hình, khiến khách nhìn thấy tổng tiền xem trước SAI (cao hơn số tiền thực sự bị tính khi đặt).
   const shippingFeeConfig = settings.defaultShippingFee ?? 30000;
   const freeShippingThreshold = settings.freeShippingThreshold ?? 0;
-  const qualifiesFreeShipping = freeShippingThreshold > 0 && totalAmount >= freeShippingThreshold;
+  const qualifiesFreeShipping = freeShippingThreshold > 0 && totalAmount >= freeShippingThreshold; // chỉ dùng tạm khi chưa có quote
   const localShippingFee = deliveryMethod === 'store_pickup' || qualifiesFreeShipping ? 0 : shippingFeeConfig;
 
   // Tính lại tổng tiền ở backend mỗi khi giỏ / chi nhánh / hình thức nhận hàng / mã thay đổi - khuyến mãi
   // có thể phụ thuộc chi nhánh và hạng thành viên nên không tự tính ở trình duyệt được.
-  const useExpress = express && deliveryMethod === 'home_delivery';
-  const quoteRequest = (code) => orderService.quote({ storeId: (useExpress ? express.store._id : selectedStoreId) || undefined, deliveryMethod, voucherCode: code || undefined, expressWindowId: useExpress ? express.windowId : undefined });
+  const useExpress = express && deliveryMethod === 'home_delivery'; // đang chọn giao hỏa tốc?
+  const quoteRequest = (code) => orderService.quote({ storeId: (useExpress ? express.store._id : selectedStoreId) || undefined, deliveryMethod, voucherCode: code || undefined, expressWindowId: useExpress ? express.windowId : undefined }); // gọi POST /orders/quote
   useEffect(() => {
     if (!cartKey) return undefined;
-    let alive = true;
+    let alive = true; // bỏ kết quả về trễ khi lựa chọn đã đổi
     quoteRequest(appliedCode)
       .then((q) => { if (alive) setQuote(q); })
       .catch((err) => {
@@ -136,27 +136,27 @@ export default function CheckoutPage() {
   const promotionDiscount = quote?.promotionDiscount || 0;
   const voucherDiscount = quote?.voucherDiscount || 0;
   const discount = promotionDiscount + voucherDiscount;
-  const grandTotal = quote ? quote.grandTotal : Math.round(Math.max(totalAmount + shippingFee, 0));
+  const grandTotal = quote ? quote.grandTotal : Math.round(Math.max(totalAmount + shippingFee, 0)); // ưu tiên số backend tính
   // MoMo giới hạn số tiền mỗi giao dịch (1.000đ - 50.000.000đ)
-  const momoAllowed = grandTotal >= methods.momoLimits.min && grandTotal <= methods.momoLimits.max;
+  const momoAllowed = grandTotal >= methods.momoLimits.min && grandTotal <= methods.momoLimits.max; // MoMo: 1.000đ - 50 triệu
   // Cổng đang chọn không còn dùng được (chưa cấu hình / vượt giới hạn) -> quay về COD
   useEffect(() => {
-    if ((paymentMode === 'vnpay' && !methods.vnpay) || (paymentMode === 'momo' && (!methods.momo || !momoAllowed))) {
+    if ((paymentMode === 'vnpay' && !methods.vnpay) || (paymentMode === 'momo' && (!methods.momo || !momoAllowed))) { // cổng không còn dùng được -> về COD
       setPaymentMode('cod');
     }
   }, [paymentMode, methods, momoAllowed]);
 
   // Gợi ý 3 mã có lợi nhất cho giỏ + chi nhánh hiện tại; tự áp mã tốt nhất nếu khách chưa tự chọn / nhập mã
   const [offers, setOffers] = useState(null);
-  const [manualVoucher, setManualVoucher] = useState(false);
+  const [manualVoucher, setManualVoucher] = useState(false); // khách đã tự chọn mã -> không tự áp mã nữa
   useEffect(() => {
     if (!cartKey || user?.role !== 'customer') return undefined;
     let alive = true;
-    const t = setTimeout(() => voucherService.suggest(selectedStoreId).then((d) => {
+    const t = setTimeout(() => voucherService.suggest(selectedStoreId).then((d) => { // chờ 300ms (đổi chi nhánh liên tục chỉ gọi 1 lần)
       if (!alive) return;
       setOffers(d);
-      const best = d.eligible[0];
-      if (best && !manualVoucher && appliedCode !== best.code) {
+      const best = d.eligible[0]; // mã có lợi nhất
+      if (best && !manualVoucher && appliedCode !== best.code) { // tự áp nếu khách chưa tự chọn
         setVoucherCode(best.code); setAppliedCode(best.code);
         setVoucherMsg(`Đã tự áp mã có lợi nhất ${best.code}: giảm ${formatVND(best.amount)}`);
       }
@@ -174,7 +174,7 @@ export default function CheckoutPage() {
     setManualVoucher(true);
     setVoucherCode(value);
     // Sửa / xóa mã đang áp dụng thì bỏ luôn phần giảm của mã cũ
-    if (appliedCode && value.trim().toUpperCase() !== appliedCode) setAppliedCode('');
+    if (appliedCode && value.trim().toUpperCase() !== appliedCode) setAppliedCode(''); // sửa mã -> bỏ mã cũ
     if (voucherMsg) setVoucherMsg('');
   };
 
@@ -186,7 +186,7 @@ export default function CheckoutPage() {
       return;
     }
     try {
-      const q = await quoteRequest(code);
+      const q = await quoteRequest(code); // backend kiểm tra mã + tính lại
       setQuote(q);
       setAppliedCode(code);
       setVoucherMsg(`Áp dụng mã thành công: giảm ${formatVND(q.voucherDiscount)}`);
@@ -198,15 +198,17 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     setError('');
-    if (cart.hasUnavailable) {
+    if (cart.hasUnavailable) { // giỏ có món ngừng bán / thiếu hàng
       setError('Giỏ hàng có sản phẩm đã ngừng bán hoặc không đủ hàng - vui lòng quay lại giỏ hàng để điều chỉnh');
       return;
     }
-    if (!selectedStoreId) {
+    // SỬA LỖI: đơn hỏa tốc do chi nhánh của khung hỏa tốc xử lý (express.store, backend đã kiểm tra đủ hàng) -
+    // trước đây vẫn bị chặn nếu chi nhánh đang chọn trong ô "Cửa hàng" thiếu hàng. Chỉ kiểm tra khi giao thường.
+    if (!useExpress && !selectedStoreId) {
       setError('Vui lòng chọn cửa hàng xử lý đơn hàng');
       return;
     }
-    if (selectedStore && !selectedStore.enough) {
+    if (!useExpress && selectedStore && !selectedStore.enough) {
       setError(`Cửa hàng ${selectedStore.name} không đủ hàng: ${selectedStore.missing.join(', ')}. Vui lòng chọn cửa hàng khác.`);
       return;
     }
@@ -215,26 +217,26 @@ export default function CheckoutPage() {
         setError('Vui lòng nhập đủ tên và địa chỉ công ty để xuất hóa đơn');
         return;
       }
-      if (!TAX_CODE_RE.test(invoice.taxCode.replace(/\s/g, ''))) {
+      if (!TAX_CODE_RE.test(invoice.taxCode.replace(/\s/g, ''))) { // MST 10 / 10-3 / 12 số
         setError('Mã số thuế không hợp lệ (10 số, 10 số-3 số hoặc 12 số)');
         return;
       }
     }
-    setSubmitting(true);
+    setSubmitting(true); // khóa nút đặt hàng (chống bấm 2 lần)
     try {
       const order = await orderService.createOrder({
-        storeId: useExpress ? express.store._id : selectedStoreId,
+        storeId: useExpress ? express.store._id : selectedStoreId, // hỏa tốc: chi nhánh của khung hỏa tốc
         deliveryAddress: address,
         express: useExpress ? { windowId: express.windowId, lat: express.lat, lng: express.lng } : undefined,
         deliveryMethod,
         paymentMode,
-        voucherCode: appliedCode || undefined,
+        voucherCode: appliedCode || undefined, // chỉ gửi mã đã áp thành công
         // Tổng tiền khách đang nhìn thấy - backend từ chối nếu số thật khác (khuyến mãi vừa đổi)
         expectedTotal: quote ? quote.grandTotal : undefined,
         invoiceInfo: wantInvoice ? invoice : undefined
       });
-      await refreshCart();
-      if (paymentMode === 'vnpay' || paymentMode === 'momo') {
+      await refreshCart(); // giỏ đã rỗng ở server -> cập nhật giao diện
+      if (paymentMode === 'vnpay' || paymentMode === 'momo') { // thanh toán online -> chuyển sang cổng
         try {
           await paymentService.start(paymentMode, order._id); // chuyển sang cổng thanh toán
           return;
@@ -250,7 +252,7 @@ export default function CheckoutPage() {
     } catch (err) {
       setError(err.response?.data?.message || 'Đặt hàng thất bại, vui lòng thử lại');
       // Tổng tiền vừa thay đổi -> tải lại bản xem trước để khách thấy số mới rồi bấm đặt lại
-      if (err.response?.status === 409) quoteRequest(appliedCode).then(setQuote).catch(() => {});
+      if (err.response?.status === 409) quoteRequest(appliedCode).then(setQuote).catch(() => {}); // tổng tiền vừa đổi -> hiện số mới
     } finally {
       setSubmitting(false);
     }

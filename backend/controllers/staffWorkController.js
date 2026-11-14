@@ -5,21 +5,21 @@ const Store = require('../models/Store');
 const Order = require('../models/Order');
 const Warranty = require('../models/Warranty');
 const WarrantyCard = require('../models/WarrantyCard');
-const StaffAssignment = require('../models/StaffAssignment');
-const StaffReview = require('../models/StaffReview');
+const StaffAssignment = require('../models/StaffAssignment'); // quá trình công tác (chính / quản lý thêm / điều chuyển)
+const StaffReview = require('../models/StaffReview'); // đánh giá cuối năm
 const asyncHandler = require('../utils/asyncHandler');
 const { disconnectAccount } = require('../utils/socketAuth');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const DAY = 86400000;
 const oid = (v) => new mongoose.Types.ObjectId(String(v));
-const validId = (v) => mongoose.isValidObjectId(String(v ?? ''));
-const parseDate = (v) => {
+const validId = (v) => mongoose.isValidObjectId(String(v ?? '')); // id hợp lệ?
+const parseDate = (v) => { // chuỗi ngày -> Date, sai -> null
   if (!v) return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
 };
-const yearRange = (year) => ({ from: new Date(`${year}-01-01T00:00:00+07:00`), to: new Date(`${year + 1}-01-01T00:00:00+07:00`) });
+const yearRange = (year) => ({ from: new Date(`${year}-01-01T00:00:00+07:00`), to: new Date(`${year + 1}-01-01T00:00:00+07:00`) }); // cả năm theo giờ VN
 
 async function loadStaff(req, res) {
   if (!validId(req.params.id)) { res.status(404).json({ message: 'Không tìm thấy nhân viên' }); return null; }
@@ -32,19 +32,19 @@ async function loadStaff(req, res) {
 async function recordStoreChanges(staff, before, actorId) {
   const now = new Date();
   // Nhân viên có từ trước khi có tính năng: tạo bù lịch sử theo trạng thái TRƯỚC khi sửa
-  await ensureBaseHistory({ _id: staff._id, storeId: before.storeId, managedStoreIds: before.managedStoreIds, title: staff.title, createdAt: staff.createdAt });
-  const prevHome = before.storeId ? String(before.storeId) : null;
-  const nextHome = staff.storeId ? String(staff.storeId._id || staff.storeId) : null;
-  if (prevHome !== nextHome) {
-    await StaffAssignment.updateMany({ staffId: staff._id, kind: 'home', endDate: null }, { $set: { endDate: now, endedBy: actorId, endNote: 'Đổi chi nhánh chính' } });
+  await ensureBaseHistory({ _id: staff._id, storeId: before.storeId, managedStoreIds: before.managedStoreIds, title: staff.title, createdAt: staff.createdAt }); // nhân viên cũ chưa có lịch sử -> tạo bù trước
+  const prevHome = before.storeId ? String(before.storeId) : null; // chi nhánh chính trước khi sửa
+  const nextHome = staff.storeId ? String(staff.storeId._id || staff.storeId) : null; // sau khi sửa
+  if (prevHome !== nextHome) { // đổi chi nhánh chính
+    await StaffAssignment.updateMany({ staffId: staff._id, kind: 'home', endDate: null }, { $set: { endDate: now, endedBy: actorId, endNote: 'Đổi chi nhánh chính' } }); // đóng giai đoạn cũ
     if (nextHome) {
-      await StaffAssignment.create({ staffId: staff._id, storeId: nextHome, kind: 'home', title: staff.title, startDate: now, createdBy: actorId });
+      await StaffAssignment.create({ staffId: staff._id, storeId: nextHome, kind: 'home', title: staff.title, startDate: now, createdBy: actorId }); // mở giai đoạn mới
     }
   }
   const prevManaged = new Set((before.managedStoreIds || []).map(String));
   const nextManaged = new Set((staff.managedStoreIds || []).map((s) => String(s._id || s)));
-  const removed = [...prevManaged].filter((s) => !nextManaged.has(s));
-  const added = [...nextManaged].filter((s) => !prevManaged.has(s));
+  const removed = [...prevManaged].filter((s) => !nextManaged.has(s)); // chi nhánh thôi phụ trách
+  const added = [...nextManaged].filter((s) => !prevManaged.has(s)); // chi nhánh mới phụ trách
   if (removed.length) {
     await StaffAssignment.updateMany(
       { staffId: staff._id, kind: 'manage', storeId: { $in: removed.map(oid) }, endDate: null },
@@ -58,18 +58,18 @@ async function recordStoreChanges(staff, before, actorId) {
 
 // Nhân viên có từ trước khi có tính năng: chưa có lịch sử -> tạo giai đoạn chi nhánh chính từ ngày tạo tài khoản
 async function ensureBaseHistory(staff) {
-  if (await StaffAssignment.exists({ staffId: staff._id })) return;
+  if (await StaffAssignment.exists({ staffId: staff._id })) return; // đã có lịch sử -> không tạo
   const docs = [];
   if (staff.storeId) docs.push({ staffId: staff._id, storeId: staff.storeId._id || staff.storeId, kind: 'home', title: staff.title, startDate: staff.createdAt || new Date() });
   for (const m of staff.managedStoreIds || []) docs.push({ staffId: staff._id, storeId: m._id || m, kind: 'manage', title: 'Quản lý', startDate: staff.createdAt || new Date() });
   if (docs.length) await StaffAssignment.insertMany(docs);
 }
 
-const view = (a, now = new Date()) => ({ ...a.toObject(), state: a.stateAt(now) });
+const view = (a, now = new Date()) => ({ ...a.toObject(), state: a.stateAt(now) }); // kèm trạng thái: sắp tới / đang diễn ra / đã kết thúc
 
 // @route GET /api/staff/me/stores - nhân viên xem các chi nhánh mình được thao tác (cho ô chọn chi nhánh)
 const myStores = asyncHandler(async (req, res) => {
-  const scope = req.storeScope || { allowed: [], current: null, stores: [], transfer: null };
+  const scope = req.storeScope || { allowed: [], current: null, stores: [], transfer: null }; // tính sẵn ở middleware protect
   res.json({ data: { current: scope.current, stores: scope.stores, transfer: scope.transfer } });
 });
 
@@ -89,24 +89,24 @@ const listAssignments = asyncHandler(async (req, res) => {
 const createTransfer = asyncHandler(async (req, res) => {
   const staff = await loadStaff(req, res);
   if (!staff) return;
-  if (staff.role !== 'staff') return res.status(400).json({ message: 'Chỉ điều chuyển được tài khoản nhân viên' });
+  if (staff.role !== 'staff') return res.status(400).json({ message: 'Chỉ điều chuyển được tài khoản nhân viên' }); // admin không bị giới hạn chi nhánh
   const { storeId, reason, title } = req.body;
   if (!validId(storeId) || !(await Store.exists({ _id: storeId, isActive: { $ne: false } }))) return res.status(400).json({ message: 'Chi nhánh không tồn tại hoặc đã ngưng hoạt động' });
-  if (String(storeId) === String(staff.storeId || '')) return res.status(400).json({ message: 'Nhân viên đang thuộc chi nhánh này' });
-  const start = parseDate(req.body.startDate) || new Date();
+  if (String(storeId) === String(staff.storeId || '')) return res.status(400).json({ message: 'Nhân viên đang thuộc chi nhánh này' }); // không điều chuyển về chi nhánh chính
+  const start = parseDate(req.body.startDate) || new Date(); // mặc định bắt đầu ngay
   let end = parseDate(req.body.endDate);
   const months = Number(req.body.months);
-  if (!end && Number.isInteger(months) && months > 0 && months <= 36) {
+  if (!end && Number.isInteger(months) && months > 0 && months <= 36) { // hoặc nhập số tháng (1-36)
     end = new Date(start);
     end.setMonth(end.getMonth() + months);
   }
   if (!end) return res.status(400).json({ message: 'Điều chuyển tạm thời cần ngày kết thúc (hoặc số tháng)' });
   if (end <= start) return res.status(400).json({ message: 'Ngày kết thúc phải sau ngày bắt đầu' });
-  if (end - start > 3 * 366 * DAY) return res.status(400).json({ message: 'Điều chuyển tạm thời tối đa 3 năm - quá thời gian này hãy đổi chi nhánh chính' });
+  if (end - start > 3 * 366 * DAY) return res.status(400).json({ message: 'Điều chuyển tạm thời tối đa 3 năm - quá thời gian này hãy đổi chi nhánh chính' }); // tối đa 3 năm
   // Không cho 2 lần điều chuyển chồng thời gian lên nhau (không biết nhân viên đang ở đâu)
-  const overlap = await StaffAssignment.findOne({
+  const overlap = await StaffAssignment.findOne({ // đợt khác chồng thời gian
     staffId: staff._id, kind: 'transfer', cancelled: { $ne: true },
-    startDate: { $lt: end }, $or: [{ endDate: null }, { endDate: { $gt: start } }]
+    startDate: { $lt: end }, $or: [{ endDate: null }, { endDate: { $gt: start } }] // điều kiện 2 khoảng thời gian giao nhau
   }).populate('storeId', 'name');
   if (overlap) return res.status(409).json({ message: `Trùng thời gian với đợt điều chuyển tới ${overlap.storeId?.name || 'chi nhánh khác'}` });
 
@@ -125,10 +125,10 @@ const endTransfer = asyncHandler(async (req, res) => {
   if (!staff) return;
   const a = validId(req.params.aid) ? await StaffAssignment.findOne({ _id: req.params.aid, staffId: staff._id, kind: 'transfer' }) : null;
   if (!a) return res.status(404).json({ message: 'Không tìm thấy đợt điều chuyển' });
-  const state = a.stateAt();
+  const state = a.stateAt(); // upcoming / active / ended
   const note = String(req.body.note || '').trim().slice(0, 300);
-  if (state === 'upcoming') a.cancelled = true;
-  else if (state === 'active') a.endDate = new Date();
+  if (state === 'upcoming') a.cancelled = true; // chưa bắt đầu -> hủy
+  else if (state === 'active') a.endDate = new Date(); // đang diễn ra -> kết thúc ngay
   else return res.status(400).json({ message: 'Đợt điều chuyển đã kết thúc' });
   a.endedBy = req.account._id;
   a.endNote = note || (state === 'upcoming' ? 'Hủy điều chuyển' : 'Kết thúc điều chuyển sớm');
@@ -142,8 +142,8 @@ const endTransfer = asyncHandler(async (req, res) => {
 // Số ngày làm việc ở từng chi nhánh trong năm (theo quá trình làm việc; điều chuyển được trừ khỏi chi nhánh chính)
 function daysByStore(assignments, from, to) {
   const now = new Date();
-  const cap = to < now ? to : now;
-  const clip = (a) => {
+  const cap = to < now ? to : now; // không tính ngày tương lai
+  const clip = (a) => { // cắt giai đoạn vào trong năm
     const s = Math.max(a.startDate, from);
     const e = Math.min(a.endDate || cap, cap);
     return e > s ? [s, e] : null;
@@ -157,12 +157,12 @@ function daysByStore(assignments, from, to) {
     result.set(key, cur);
   };
   const transfers = assignments.filter((a) => a.kind === 'transfer' && !a.cancelled).map((a) => ({ a, r: clip(a) })).filter((x) => x.r);
-  for (const t of transfers) add(t.a.storeId, t.r[1] - t.r[0]);
+  for (const t of transfers) add(t.a.storeId, t.r[1] - t.r[0]); // ngày ở chi nhánh điều chuyển tới
   for (const h of assignments.filter((a) => a.kind === 'home')) {
     const r = clip(h);
     if (!r) continue;
     let ms = r[1] - r[0];
-    for (const t of transfers) ms -= Math.max(0, Math.min(r[1], t.r[1]) - Math.max(r[0], t.r[0]));
+    for (const t of transfers) ms -= Math.max(0, Math.min(r[1], t.r[1]) - Math.max(r[0], t.r[0])); // trừ thời gian điều chuyển khỏi chi nhánh chính
     add(h.storeId, ms);
   }
   return [...result.values()].map((x) => ({ ...x, days: Math.round(x.days) })).sort((a, b) => b.days - a.days);
@@ -172,11 +172,11 @@ function daysByStore(assignments, from, to) {
 async function metricsFor(staffIds, year) {
   const { from, to } = yearRange(year);
   const ids = staffIds.map(oid);
-  const monthOf = (field) => ({ $month: { date: field, timezone: TZ } });
+  const monthOf = (field) => ({ $month: { date: field, timezone: TZ } }); // tháng theo giờ VN
   const [pos, handled, deliveries, repairs, extensions] = await Promise.all([
     // Bán tại quầy: đơn do nhân viên tạo, đã giao (không tính đơn hủy / trả)
     Order.aggregate([
-      { $match: { source: 'pos', createdBy: { $in: ids }, status: 'delivered', createdAt: { $gte: from, $lt: to } } },
+      { $match: { source: 'pos', createdBy: { $in: ids }, status: 'delivered', createdAt: { $gte: from, $lt: to } } }, // bán tại quầy đã hoàn tất
       { $group: { _id: { s: '$createdBy', m: monthOf('$createdAt'), store: '$storeId' }, revenue: { $sum: '$grandTotal' }, orders: { $sum: 1 } } }
     ]),
     // Đơn đã xử lý: số đơn nhân viên có cập nhật trạng thái (xác nhận, đóng gói, bàn giao...)
@@ -184,12 +184,12 @@ async function metricsFor(staffIds, year) {
       { $match: { 'statusHistory.changedBy': { $in: ids }, createdAt: { $gte: from, $lt: to } } },
       { $unwind: '$statusHistory' },
       { $match: { 'statusHistory.changedBy': { $in: ids }, 'statusHistory.eventType': { $ne: 'activity' } } },
-      { $group: { _id: { s: '$statusHistory.changedBy', o: '$_id' }, at: { $first: '$statusHistory.changedAt' }, store: { $first: { $ifNull: ['$statusHistory.storeId', '$storeId'] } } } },
+      { $group: { _id: { s: '$statusHistory.changedBy', o: '$_id' }, at: { $first: '$statusHistory.changedAt' }, store: { $first: { $ifNull: ['$statusHistory.storeId', '$storeId'] } } } }, // mỗi đơn tính 1 lần / người
       { $group: { _id: { s: '$_id.s', m: monthOf('$at'), store: '$store' }, orders: { $sum: 1 } } }
     ]),
     // Giao hàng: đơn được phân công, giao thành công, số lần giao thất bại
     Order.aggregate([
-      { $match: { shipperId: { $in: ids }, createdAt: { $gte: from, $lt: to } } },
+      { $match: { shipperId: { $in: ids }, createdAt: { $gte: from, $lt: to } } }, // giao hàng
       {
         $group: {
           _id: { s: '$shipperId', m: monthOf('$createdAt') },
@@ -204,7 +204,7 @@ async function metricsFor(staffIds, year) {
       { $match: { 'statusHistory.changedBy': { $in: ids }, createdAt: { $gte: from, $lt: to } } },
       { $unwind: '$statusHistory' },
       { $match: { 'statusHistory.changedBy': { $in: ids } } },
-      { $group: { _id: { s: '$statusHistory.changedBy', w: '$_id' }, at: { $first: '$statusHistory.changedAt' }, rating: { $first: '$customerRating' } } },
+      { $group: { _id: { s: '$statusHistory.changedBy', w: '$_id' }, at: { $first: '$statusHistory.changedAt' }, rating: { $first: '$customerRating' } } }, // mỗi phiếu tính 1 lần / người
       { $group: { _id: { s: '$_id.s', m: monthOf('$at') }, tickets: { $sum: 1 }, ratingSum: { $sum: { $ifNull: ['$rating', 0] } }, rated: { $sum: { $cond: [{ $gt: ['$rating', 0] }, 1, 0] } } } }
     ]),
     // Gói bảo hành mở rộng đã bán / xác nhận thu tiền
@@ -217,18 +217,18 @@ async function metricsFor(staffIds, year) {
   ]);
 
   const out = new Map();
-  const blank = () => ({
+  const blank = () => ({ // khung số liệu rỗng 12 tháng
     totals: { posRevenue: 0, posOrders: 0, ordersHandled: 0, deliveriesAssigned: 0, deliveriesDone: 0, deliveryFailures: 0, repairTickets: 0, repairRating: null, extensionsSold: 0, extensionRevenue: 0 },
     monthly: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, posRevenue: 0, posOrders: 0, ordersHandled: 0, deliveriesDone: 0, repairTickets: 0, extensionRevenue: 0 })),
     byStore: new Map(),
     _rating: [0, 0]
   });
-  const get = (id) => {
+  const get = (id) => { // lấy (hoặc tạo) số liệu của 1 người
     const k = String(id);
     if (!out.has(k)) out.set(k, blank());
     return out.get(k);
   };
-  const storeRow = (m, store) => {
+  const storeRow = (m, store) => { // số liệu theo chi nhánh
     const k = String(store);
     if (!m.byStore.has(k)) m.byStore.set(k, { storeId: k, posRevenue: 0, posOrders: 0, ordersHandled: 0 });
     return m.byStore.get(k);
@@ -262,7 +262,7 @@ async function metricsFor(staffIds, year) {
     m.monthly[r._id.m - 1].extensionRevenue += r.revenue;
   }
   for (const m of out.values()) {
-    m.totals.repairRating = m._rating[1] ? Math.round((m._rating[0] / m._rating[1]) * 10) / 10 : null;
+    m.totals.repairRating = m._rating[1] ? Math.round((m._rating[0] / m._rating[1]) * 10) / 10 : null; // điểm trung bình sửa chữa
     delete m._rating;
   }
   return { get, out };
@@ -271,7 +271,7 @@ async function metricsFor(staffIds, year) {
 const parseYear = (v) => {
   const y = Number.parseInt(v, 10);
   const now = new Date().getFullYear();
-  return Number.isInteger(y) && y >= 2000 && y <= now + 1 ? y : now;
+  return Number.isInteger(y) && y >= 2000 && y <= now + 1 ? y : now; // năm hợp lệ, sai -> năm nay
 };
 
 // @route GET /api/staff/:id/performance?year= - hiệu suất 1 năm + quá trình làm việc + đánh giá
@@ -282,7 +282,7 @@ const performance = asyncHandler(async (req, res) => {
   await ensureBaseHistory(staff);
   const { from, to } = yearRange(year);
   const [assignments, { get }, review] = await Promise.all([
-    StaffAssignment.find({ staffId: staff._id, startDate: { $lt: to }, $or: [{ endDate: null }, { endDate: { $gt: from } }] }).populate('storeId', 'name').lean(),
+    StaffAssignment.find({ staffId: staff._id, startDate: { $lt: to }, $or: [{ endDate: null }, { endDate: { $gt: from } }] }).populate('storeId', 'name').lean(), // giai đoạn giao với năm
     metricsFor([staff._id], year),
     StaffReview.findOne({ staffId: staff._id, year }).populate('reviewedBy', 'name').lean()
   ]);
@@ -305,7 +305,7 @@ const performance = asyncHandler(async (req, res) => {
 // @route GET /api/staff/performance/summary?year= - bảng xếp hạng toàn bộ nhân viên (tính thưởng)
 const performanceSummary = asyncHandler(async (req, res) => {
   const year = parseYear(req.query.year);
-  const staffList = await Admin.find({ role: 'staff' }).select('name email title storeId managedStoreIds isActive').populate('storeId', 'name').lean();
+  const staffList = await Admin.find({ role: 'staff' }).select('name email title storeId managedStoreIds isActive').populate('storeId', 'name').lean(); // mọi nhân viên (kể cả đã khóa)
   const { get } = await metricsFor(staffList.map((s) => s._id), year);
   const reviews = await StaffReview.find({ year, staffId: { $in: staffList.map((s) => s._id) } }).lean();
   const reviewMap = new Map(reviews.map((r) => [String(r.staffId), r]));
@@ -325,11 +325,11 @@ const saveReview = asyncHandler(async (req, res) => {
   const staff = await loadStaff(req, res);
   if (!staff) return;
   const year = Number.parseInt(req.params.year, 10);
-  if (!Number.isInteger(year) || year < 2000 || year > new Date().getFullYear()) return res.status(400).json({ message: 'Năm đánh giá không hợp lệ' });
+  if (!Number.isInteger(year) || year < 2000 || year > new Date().getFullYear()) return res.status(400).json({ message: 'Năm đánh giá không hợp lệ' }); // không đánh giá năm tương lai
   const rating = Number(req.body.rating);
   const bonus = Number(req.body.bonus ?? 0);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ message: 'Xếp loại từ 1 đến 5' });
-  if (!Number.isInteger(bonus) || bonus < 0 || bonus > 10_000_000_000) return res.status(400).json({ message: 'Tiền thưởng phải là số nguyên ≥ 0' });
+  if (!Number.isInteger(bonus) || bonus < 0 || bonus > 10_000_000_000) return res.status(400).json({ message: 'Tiền thưởng phải là số nguyên ≥ 0' }); // thưởng 0 - 10 tỷ
   const { get } = await metricsFor([staff._id], year);
   const review = await StaffReview.findOneAndUpdate(
     { staffId: staff._id, year },
@@ -338,11 +338,11 @@ const saveReview = asyncHandler(async (req, res) => {
         rating, bonus,
         strengths: String(req.body.strengths || '').trim().slice(0, 1000),
         improvements: String(req.body.improvements || '').trim().slice(0, 1000),
-        metricsSnapshot: get(staff._id).totals,
+        metricsSnapshot: get(staff._id).totals, // chụp số liệu lúc đánh giá (sau này số liệu đổi vẫn giữ căn cứ)
         reviewedBy: req.account._id
       }
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, new: true, setDefaultsOnInsert: true } // mỗi người mỗi năm 1 bản đánh giá
   );
   res.json({ data: review });
 });
@@ -357,9 +357,9 @@ const storeStaff = asyncHandler(async (req, res) => {
   const storeId = oid(req.params.storeId);
   const now = new Date();
   const [members, transfers] = await Promise.all([
-    Admin.find({ role: 'staff', $or: [{ storeId }, { managedStoreIds: storeId }] })
+    Admin.find({ role: 'staff', $or: [{ storeId }, { managedStoreIds: storeId }] }) // chính thức + làm thêm
       .select('name email title isActive storeId managedStoreIds groupIds').populate('groupIds', 'name').populate('storeId', 'name').lean(),
-    StaffAssignment.find({ storeId, kind: 'transfer', cancelled: { $ne: true }, startDate: { $lte: now }, $or: [{ endDate: null }, { endDate: { $gt: now } }] })
+    StaffAssignment.find({ storeId, kind: 'transfer', cancelled: { $ne: true }, startDate: { $lte: now }, $or: [{ endDate: null }, { endDate: { $gt: now } }] }) // đang điều chuyển tới
       .populate({ path: 'staffId', select: 'name email title isActive storeId groupIds', populate: [{ path: 'groupIds', select: 'name' }, { path: 'storeId', select: 'name' }] }).lean()
   ]);
   const rows = members.map((m) => ({
@@ -368,14 +368,14 @@ const storeStaff = asyncHandler(async (req, res) => {
     homeStore: m.storeId?.name || '', storeCount: (m.storeId ? 1 : 0) + (m.managedStoreIds || []).length
   }));
   for (const t of transfers) {
-    if (!t.staffId || rows.some((r) => String(r._id) === String(t.staffId._id))) continue;
+    if (!t.staffId || rows.some((r) => String(r._id) === String(t.staffId._id))) continue; // không thêm trùng
     rows.push({
       _id: t.staffId._id, name: t.staffId.name, email: t.staffId.email, title: t.title || t.staffId.title, isActive: t.staffId.isActive,
       groups: (t.staffId.groupIds || []).map((g) => g.name), relation: 'transfer', homeStore: t.staffId.storeId?.name || '', until: t.endDate
     });
   }
   const order = { home: 0, extra: 1, transfer: 2 };
-  rows.sort((a, b) => order[a.relation] - order[b.relation] || a.name.localeCompare(b.name));
+  rows.sort((a, b) => order[a.relation] - order[b.relation] || a.name.localeCompare(b.name)); // chính thức -> làm thêm -> điều chuyển, rồi theo tên
   res.json({ data: rows });
 });
 
@@ -389,10 +389,10 @@ const addStaffToStore = asyncHandler(async (req, res) => {
   const staff = validId(req.body.staffId) ? await Admin.findById(req.body.staffId) : null;
   if (!staff || staff.role !== 'staff') return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
   const before = { storeId: staff.storeId, managedStoreIds: [...(staff.managedStoreIds || [])] };
-  const has = String(staff.storeId || '') === String(storeId) || (staff.managedStoreIds || []).some((m) => String(m) === String(storeId));
+  const has = String(staff.storeId || '') === String(storeId) || (staff.managedStoreIds || []).some((m) => String(m) === String(storeId)); // đã thuộc chi nhánh?
   if (has) return res.status(409).json({ message: `${staff.name} đã làm việc ở chi nhánh này` });
-  if (!staff.storeId) staff.storeId = storeId;
-  else staff.managedStoreIds.push(storeId);
+  if (!staff.storeId) staff.storeId = storeId; // chưa có chi nhánh chính -> đây là chi nhánh chính
+  else staff.managedStoreIds.push(storeId); // có rồi -> thêm vào chi nhánh làm việc khác
   await staff.save();
   await recordStoreChanges(staff, before, req.account._id);
   disconnectAccount(req, staff._id);
@@ -407,16 +407,16 @@ const removeStaffFromStore = asyncHandler(async (req, res) => {
   const staff = validId(req.params.staffId) ? await Admin.findById(req.params.staffId) : null;
   if (!staff || staff.role !== 'staff') return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
   const before = { storeId: staff.storeId, managedStoreIds: [...(staff.managedStoreIds || [])] };
-  const isHome = String(staff.storeId || '') === String(storeId);
+  const isHome = String(staff.storeId || '') === String(storeId); // đang bỏ chi nhánh chính?
   const others = (staff.managedStoreIds || []).filter((m) => String(m) !== String(storeId));
   if (!isHome && others.length === (staff.managedStoreIds || []).length) {
     return res.status(400).json({ message: 'Nhân viên không làm việc ở chi nhánh này (nếu đang điều chuyển tới, hãy kết thúc điều chuyển ở hồ sơ nhân viên)' });
   }
-  if (isHome && !others.length) {
+  if (isHome && !others.length) { // không cho bỏ chi nhánh cuối cùng
     return res.status(400).json({ message: `Đây là chi nhánh duy nhất của ${staff.name}. Thêm chi nhánh khác trước, hoặc khóa tài khoản nếu nhân viên nghỉ việc.` });
   }
   if (isHome) {
-    staff.storeId = others[0];
+    staff.storeId = others[0]; // chi nhánh khác đầu tiên lên làm chi nhánh chính
     staff.managedStoreIds = others.slice(1);
   } else {
     staff.managedStoreIds = others;
