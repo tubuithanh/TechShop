@@ -206,12 +206,33 @@ const assignShipper = asyncHandler(async (req, res) => {
 const getMyDeliveries = asyncHandler(async (req, res) => {
   const mine = { shipperId: req.account._id }; // CHỈ đơn của chính shipper
   const branch = await workingStore(req.account); // chi nhánh đang làm
-  const [active, codPending, history] = await Promise.all([
-    Order.find({ ...mine, storeId: branch?._id || branch || '000000000000000000000000', status: { $in: [...ASSIGNABLE, 'shipping', 'returning'] } }).populate(...POPULATE_STORE).sort({ assignedAt: 1 }), // đơn đang giao tại chi nhánh hiện tại (không chi nhánh -> id rỗng = không có đơn)
-    Order.find({ ...mine, paymentMode: 'cod', codCollectedAt: { $ne: null }, codSettledAt: null }).select('orderCode grandTotal codCollectedAt'), // tiền COD đang giữ
-    Order.find({ ...mine, status: { $in: ['delivered', 'returned'] } }).populate(...POPULATE_STORE).populate('handover.by receipt.by', 'name').sort({ 'statusHistory.changedAt': -1 }).limit(50) // 50 đơn đã xong gần nhất
+  // PHÂN TRANG: ?view=active|history&page=&limit= (mặc định 10 đơn / trang). Trước đây tải hết đơn đang giao và
+  // cắt cứng lịch sử ở 50 đơn (không xem được đơn cũ hơn). Trả về tổng số của CẢ 2 tab để hiện số trên tab.
+  const view = req.query.view === 'history' ? 'history' : 'active';
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1)); // trang >= 1
+  const limit = Math.min(50, Math.max(1, Math.floor(Number(req.query.limit) || 10))); // 1..50
+  const activeFilter = { ...mine, storeId: branch?._id || branch || '000000000000000000000000', status: { $in: [...ASSIGNABLE, 'shipping', 'returning'] } }; // đơn đang giao tại chi nhánh hiện tại (không chi nhánh -> id rỗng = không có đơn)
+  const historyFilter = { ...mine, status: { $in: ['delivered', 'returned'] } }; // đơn đã xong
+  const skip = (page - 1) * limit;
+  const [activeTotal, historyTotal, list, codPending] = await Promise.all([
+    Order.countDocuments(activeFilter),
+    Order.countDocuments(historyFilter),
+    view === 'active'
+      // Hỏa tốc lên đầu (hạn giao sớm nhất trước), sau đó theo thứ tự được phân công
+      ? Order.find(activeFilter).populate(...POPULATE_STORE).sort({ 'express.deadline': -1, assignedAt: 1, _id: 1 }).skip(skip).limit(limit)
+      : Order.find(historyFilter).populate(...POPULATE_STORE).populate('handover.by receipt.by', 'name').sort({ 'statusHistory.changedAt': -1, _id: -1 }).skip(skip).limit(limit),
+    Order.find({ ...mine, paymentMode: 'cod', codCollectedAt: { $ne: null }, codSettledAt: null }).select('orderCode grandTotal codCollectedAt') // tiền COD đang giữ (luôn đủ, không phân trang)
   ]);
-  res.json({ data: { active, history, codPending, branch, codTotal: codPending.reduce((sum, o) => sum + o.grandTotal, 0) } }); // tổng tiền đang giữ
+  const total = view === 'active' ? activeTotal : historyTotal;
+  res.json({
+    data: {
+      view, page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)), // thông tin phân trang
+      counts: { active: activeTotal, history: historyTotal }, // số trên tab
+      active: view === 'active' ? list : [], // giữ tên trường cũ cho giao diện
+      history: view === 'history' ? list : [],
+      codPending, branch, codTotal: codPending.reduce((sum, o) => sum + o.grandTotal, 0) // tổng tiền đang giữ
+    }
+  });
 });
 
 // Đơn được phân công cho CHÍNH người gọi (nhân viên giao hàng) - không thì 403 / 404

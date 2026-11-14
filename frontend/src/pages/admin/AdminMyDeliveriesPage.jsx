@@ -5,19 +5,23 @@ import OrderReceipt from '../../components/admin/OrderReceipt';
 import { orderLabel } from '../../utils/orderWorkflow';
 import api from '../../services/api';
 import { connectSocket } from '../../services/socket';
+import AdminPagination from '../../components/admin/AdminPagination';
 
 // Nhân viên giao hàng (quyền deliveries.perform): đơn được phân công cho mình (UC38), xác nhận lấy hàng, báo kết
 // quả giao (UC39), xem tiền COD đang giữ chờ nộp về chi nhánh (UC40).
 const money = (v) => (v ?? 0).toLocaleString('vi-VN') + 'đ';
 const STATUS = { confirmed: 'Chi nhánh đang chuẩn bị', processing: 'Chờ lấy hàng', shipping: 'Đang giao' };
+const PAGE_SIZE = 10; // số đơn mỗi trang
 const REASONS = ['Không liên lạc được khách', 'Khách hẹn giao hôm khác', 'Sai địa chỉ', 'Khách từ chối nhận hàng'];
 
 export default function AdminMyDeliveriesPage() {
   const [handover, setHandover] = useState(null);
   const [details, setDetails] = useState(null);
-  const [view, setView] = useState('active');
+  const [view, setViewState] = useState('active'); // tab: cần xử lý / lịch sử
+  const [page, setPage] = useState(1); // trang hiện tại (phân trang ở backend, 10 đơn / trang)
+  const setView = (v) => { setViewState(v); setPage(1); }; // đổi tab -> về trang 1
   const [busy, setBusy] = useState(false);
-  const [data, setData] = useState({ active: [], codPending: [], codTotal: 0 });
+  const [data, setData] = useState({ active: [], history: [], codPending: [], codTotal: 0, counts: {}, totalPages: 1, total: 0 });
   const [error, setError] = useState('');
   const [failing, setFailing] = useState(null); // đơn đang báo giao thất bại
   const [reason, setReason] = useState(REASONS[0]);
@@ -25,11 +29,14 @@ export default function AdminMyDeliveriesPage() {
 
   const load = useCallback(async () => {
     try {
-      setData((await api.get('/deliveries/mine')).data.data);
+      const d = (await api.get('/deliveries/mine', { params: { view, page, limit: PAGE_SIZE } })).data.data;
+      // Trang hiện tại trống (VD vừa giao xong đơn cuối của trang) -> lùi về trang cuối còn dữ liệu
+      if (page > 1 && page > d.totalPages) { setPage(d.totalPages); return; }
+      setData(d);
     } catch (err) {
       setError(err.response?.data?.message || 'Không tải được danh sách');
     }
-  }, []);
+  }, [view, page]);
   // Đơn HỎA TỐC vừa được tự phân công: báo ngay (socket) + phát âm báo, tải lại danh sách
   const [expressAlert, setExpressAlert] = useState(null);
   useEffect(() => {
@@ -82,7 +89,7 @@ export default function AdminMyDeliveriesPage() {
         </Alert>
       )}
       <p className="text-muted">Chi nhánh đang giao: <strong>{data.branch?.name || 'Chưa được gán chi nhánh'}</strong></p>
-      <Nav variant="tabs" activeKey={view} onSelect={setView} className="mb-3"><Nav.Item><Nav.Link eventKey="active">Cần xử lý</Nav.Link></Nav.Item><Nav.Item><Nav.Link eventKey="history">Lịch sử (50 đơn gần nhất)</Nav.Link></Nav.Item></Nav>
+      <Nav variant="tabs" activeKey={view} onSelect={setView} className="mb-3"><Nav.Item><Nav.Link eventKey="active">Cần xử lý {data.counts?.active > 0 && <Badge bg="danger" pill>{data.counts.active}</Badge>}</Nav.Link></Nav.Item><Nav.Item><Nav.Link eventKey="history">Lịch sử {data.counts?.history > 0 && <Badge bg="secondary" pill>{data.counts.history}</Badge>}</Nav.Link></Nav.Item></Nav>
       {error && <Alert variant="danger">{error}</Alert>}
       {data.codTotal > 0 && (
         <Alert variant="warning">
@@ -91,6 +98,7 @@ export default function AdminMyDeliveriesPage() {
       )}
 
       {view === 'active' && data.active.length === 0 && <p className="text-muted">Chưa có đơn nào được phân công cho bạn.</p>}
+      {view === 'history' && (data.history || []).length === 0 && <p className="text-muted">Chưa có đơn đã giao xong.</p>}
       <div className="d-grid gap-3" style={{ maxWidth: 720 }}>
         {(view === 'active' ? data.active : data.history || []).map((o) => (
           <Card key={o._id}>
@@ -147,6 +155,10 @@ export default function AdminMyDeliveriesPage() {
             </Card.Body>
           </Card>
         ))}
+      </div>
+      {/* Phân trang (backend trả total / totalPages của tab đang xem) */}
+      <div style={{ maxWidth: 720 }}>
+        <AdminPagination page={page} totalPages={data.totalPages} total={data.total} onChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
       </div>
 
       <Modal show={!!failing} onHide={() => setFailing(null)}>
