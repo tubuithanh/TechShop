@@ -19,7 +19,14 @@ const PERMISSIONS = [
   { key: 'chat.support', label: 'Chat hỗ trợ khách hàng' },
   { key: 'dashboard.view', label: 'Xem thống kê tổng quan' },
   { key: 'deliveries.manage', label: 'Phân công giao hàng, đối soát tiền COD' },
-  { key: 'deliveries.perform', label: 'Giao hàng (nhân viên giao hàng)' }
+  { key: 'deliveries.perform', label: 'Giao hàng (nhân viên giao hàng)' },
+  // ----- Kế toán: làm việc với TIỀN và CHỨNG TỪ, chỉ XEM đơn (không đổi trạng thái / phân công giao hàng)
+  { key: 'orders.view', label: 'Xem đơn hàng (chỉ xem)' },
+  { key: 'finance.payments', label: 'Kế toán: xác nhận chuyển khoản, hoàn tiền' },
+  { key: 'finance.cod', label: 'Kế toán: đối soát tiền COD (shipper, đơn vị vận chuyển)' },
+  { key: 'einvoices.manage', label: 'Kế toán: hóa đơn điện tử (phát hành, hủy, thay thế)' },
+  { key: 'finance.reports', label: 'Kế toán: báo cáo doanh thu, thống kê' },
+  { key: 'einvoices.config', label: 'Kế toán trưởng: cấu hình hóa đơn điện tử (người bán, ký hiệu, nhà cung cấp)' }
 ];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
@@ -38,6 +45,7 @@ PermissionGroup.PERMISSIONS = PERMISSIONS;
 PermissionGroup.PERMISSION_KEYS = PERMISSION_KEYS;
 // Quyền nghiệp vụ cho nhóm "toàn quyền vận hành": mọi quyền TRỪ "Giao hàng" (deliveries.perform) - quyền này
 // đánh dấu tài khoản là nhân viên giao hàng (hiện trong danh sách chọn người giao), không phải quyền quản lý
-PermissionGroup.OPERATIONS_PERMISSIONS = PERMISSION_KEYS.filter((k) => k !== 'deliveries.perform');
+// Cấu hình hóa đơn điện tử (einvoices.config) cũng loại ra - dành riêng cho kế toán trưởng
+PermissionGroup.OPERATIONS_PERMISSIONS = PERMISSION_KEYS.filter((k) => !['deliveries.perform', 'einvoices.config'].includes(k));
 
 module.exports = PermissionGroup;

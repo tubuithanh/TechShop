@@ -27,17 +27,19 @@ function roleOf(req) {
   if (req.accountRole === 'admin') return 'admin'; // admin luôn là admin
   if (isStoreManager({ role: 'staff', title: a.title })) return 'manager'; // chức danh "trưởng / quản lý chi nhánh..."
   const t = String(a.title || '').toLowerCase(); // đoán vị trí theo chức danh
+  if (/kế toán/.test(t)) return 'accountant'; // kế toán viên / kế toán trưởng
   if (/giao hàng|shipper/.test(t)) return 'delivery';
   if (/bảo hành|kỹ thuật/.test(t)) return 'warranty';
   if (/kho/.test(t)) return 'warehouse';
   if (/bán hàng|thu ngân|tư vấn|cskh|chăm sóc/.test(t)) return 'sales';
   const p = perms(a); // không đoán được -> theo quyền được cấp
+  if (p.has('finance.payments') || p.has('finance.cod') || p.has('einvoices.manage')) return 'accountant'; // có quyền tài chính
   if (p.has('deliveries.perform')) return 'delivery';
   if (p.has('warranties.manage')) return 'warranty';
   if (p.has('inventory.manage')) return 'warehouse';
   return 'sales'; // mặc định: bán hàng
 }
-const ROLE_LABEL = { admin: 'Quản trị viên', manager: 'Trưởng cửa hàng', sales: 'Bán hàng / CSKH', warehouse: 'Kho', delivery: 'Giao hàng', warranty: 'Kỹ thuật bảo hành' };
+const ROLE_LABEL = { admin: 'Quản trị viên', manager: 'Trưởng cửa hàng', sales: 'Bán hàng / CSKH', warehouse: 'Kho', delivery: 'Giao hàng', warranty: 'Kỹ thuật bảo hành', accountant: 'Kế toán' };
 
 const vnToday = () => { const vn = new Date(Date.now() + 7 * 3600000); return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) - 7 * 3600000); }; // 0 giờ hôm nay theo giờ VN (dạng UTC)
 const monthStart = (offset = 0) => { const vn = new Date(Date.now() + 7 * 3600000); return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth() + offset, 1) - 7 * 3600000); }; // ngày 1 của tháng (offset -1 = tháng trước)
@@ -169,6 +171,64 @@ const getWorkspace = asyncHandler(async (req, res) => {
       stores: role === 'admin' ? null : managed.length
     };
   }
+  // ---------- KẾ TOÁN: việc cần làm với TIỀN và CHỨNG TỪ (phạm vi: chi nhánh mình; kế toán trưởng: mọi chi nhánh) ----------
+  if (role === 'accountant') {
+    const OPEN = ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'];
+    const issued = await EInvoice.distinct('orderId', { status: 'issued' }); // đơn đã có hóa đơn
+    const sumN = (rows) => ({ n: rows[0]?.n || 0, amount: rows[0]?.amount || 0 });
+    const grp = { $group: { _id: null, n: { $sum: 1 }, amount: { $sum: '$grandTotal' } } };
+    const transferQ = { ...storeMatch, paymentMode: 'bank_transfer', paymentStatus: { $in: ['pending', 'failed'] }, status: { $in: OPEN } }; // chuyển khoản chờ xác nhận
+    const codShipperQ = { ...storeMatch, paymentMode: 'cod', codCollectedAt: { $ne: null }, codSettledAt: null }; // COD shipper đang giữ
+    const codCarrierQ = { ...storeMatch, status: 'delivered', 'shipment.phase': 'active', 'shipment.codAmount': { $gt: 0 }, 'shipment.codSettledAt': null }; // COD đơn vị vận chuyển chưa trả
+    const refundQ = { ...storeMatch, refundStatus: { $in: ['pending', 'processing'] } }; // chờ hoàn tiền
+    const einvQ = { ...storeMatch, status: 'delivered', _id: { $nin: issued }, refundStatus: { $ne: 'completed' }, paymentStatus: { $ne: 'refunded' }, $or: [{ paymentMode: { $in: ['cod', 'cash'] } }, { paymentStatus: 'paid' }] }; // chờ xuất hóa đơn
+    const [transfer, transferList, codShipper, codByShipper, codCarrier, refund, refundList, einvPending, einvAttention, byPayment] = await Promise.all([
+      Order.aggregate([{ $match: transferQ }, grp]),
+      Order.find(transferQ).sort({ createdAt: 1 }).limit(6).select('orderCode createdAt grandTotal deliveryAddress status').lean(),
+      Order.aggregate([{ $match: codShipperQ }, grp]),
+      Order.aggregate([{ $match: codShipperQ }, { $group: { _id: '$shipperId', n: { $sum: 1 }, amount: { $sum: '$grandTotal' }, oldest: { $min: '$codCollectedAt' } } }, { $sort: { amount: -1 } }, { $limit: 6 },
+        { $lookup: { from: 'admins', localField: '_id', foreignField: '_id', as: 'a', pipeline: [{ $project: { name: 1 } }] } }]),
+      Order.aggregate([{ $match: codCarrierQ }, { $group: { _id: null, n: { $sum: 1 }, amount: { $sum: '$shipment.codAmount' } } }]),
+      Order.aggregate([{ $match: refundQ }, grp]),
+      Order.find(refundQ).sort({ createdAt: 1 }).limit(6).select('orderCode createdAt grandTotal paymentMode status deliveryAddress').lean(),
+      Order.countDocuments(einvQ),
+      Order.countDocuments({ ...storeMatch, _id: { $in: issued }, $or: [{ status: { $in: ['returning', 'returned'] } }, { refundStatus: 'completed' }, { paymentStatus: 'refunded' }] }), // hóa đơn của đơn đã trả / hoàn tiền
+      Order.aggregate([...deliveredBetween(storeMatch, today), { $group: { _id: '$paymentMode', n: { $sum: 1 }, amount: { $sum: '$grandTotal' } } }, { $sort: { amount: -1 } }]) // thu hôm nay theo hình thức
+    ]);
+    const PAY = { cash: 'Tiền mặt', cod: 'COD', bank_transfer: 'Chuyển khoản', vnpay: 'VNPay', momo: 'MoMo' };
+    out.accounting = {
+      scope: storeMatch.storeId ? 'store' : 'all',
+      transfer: { ...sumN(transfer), list: transferList.map((o) => ({ ...brief(o), waitingMinutes: minutesSince(o.createdAt) })) },
+      codShipper: { ...sumN(codShipper), byShipper: codByShipper.map((x) => ({ shipperId: x._id, name: x.a?.[0]?.name || 'Shipper', n: x.n, amount: x.amount, oldestDays: x.oldest ? Math.floor(minutesSince(x.oldest) / 1440) : 0 })) },
+      codCarrier: { n: codCarrier[0]?.n || 0, amount: codCarrier[0]?.amount || 0 },
+      refunds: { ...sumN(refund), list: refundList.map(brief) },
+      einvoicePending: einvPending, einvoiceAttention: einvAttention,
+      todayByPayment: byPayment.map((p) => ({ mode: p._id, label: PAY[p._id] || p._id, n: p.n, amount: p.amount })),
+      todayTotal: byPayment.reduce((t, p) => t + p.amount, 0)
+    };
+
+    // Kế toán trưởng / admin (phạm vi mọi chi nhánh): bảng tổng hợp từng chi nhánh + đội kế toán viên báo cáo cho mình
+    if (!storeMatch.storeId) {
+      const stores = await Store.find({ isActive: { $ne: false } }).select('name').lean();
+      const by = (rows) => new Map(rows.map((r) => [String(r._id), r]));
+      const g2 = { $group: { _id: '$storeId', n: { $sum: 1 }, amount: { $sum: '$grandTotal' } } };
+      const [t2, c2, r2, e2, rev2] = await Promise.all([
+        Order.aggregate([{ $match: transferQ }, g2]),
+        Order.aggregate([{ $match: codShipperQ }, g2]),
+        Order.aggregate([{ $match: refundQ }, g2]),
+        Order.aggregate([{ $match: einvQ }, g2]),
+        Order.aggregate([...deliveredBetween({}, today), g2])
+      ]);
+      const T = by(t2); const C = by(c2); const R = by(r2); const E = by(e2); const V = by(rev2);
+      out.accounting.stores = stores.map((st) => {
+        const k = String(st._id);
+        return { _id: st._id, name: st.name, transfer: T.get(k)?.n || 0, codHeld: C.get(k)?.amount || 0, refunds: R.get(k)?.n || 0, einvoicePending: E.get(k)?.n || 0, revenueToday: V.get(k)?.amount || 0 };
+      }).sort((a, b) => (b.transfer + b.refunds + b.einvoicePending) - (a.transfer + a.refunds + a.einvoicePending));
+      const team = await Admin.find({ managerId: me._id, isActive: { $ne: false } }).select('name title storeId lastLoginAt').populate('storeId', 'name').lean();
+      out.accounting.team = team.map((a) => ({ _id: a._id, name: a.name, title: a.title, store: a.storeId?.name || '', lastLoginAt: a.lastLoginAt, activeToday: a.lastLoginAt && new Date(a.lastLoginAt) >= today }));
+    }
+  }
+
   // ---------- Biểu đồ: đơn theo giờ (hôm nay vs hôm qua) + doanh thu 7 ngày ----------
   if (role !== 'delivery' && role !== 'warranty') {
     const yesterday = new Date(today - DAY);

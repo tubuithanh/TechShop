@@ -7,6 +7,7 @@ import { orderLabel } from '../../utils/orderWorkflow';
 import AdminPagination from '../../components/admin/AdminPagination';
 import { useSettings } from '../../store/SettingsContext';
 import { useAuth } from '../../store/AuthContext';
+import { hasPermissionKey } from '../../utils/permissions';
 import DeliveryPlanModal from '../../components/admin/DeliveryPlanModal';
 import { SHIPMENT_LABELS } from '../../components/ShipmentTracking';
 
@@ -74,10 +75,12 @@ function AssigneeCell({ o, suggestion, onQuickAssign, busy }) {
 export default function AdminDeliveriesPage() {
   const { settings } = useSettings();
   const { user } = useAuth();
+  // Kế toán (chỉ có finance.cod): chỉ xem tab tiền COD + vận đơn / COD đơn vị vận chuyển, không phân công giao hàng
+  const canDispatch = hasPermissionKey(user, 'deliveries.manage');
   const [stores, setStores] = useState([]), [storeId, setStoreId] = useState('');
   const scoped = user?.role === 'staff' && (user?.storeScope?.current || user?.storeId);
   const pageSize = settings.productsPerPage || 20;
-  const [view, setView] = useState('assign');
+  const [view, setView] = useState(() => (hasPermissionKey(user, 'deliveries.manage') ? 'assign' : 'cod')); // kế toán mở thẳng tab COD
   const [stage, setStage] = useState('assign'); // giai đoạn lọc trong tab "Đơn cần giao"
   const [stages, setStages] = useState(null);
   const [planning, setPlanning] = useState(null);
@@ -97,7 +100,7 @@ export default function AdminDeliveriesPage() {
   const [bulkShipper, setBulkShipper] = useState('');
   const [notice, setNotice] = useState('');
   const loadId = useRef(0);
-  const loadBoard = useCallback(() => api.get('/deliveries/board', { params: { storeId: storeId || undefined } }).then((r) => setBoard(r.data.data)).catch(() => {}), [storeId]);
+  const loadBoard = useCallback(() => (!canDispatch ? Promise.resolve() : api.get('/deliveries/board', { params: { storeId: storeId || undefined } }).then((r) => setBoard(r.data.data)).catch(() => {})), [storeId, canDispatch]); // kế toán không cần bảng điều phối
   useEffect(() => { loadBoard(); const t = setInterval(loadBoard, 30000); return () => clearInterval(t); }, [loadBoard]);
   useEffect(() => {
     const timer = setTimeout(() => { setQuery(search.trim()); setPage(1); }, 300);
@@ -178,7 +181,7 @@ export default function AdminDeliveriesPage() {
   return (
     <div>
       <div className="d-flex align-items-center gap-2 mb-3">
-        <h3 className="mb-0">Phân công giao hàng</h3>
+        <h3 className="mb-0">{canDispatch ? 'Phân công giao hàng' : 'Đối soát COD'}</h3>
         <Button size="sm" variant="outline-secondary" className="ms-auto" onClick={() => { load(); loadBoard(); }}><ArrowClockwise className="me-1" />Làm mới</Button>
       </div>
       {board && view === 'assign' && (
@@ -192,9 +195,9 @@ export default function AdminDeliveriesPage() {
       {notice && <Alert variant="success" dismissible onClose={() => setNotice('')} className="py-2 small">{notice}</Alert>}
       {!scoped && <Form.Select className="mb-3" aria-label="Lọc chi nhánh giao hàng" value={storeId} onChange={e => { setStoreId(e.target.value); setPage(1); }}><option value="">Tất cả chi nhánh</option>{stores.map(s => <option value={s._id} key={s._id}>{s.name}</option>)}</Form.Select>}
       <Nav variant="tabs" activeKey={view} onSelect={(k) => { setView(k); setPage(1); }} className="mb-3">
-        <Nav.Item><Nav.Link eventKey="assign">Đơn cần giao</Nav.Link></Nav.Item>
+        {canDispatch && <Nav.Item><Nav.Link eventKey="assign">Đơn cần giao</Nav.Link></Nav.Item>}
         <Nav.Item><Nav.Link eventKey="cod">Tiền COD chờ đối soát</Nav.Link></Nav.Item>
-        <Nav.Item><Nav.Link eventKey="returns">Nhận hàng trả về</Nav.Link></Nav.Item>
+        {canDispatch && <Nav.Item><Nav.Link eventKey="returns">Nhận hàng trả về</Nav.Link></Nav.Item>}
         <Nav.Item><Nav.Link eventKey="carrier">Vận đơn / COD GHN</Nav.Link></Nav.Item>
       </Nav>
       {view === 'assign' && (
@@ -265,6 +268,8 @@ export default function AdminDeliveriesPage() {
                 <td>
                   {money(o.grandTotal)}
                   {o.paymentMode === 'cod' && <Badge bg="warning" text="dark" className="ms-1">COD</Badge>}
+                  {/* Trả trước chưa xác nhận tiền: vẫn phân công được, nhưng shipper chưa lấy hàng được */}
+                  {o.paymentMode !== 'cod' && o.paymentStatus !== 'paid' && <div><Badge bg="danger" className="fw-normal" title="Đơn chuyển khoản chưa được kế toán xác nhận đã nhận tiền - shipper chưa thể lấy hàng">Chờ kế toán xác nhận tiền</Badge></div>}
                 </td>
                 <td>
                   {STATUS[o.status] || orderLabel(o)}
@@ -275,10 +280,17 @@ export default function AdminDeliveriesPage() {
                   )}
                 </td>
                 <td>
+                  {!canDispatch ? (
+                    // KẾ TOÁN: không phân công; chỉ đối soát COD đơn vị vận chuyển khi đơn đã giao và chưa đối soát
+                    o.status === 'delivered' && o.shipment?.codAmount > 0 && !o.shipment?.codSettledAt
+                      ? <Button size="sm" variant="outline-success" disabled={busy} onClick={() => { const reference = window.prompt(`Mã đối soát COD ${money(o.shipment.codAmount)} (số phiếu chuyển tiền của đơn vị vận chuyển):`); if (reference?.trim()) run(() => api.post(`/deliveries/${o._id}/shipment/settle`, { reference: reference.trim() })); }}>Đối soát COD GHN</Button>
+                      : <span className="small text-muted">{o.shipment?.codSettledAt ? `Đã đối soát ${new Date(o.shipment.codSettledAt).toLocaleDateString('vi-VN')}` : '—'}</span>
+                  ) : (<>
                   <AssigneeCell o={o} suggestion={view === 'assign' ? suggestions[o._id] : null} onQuickAssign={quickAssign} busy={busy} />
                   <div className="mt-2">
                   {o.status === 'returning' ? <><Button size="sm" variant="outline-primary" onClick={() => setPlanning(o)}>Theo dõi</Button><Button className="mt-2" size="sm" disabled={busy} onClick={() => { if (window.confirm('Xác nhận đã nhận đủ hàng trả về?')) run(() => api.post(`/deliveries/${o._id}/receive-return`, { received: true })); }}>Nhận hàng trả</Button></> : <Button size="sm" disabled={!!o.activeTransferId} variant={ASSIGNABLE.includes(o.status) && !['creating','unknown','active'].includes(o.shipment?.phase) ? 'primary' : 'outline-primary'} onClick={() => setPlanning(o)}>{ASSIGNABLE.includes(o.status) && !['creating','unknown','active'].includes(o.shipment?.phase) ? (o.shipperId ? 'Đổi phân công' : 'Phân công') : 'Theo dõi'}</Button>}
                   </div>
+                  </>)}
                 </td>
               </tr>
             ))}

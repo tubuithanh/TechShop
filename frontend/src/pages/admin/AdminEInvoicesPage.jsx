@@ -8,6 +8,8 @@ import EInvoiceDraftModal from '../../components/admin/EInvoiceDraftModal';
 import api from '../../services/api';
 import EInvoiceView from '../../components/EInvoiceView';
 import AdminPagination from '../../components/admin/AdminPagination';
+import EInvoiceConfigPanel from '../../components/admin/EInvoiceConfigPanel';
+import { hasPermissionKey } from '../../utils/permissions';
 
 const vnd = (v) => (v ?? 0).toLocaleString('vi-VN') + 'đ';
 const pad = (n) => String(n || 0).padStart(8, '0');
@@ -116,6 +118,8 @@ function CopyCode({ code }) {
 export default function AdminEInvoicesPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const canConfig = hasPermissionKey(user, 'einvoices.config'); // admin / kế toán trưởng
+  const [showConfig, setShowConfig] = useState(false);
   const [tab, setTab] = useState('pending');
   const [period, setPeriod] = useState('all');
   const [range, setRange] = useState({ from: '', to: '' });
@@ -199,6 +203,15 @@ export default function AdminEInvoicesPage() {
       </div>
       <div className="small text-muted mb-3">Mô phỏng hóa đơn GTGT có mã của cơ quan thuế (NĐ 123/2020, TT 78/2021). Không gửi lên cơ quan thuế thật.</div>
       {notice && <Alert variant={notice.tone} dismissible onClose={() => setNotice(null)} className="py-2">{notice.text}</Alert>}
+      {canConfig && (
+        <div className="mb-3">
+          <Button size="sm" variant="outline-secondary" onClick={() => setShowConfig(true)}>⚙ Cấu hình hóa đơn (người bán, ký hiệu, nhà cung cấp)</Button>
+        </div>
+      )}
+      <Modal show={showConfig} onHide={() => setShowConfig(false)} size="xl" scrollable>
+        <Modal.Header closeButton><Modal.Title className="fs-5">Cấu hình hóa đơn điện tử</Modal.Title></Modal.Header>
+        <Modal.Body>{showConfig && <EInvoiceConfigPanel />}</Modal.Body>
+      </Modal>
 
       {/* Số liệu */}
       {s && (

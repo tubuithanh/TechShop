@@ -41,7 +41,7 @@ import {
 import { useAuth } from '../../store/AuthContext';
 import { getWorkingStore, setWorkingStore } from '../../services/api'; // chi nhánh đang làm việc (localStorage)
 import { useSettings } from '../../store/SettingsContext';
-import { hasPagePermission, isStoreManager } from '../../utils/permissions';
+import { hasPagePermission, isStoreManager, hasPermissionKey } from '../../utils/permissions';
 import { orderService } from '../../services/orderService';
 import { chatService } from '../../services/chatService';
 import api from '../../services/api';
@@ -173,6 +173,12 @@ function canSee(user, item) {
   // "Đơn tôi cần giao" chỉ dành cho nhân viên giao hàng - quản trị viên không được phân công giao hàng
   if (item.staffOnly && isAdmin) return false; // admin không có "đơn tôi cần giao"
   return hasPagePermission(user, item.path); // còn lại: theo nhóm quyền
+}
+
+// Tên menu theo vai trò: kế toán (không phân công giao hàng) thấy trang giao hàng là "Đối soát COD"
+function labelFor(user, item) {
+  if (item.path === '/admin/deliveries' && !hasPermissionKey(user, 'deliveries.manage')) return { ...item, label: 'Đối soát COD' };
+  return item;
 }
 
 const isActive = (pathname, path) => (path === '/admin' ? pathname === '/admin' : pathname === path || pathname.startsWith(`${path}/`)); // /admin chỉ sáng đúng trang chủ quản trị; trang khác sáng cả trang con
@@ -352,7 +358,7 @@ export default function AdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const sections = useMemo(
-    () => SECTIONS.map((s) => ({ ...s, items: s.items.filter((m) => canSee(user, m)) })).filter((s) => s.items.length), // lọc mục theo quyền, bỏ nhóm rỗng
+    () => SECTIONS.map((s) => ({ ...s, items: s.items.filter((m) => canSee(user, m)).map((m) => labelFor(user, m)) })).filter((s) => s.items.length), // lọc mục theo quyền, bỏ nhóm rỗng
     [user]
   );
   const flatItems = useMemo(() => sections.flatMap((s) => s.items.map((m) => ({ ...m, section: s.title }))), [sections]); // danh sách phẳng cho ô tìm nhanh

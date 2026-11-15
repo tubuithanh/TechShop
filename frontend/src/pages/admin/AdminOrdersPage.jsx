@@ -6,7 +6,7 @@ import DeliveryPlanModal from '../../components/admin/DeliveryPlanModal';
 import OrderWorkPanel from '../../components/admin/OrderWorkPanel';
 import { EInvoiceModal } from './AdminEInvoicesPage';
 import EInvoiceDraftModal from '../../components/admin/EInvoiceDraftModal';
-import { hasPagePermission } from '../../utils/permissions';
+import { hasPagePermission, hasPermissionKey } from '../../utils/permissions';
 import { orderActions as allowedTransitions } from '../../utils/orderWorkflow';
 import api from '../../services/api';
 import HandoverModal from '../../components/admin/HandoverModal';
@@ -66,6 +66,9 @@ export default function AdminOrdersPage() {
   const [inboxKey, setInboxKey] = useState(0); // đổi -> "Việc cần làm" tải lại sau mỗi thao tác
   const { settings } = useSettings();
   const { user } = useAuth();
+  // Kế toán (chỉ xem đơn, không có orders.manage): không có tab 'Việc cần làm', nút chỉ gồm thao tác tiền / hóa đơn
+  const financeOnly = !hasPermissionKey(user, 'orders.manage');
+  useEffect(() => { if (financeOnly && view === 'inbox') setView('all'); }, [financeOnly]); // eslint-disable-line react-hooks/exhaustive-deps
   const pageSize = settings.productsPerPage || 20; // số đơn mỗi trang theo cấu hình
   const query = useListQuery(['status', 'paymentStatus', 'refundStatus', 'paymentMode', 'storeId', 'source', 'deliveryMethod', 'from', 'to']); // bộ lọc lưu trên URL
   const { data: orders, total, totalPages, loading, meta, reload: reloadList } = useAdminList(orderService.getAllOrdersAdmin, { // tải danh sách theo bộ lọc
@@ -235,10 +238,10 @@ export default function AdminOrdersPage() {
   };
 
   // Nút thao tác của 1 đơn - dùng chung cho "Việc cần làm" và "Tất cả đơn"
-  const renderActions = (o) => <OrderActions o={o} busy={busy} canDeliver={canDeliver} onRun={runAction} />;
+  const renderActions = (o) => <OrderActions o={o} busy={busy} canDeliver={canDeliver} onRun={runAction} financeOnly={financeOnly} />;
   // Thao tác hàng loạt trên các đơn đã chọn (chỉ áp cho đơn được phép)
   const selectedOrders = orders.filter((o) => selected.includes(o._id)); // đơn đang tick chọn
-  const bulkTargets = (status) => selectedOrders.filter((o) => !o.activeTransferId && allowedTransitions(o).includes(status) && !(status === 'confirmed' && ['vnpay', 'momo'].includes(o.paymentMode) && o.paymentStatus !== 'paid')); // chỉ đơn hợp lệ cho thao tác hàng loạt (đúng sơ đồ trạng thái, online đã trả tiền)
+  const bulkTargets = (status) => (financeOnly ? [] : selectedOrders).filter((o) => !o.activeTransferId && allowedTransitions(o).includes(status) && !(status === 'confirmed' && ['vnpay', 'momo'].includes(o.paymentMode) && o.paymentStatus !== 'paid')); // chỉ đơn hợp lệ cho thao tác hàng loạt (đúng sơ đồ trạng thái, online đã trả tiền)
   const toggleSelect = (id) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
   return (
@@ -273,9 +276,11 @@ export default function AdminOrdersPage() {
         {view === 'all' && query.values.q && <div className="small text-muted mt-1">{loading ? 'Đang tìm…' : `${total} đơn khớp "${query.values.q}"`}{!loading && total === 0 && ' - thử tìm bằng số điện thoại hoặc vài chữ trong tên khách'}</div>}
       </Form>
       <div className="order-view-switch mb-3" role="tablist" aria-label="Chế độ xem đơn hàng">
-        <button type="button" role="tab" aria-selected={view === 'inbox'} className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')}>
-          Việc cần làm
-        </button>
+        {!financeOnly && (
+          <button type="button" role="tab" aria-selected={view === 'inbox'} className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')}>
+            Việc cần làm
+          </button>
+        )}
         <button type="button" role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>
           Tất cả đơn
         </button>
@@ -387,7 +392,7 @@ export default function AdminOrdersPage() {
       {delivering && <DeliveryPlanModal key={delivering._id} order={delivering} onHide={() => setDelivering(null)} onChanged={loadOrders} />}
       {draftOrder && <EInvoiceDraftModal orderId={draftOrder._id} onHide={() => setDraftOrder(null)} onIssued={(inv) => { setDraftOrder(null); notify(`Đã phát hành hóa đơn số ${String(inv.number).padStart(8, '0')}${(inv.emailQueuedTo || inv.emailedTo) ? ` · đang gửi email tới ${inv.emailQueuedTo || inv.emailedTo}` : ''}`); setEinvoiceId(inv._id); loadOrders(); }} />}
       {einvoiceId && <EInvoiceModal id={einvoiceId} onHide={(nextId) => { setEinvoiceId(nextId || null); loadOrders(); }} onChanged={(text) => { notify(text); loadOrders(); }} />}
-      {working && <OrderWorkPanel order={working.order} list={working.list} busy={busy} canDeliver={canDeliver} onClose={() => setWorking(null)} onSelect={(o) => setWorking((w) => ({ ...w, order: o }))} onReceipt={setDetails} onRun={runAction} />}
+      {working && <OrderWorkPanel order={working.order} list={working.list} busy={busy} canDeliver={canDeliver} onClose={() => setWorking(null)} onSelect={(o) => setWorking((w) => ({ ...w, order: o }))} onReceipt={setDetails} onRun={runAction} financeOnly={financeOnly} />}
       <ToastContainer position="bottom-end" className="p-3" style={{ zIndex: 1080 }}>
         {toasts.map((t) => (
           <Toast key={t.id} bg={t.tone} onClose={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>

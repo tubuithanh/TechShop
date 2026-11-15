@@ -5,7 +5,7 @@ import api from '../services/api';
 
 const GROUPS = [
   ['admin', 'Quản trị viên'], ['manager', 'Quản lý'], ['sales', 'Bán hàng / CSKH'], ['warehouse', 'Kho'],
-  ['delivery', 'Giao hàng'], ['warranty', 'Kỹ thuật bảo hành'], ['other', 'Khác'], ['customer', 'Khách hàng']
+  ['delivery', 'Giao hàng'], ['warranty', 'Kỹ thuật bảo hành'], ['accountant', 'Kế toán'], ['other', 'Khác'], ['customer', 'Khách hàng']
 ];
 
 // TÀI KHOẢN DEMO trên trang đăng nhập: lấy từ máy chủ (tài khoản quản trị / nhân viên đang hoạt động).

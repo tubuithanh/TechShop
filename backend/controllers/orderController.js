@@ -18,7 +18,7 @@ const User = require('../models/User'); // khách hàng
 const asyncHandler = require('../utils/asyncHandler');
 const { emailOrderPlaced, emailOrderStatus } = require('../utils/notifyEmail'); // email đặt hàng / đổi trạng thái
 const { searchFilter } = require('../utils/search'); // tạo điều kiện tìm kiếm
-const { hasPermission, getScopedStoreId, isStoreAllowed } = require('../middlewares/authMiddleware'); // phân quyền + phạm vi chi nhánh
+const { hasPermission, hasAnyPermission, getScopedStoreId, isStoreAllowed } = require('../middlewares/authMiddleware'); // phân quyền + phạm vi chi nhánh
 const { releaseVoucher } = require('../utils/voucherUsage'); // trả lại lượt mã khi hủy đơn
 const { withTransaction, BusinessError } = require('../utils/transaction'); // giao dịch MongoDB + lỗi nghiệp vụ
 const { validatePhone } = require('../utils/customerValidation');
@@ -542,7 +542,7 @@ const getOrderById = asyncHandler(async (req, res) => {
   // hay không - lộ dữ liệu đơn hàng (địa chỉ, SĐT, giá trị mua) cho staff không được cấp quyền quản
   // lý đơn hàng, trong khi danh sách đơn hàng (getAllOrders) đã được chặn đúng theo quyền này.
   const isOwner = String(order.userId) === String(req.account._id); // chủ đơn?
-  if (!isOwner && !hasPermission(req, 'orders.manage')) {
+  if (!isOwner && !hasAnyPermission(req, ['orders.manage', 'orders.view'])) { // quản lý đơn HOẶC kế toán (chỉ xem)
     return res.status(403).json({ message: 'Bạn không có quyền xem đơn hàng này' });
   }
   if (!isOwner && !inScope(req, order)) { // nhân viên chi nhánh khác

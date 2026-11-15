@@ -174,6 +174,7 @@ const orderSchema = new mongoose.Schema(
       createdAt: Date, updatedAt: Date, busyUntil: Date, lease: String,
       request: { type: mongoose.Schema.Types.Mixed, select: false },
       error: String, codSettledAt: Date, codSettlementReference: String,
+      codSettledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' }, // kế toán / quản lý đã đối soát COD với đơn vị vận chuyển
       events: [{ status: String, at: Date }]
     },
     // Mỗi lần giao: thành công / thất bại kèm lý do

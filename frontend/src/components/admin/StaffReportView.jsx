@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 import { Card, Row, Col, Button, Form, Badge, Spinner, Alert, Table } from 'react-bootstrap';
-import { ArrowUpShort, ArrowDownShort, Trophy, StarFill, Truck, Cart3, Tools, ChatQuote } from 'react-bootstrap-icons';
+import { ArrowUpShort, ArrowDownShort, Trophy, StarFill, Truck, Cart3, Tools, ChatQuote, Calculator } from 'react-bootstrap-icons';
 import AdminThumb from './AdminThumb';
 import SalesInsights from './SalesInsights';
 
 export const money = (v) => (v || 0).toLocaleString('vi-VN') + 'đ';
 export const shortMoney = (v) => (v >= 1e9 ? `${(v / 1e9).toFixed(1)} tỷ` : v >= 1e6 ? `${Math.round(v / 1e6)} tr` : (v || 0).toLocaleString('vi-VN'));
-const KIND_ICON = { sales: Cart3, delivery: Truck, warranty: Tools };
+const KIND_ICON = { sales: Cart3, delivery: Truck, warranty: Tools, accountant: Calculator };
 
 // ---------- Chọn kỳ báo cáo ----------
 const iso = (d) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0, 10);
@@ -124,7 +124,8 @@ export default function StaffReportView({ load, title, loadSales, canSetTarget }
   const show = {
     sales: kind === 'sales' || kind === 'manager' || m?.sales.orders > 0 || m?.sales.onlineConfirmed > 0,
     delivery: kind === 'delivery' || m?.delivery.assigned > 0,
-    warranty: kind === 'warranty' || m?.warranty.tickets > 0 || m?.warranty.extensions > 0
+    warranty: kind === 'warranty' || m?.warranty.tickets > 0 || m?.warranty.extensions > 0,
+    finance: kind === 'accountant' || (m?.finance && (m.finance.transfers + m.finance.codSettled + m.finance.carrierSettled + m.finance.refunds + m.finance.invoices) > 0)
   };
 
   return (
@@ -198,6 +199,22 @@ export default function StaffReportView({ load, title, loadSales, canSetTarget }
                 </Col>
               </Row>
               {loadSales && s && <SalesInsights loadSales={loadSales} staffId={s._id} staffName={s.name} canSetTarget={canSetTarget} range={range} />}
+            </section>
+          )}
+
+          {/* KẾ TOÁN */}
+          {show.finance && m.finance && (
+            <section className="mb-4">
+              <h2 className="fs-6 fw-bold text-uppercase text-muted mb-2"><Calculator className="me-1" />Kế toán</h2>
+              <Row xs={2} md={3} xl={6} className="g-3 mb-2">
+                <Col><Kpi label="Chuyển khoản đã xác nhận" value={m.finance.transfers} cur={m.finance.transfers} prev={p.finance?.transfers} sub={shortMoney(m.finance.transferAmount)} /></Col>
+                <Col><Kpi label="Thời gian xác nhận TB" value={m.finance.avgConfirmMinutes == null ? '—' : m.finance.avgConfirmMinutes >= 60 ? `${Math.round(m.finance.avgConfirmMinutes / 60)} giờ` : `${m.finance.avgConfirmMinutes} phút`} cur={m.finance.avgConfirmMinutes} prev={p.finance?.avgConfirmMinutes} inverse sub="từ lúc đặt đơn" /></Col>
+                <Col><Kpi label="COD shipper đã đối soát" value={m.finance.codSettled} cur={m.finance.codSettled} prev={p.finance?.codSettled} sub={shortMoney(m.finance.codAmount)} /></Col>
+                <Col><Kpi label="COD đơn vị VC đã đối soát" value={m.finance.carrierSettled} cur={m.finance.carrierSettled} prev={p.finance?.carrierSettled} sub={shortMoney(m.finance.carrierAmount)} /></Col>
+                <Col><Kpi label="Khoản đã hoàn tiền" value={m.finance.refunds} cur={m.finance.refunds} prev={p.finance?.refunds} sub={shortMoney(m.finance.refundAmount)} /></Col>
+                <Col><Kpi label="Hóa đơn đã phát hành" value={m.finance.invoices} cur={m.finance.invoices} prev={p.finance?.invoices} sub={shortMoney(m.finance.invoiceAmount)} /></Col>
+              </Row>
+              <div className="small text-muted">Tổng số khoản đã xử lý: <b>{m.finance.transfers + m.finance.codSettled + m.finance.carrierSettled + m.finance.refunds + m.finance.invoices}</b> · tổng tiền đã đối soát / xác nhận: <b>{money(m.finance.transferAmount + m.finance.codAmount + m.finance.carrierAmount)}</b></div>
             </section>
           )}
 

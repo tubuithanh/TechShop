@@ -12,6 +12,8 @@ import AdminPagination from '../../components/admin/AdminPagination';
 const money = (v) => (v ?? 0).toLocaleString('vi-VN') + 'đ';
 const STATUS = { confirmed: 'Chi nhánh đang chuẩn bị', processing: 'Chờ lấy hàng', shipping: 'Đang giao' };
 const PAGE_SIZE = 10; // số đơn mỗi trang
+// Đơn trả trước (chuyển khoản / online) chưa được kế toán xác nhận đủ tiền -> chưa được lấy hàng
+const awaitingPayment = (o) => o.paymentMode !== 'cod' && o.paymentStatus !== 'paid';
 const REASONS = ['Không liên lạc được khách', 'Khách hẹn giao hôm khác', 'Sai địa chỉ', 'Khách từ chối nhận hàng'];
 
 export default function AdminMyDeliveriesPage() {
@@ -39,19 +41,22 @@ export default function AdminMyDeliveriesPage() {
   }, [view, page]);
   // Đơn HỎA TỐC vừa được tự phân công: báo ngay (socket) + phát âm báo, tải lại danh sách
   const [expressAlert, setExpressAlert] = useState(null);
+  const [paidAlert, setPaidAlert] = useState(null); // kế toán vừa xác nhận tiền của 1 đơn được giao cho mình
   useEffect(() => {
     load();
     const timer = setInterval(load, 15000);
     let socket = null;
     try {
       socket = connectSocket();
+      // Kế toán xác nhận đã nhận chuyển khoản -> đơn hết khóa, báo shipper đi lấy hàng
+      socket.on('delivery:paymentConfirmed', (p) => { setPaidAlert(p); load(); });
       socket.on('express:assigned', (p) => {
         setExpressAlert(p);
         load();
         try { new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=').play(); } catch { /* trình duyệt chặn âm thanh */ }
       });
     } catch { /* chưa đăng nhập socket */ }
-    return () => { clearInterval(timer); socket?.off('express:assigned'); };
+    return () => { clearInterval(timer); socket?.off('express:assigned'); socket?.off('delivery:paymentConfirmed'); };
   }, [load]);
 
   const run = async (action) => {
@@ -82,6 +87,11 @@ export default function AdminMyDeliveriesPage() {
   return (
     <div>
       <h3 className="mb-3">Đơn tôi cần giao</h3>
+      {paidAlert && (
+        <Alert variant="success" dismissible onClose={() => setPaidAlert(null)} className="fw-semibold">
+          💰 Kế toán đã xác nhận nhận tiền đơn #{paidAlert.orderCode}{paidAlert.status === 'processing' ? ' - bạn có thể đến lấy hàng ngay.' : ' - đơn sẽ lấy được khi chi nhánh chuẩn bị xong hàng.'}
+        </Alert>
+      )}
       {expressAlert && (
         <Alert variant="danger" dismissible onClose={() => setExpressAlert(null)} className="fw-semibold">
           ⚡ ĐƠN HỎA TỐC MỚI #{expressAlert.orderCode} - giao trước {new Date(expressAlert.deadline).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}.
@@ -111,6 +121,7 @@ export default function AdminMyDeliveriesPage() {
                   return <Badge bg={mins < 0 ? 'dark' : mins <= 30 ? 'danger' : 'warning'} text={mins > 30 ? 'dark' : undefined} className="ms-1">{mins < 0 ? 'TRỄ ' + -mins + ' phút' : 'Còn ' + Math.floor(mins / 60) + 'h' + String(mins % 60).padStart(2, '0')}</Badge>;
                 })()}
                 <Badge bg={o.status === 'shipping' ? 'primary' : 'secondary'}>{STATUS[o.status] || orderLabel(o)}</Badge>
+                {awaitingPayment(o) && <Badge bg="danger" className="ms-1">Chờ kế toán xác nhận tiền</Badge>}
               </div>
               <div className="mt-2">
                 {o.deliveryAddress?.fullName} - <a href={`tel:${o.deliveryAddress?.phone}`}>{o.deliveryAddress?.phone}</a>
@@ -142,7 +153,9 @@ export default function AdminMyDeliveriesPage() {
                 </div>
               )}
               <div className="d-flex gap-2">
-                {o.status === 'processing' && <Button disabled={busy} onClick={() => pickUp(o)}>Đã lấy hàng</Button>}
+                {o.status === 'processing' && (awaitingPayment(o)
+                  ? <span className="d-inline-flex flex-column"><Button disabled variant="secondary">Đã lấy hàng</Button><span className="small text-danger mt-1">Chưa lấy hàng: chờ kế toán xác nhận đã nhận chuyển khoản</span></span>
+                  : <Button disabled={busy} onClick={() => pickUp(o)}>Đã lấy hàng</Button>)}
                 {o.status === 'shipping' && (
                   <>
                     <Button disabled={busy} variant="success" onClick={() => success(o)}>Giao thành công</Button>

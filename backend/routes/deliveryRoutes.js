@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect, can } = require('../middlewares/authMiddleware');
+const { protect, can, canAny } = require('../middlewares/authMiddleware');
 const {
   getDeliveries,
   getShippers,
@@ -35,7 +35,7 @@ router.post('/:orderId/dispatch', can('deliveries.manage'), carriers.dispatch); 
 router.post('/:orderId/shipment/retire-sandbox', can('deliveries.manage'), simulated.retireSandbox); // bỏ vận đơn sandbox cũ
 router.post('/:orderId/shipment/sync', can('deliveries.manage'), shipments.sync); // đồng bộ trạng thái từ GHN
 router.post('/:orderId/shipment/cancel', can('deliveries.manage'), shipments.cancel); // hủy vận đơn
-router.post('/:orderId/shipment/settle', can('deliveries.manage'), shipments.settle); // đối soát COD với đơn vị vận chuyển
+router.post('/:orderId/shipment/settle', canAny('deliveries.manage', 'finance.cod'), shipments.settle); // đối soát COD với đơn vị vận chuyển
 const evidence = require('../controllers/deliveryEvidenceController');
 const { uploadLimiter } = require('../middlewares/rateLimits');
 router.post('/:orderId/shipment/evidence/:stage', can('deliveries.manage'), evidence.loadCarrier, uploadLimiter, evidence.parse, evidence.save); // ảnh bằng chứng của đơn vị vận chuyển
@@ -45,11 +45,11 @@ router.get('/mine', can('deliveries.perform'), getMyDeliveries); // shipper: đ�
 router.post('/:orderId/pickup', can('deliveries.perform'), pickUp); // shipper: đã lấy hàng
 router.post('/:orderId/result', can('deliveries.perform'), reportResult); // shipper: kết quả giao
 // Quản lý chi nhánh
-router.get('/', can('deliveries.manage'), getDeliveries); // quản lý: danh sách theo tab
+router.get('/', canAny('deliveries.manage', 'finance.cod'), getDeliveries); // quản lý: danh sách theo tab
 router.get('/shippers', can('deliveries.manage'), getShippers); // quản lý: shipper chọn được
 router.get('/board', can('deliveries.manage'), require('../controllers/deliveryController').getBoard); // quản lý: bảng điều phối
 router.post('/:orderId/receive-return', can('deliveries.manage'), (req, res, next) => { req.params.id = req.params.orderId; next(); }, require('../controllers/fulfillmentController').receiveReturn); // nhận hàng hoàn (đổi tên tham số cho controller dùng chung)
 router.put('/:orderId/assign', can('deliveries.manage'), assignShipper); // phân công shipper
-router.post('/:orderId/settle-cod', can('deliveries.manage'), settleCod); // nhận tiền COD từ shipper
+router.post('/:orderId/settle-cod', canAny('deliveries.manage', 'finance.cod'), settleCod); // nhận tiền COD từ shipper
 
 module.exports = router;

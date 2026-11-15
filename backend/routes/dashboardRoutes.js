@@ -9,9 +9,9 @@ const {
   getRevenueByStore
 } = require('../controllers/dashboardController');
 const { getAnalytics } = require('../controllers/analyticsController');
-const { protect, can } = require('../middlewares/authMiddleware');
+const { protect, canAny } = require('../middlewares/authMiddleware');
 
-router.use(protect, can('dashboard.view'));
+router.use(protect, canAny('dashboard.view', 'finance.reports')); // thống kê: quản lý HOẶC kế toán
 router.get('/summary', getSummary);
 router.get('/revenue-by-day', getRevenueByDay);
 router.get('/revenue-by-month', getRevenueByMonth);

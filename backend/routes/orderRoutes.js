@@ -9,7 +9,7 @@ const {
   getAllOrders,
   updateOrderStatus
 } = require('../controllers/orderController');
-const { protect, can, authorize } = require('../middlewares/authMiddleware');
+const { protect, can, canAny, authorize } = require('../middlewares/authMiddleware');
 const { orderLimiter, quoteLimiter } = require('../middlewares/rateLimits');
 
 router.use(protect); // mọi URL đơn hàng đều cần đăng nhập
@@ -34,13 +34,13 @@ router.post('/pos', can('orders.pos'), pos.create); // POS: thanh toán tạo đ
 router.post('/pos/quote', can('orders.pos'), (req, res, next) => { req.posQuote = true; next(); }, pos.create); // POS: tính trước tổng tiền (dùng chung hàm, bật cờ posQuote)
 router.post('/:id/handover', can('orders.manage'), fulfillment.handover); // bàn giao cho khách tại cửa hàng
 router.post('/:id/receive-return', can('orders.manage'), fulfillment.receiveReturn); // kho nhận hàng trả
-router.post('/:id/confirm-payment', can('orders.manage'), fulfillment.confirmPayment); // xác nhận đã nhận chuyển khoản
-router.post('/:id/confirm-refund', can('orders.manage'), fulfillment.confirmRefund); // xác nhận đã hoàn tiền
+router.post('/:id/confirm-payment', canAny('orders.manage', 'finance.payments'), fulfillment.confirmPayment); // xác nhận đã nhận chuyển khoản
+router.post('/:id/confirm-refund', canAny('orders.manage', 'finance.payments'), fulfillment.confirmRefund); // xác nhận đã hoàn tiền
 router.get('/:orderId/evidence/:evidenceId', evidence.load, evidence.download); // xem ảnh bằng chứng
 router.post('/quote', quoteLimiter, quoteOrder); // khách: xem trước tổng tiền
 router.post('/', orderLimiter, createOrder); // khách: đặt hàng
 router.get('/', getMyOrders); // khách: đơn của tôi
-router.get('/admin/all', can('orders.manage'), getAllOrders); // quản trị: danh sách đơn (đứng TRƯỚC /:id để không bị hiểu "admin" là id)
+router.get('/admin/all', canAny('orders.manage', 'orders.view'), getAllOrders); // quản trị: danh sách đơn (đứng TRƯỚC /:id để không bị hiểu "admin" là id)
 router.get('/:id', getOrderById); // chi tiết đơn (kiểm tra quyền trong controller)
 router.put('/:id/cancel', cancelOrder); // khách tự hủy
 router.put('/:id/status', can('orders.manage'), updateOrderStatus); // nhân viên đổi trạng thái

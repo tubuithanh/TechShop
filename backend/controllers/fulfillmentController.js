@@ -80,6 +80,9 @@ const confirmPayment = asyncHandler(async (req, res) => {
     $push: { statusHistory: historyEntry(req, order.status, 'Xác nhận đã nhận chuyển khoản', { paymentStatus: { from: order.paymentStatus, to: 'paid' } }) }
   }, { new: true });
   if (!updated) return res.status(409).json({ message: 'Đơn đã thay đổi, vui lòng tải lại' });
+  // Đơn đã phân công shipper: báo ngay để shipper đi lấy hàng (không phải chờ trang tự làm mới)
+  const io = req.app.get('io');
+  if (io && updated.shipperId) io.to(`user_${updated.shipperId}`).emit('delivery:paymentConfirmed', { orderId: updated._id, orderCode: updated.orderCode, status: updated.status });
   res.json({ data: updated });
 });
 // Thông tin giao dịch gốc để hoàn qua cổng thanh toán: mã giao dịch của lần thanh toán THÀNH CÔNG

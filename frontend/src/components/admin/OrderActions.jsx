@@ -74,12 +74,21 @@ export function ReasonModal({ target, onHide, onSubmit }) {
   );
 }
 
+// KẾ TOÁN (financeOnly): chỉ các thao tác về TIỀN và CHỨNG TỪ - hoàn tiền, xác nhận chuyển khoản, xuất hóa đơn.
+// Không đổi trạng thái / phân công / sửa / hủy đơn (backend cũng chặn).
+export function financeAction(o) {
+  if (o.refundStatus === 'pending' && ['cancelled', 'returned'].includes(o.status)) return { key: 'refund', label: 'Hoàn tiền cho khách', icon: CurrencyExchange, variant: 'warning' };
+  if (o.paymentMode === 'bank_transfer' && o.paymentStatus !== 'paid' && ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipping'].includes(o.status)) return { key: 'confirm-payment', label: 'Đã nhận chuyển khoản', icon: Cash, variant: 'success' };
+  const p = primaryAction(o);
+  return p?.key === 'einvoice' ? p : null;
+}
+
 // Thao tác của 1 đơn: nút "bước tiếp theo" + menu ⋯ các thao tác phụ
-export default function OrderActions({ o, busy, canDeliver, onRun }) {
-  const primary = primaryAction(o, { canDeliver });
-  const transitions = orderActions(o);
-  const locked = !!o.activeTransferId;
-  const extras = [
+export default function OrderActions({ o, busy, canDeliver, onRun, financeOnly = false }) {
+  const primary = financeOnly ? financeAction(o) : primaryAction(o, { canDeliver });
+  const transitions = financeOnly ? [] : orderActions(o); // kế toán: không có chuyển trạng thái
+  const locked = !!o.activeTransferId || financeOnly; // kế toán: không sửa / điều phối
+  const extras = financeOnly ? [] : [
     ...transitions.filter((s) => !['cancelled', 'returning'].includes(s) && `status:${s}` !== primary?.key).map((s) => ({ key: `status:${s}`, label: `Chuyển sang "${ORDER_LABELS[s]}"`, icon: CheckLg })),
     !shipmentLocked(o) && !locked && ['pending', 'confirmed'].includes(o.status) && { key: 'edit', label: 'Sửa thông tin người nhận', icon: PencilSquare },
     !shipmentLocked(o) && !locked && o.source !== 'pos' && ['pending', 'confirmed', 'processing'].includes(o.status) && !onlineUnpaid(o) && { key: 'transfer', label: 'Điều phối sang chi nhánh khác', icon: ArrowLeftRight },

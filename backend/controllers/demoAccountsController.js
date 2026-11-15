@@ -35,10 +35,11 @@ async function demoPassword(hash, email = '') {
   return found;
 }
 
-const KIND_ORDER = { admin: 0, manager: 1, sales: 2, warehouse: 3, delivery: 4, warranty: 5, other: 6 };
+const KIND_ORDER = { admin: 0, manager: 1, sales: 2, warehouse: 3, delivery: 4, warranty: 5, accountant: 6, other: 7 };
 const kindOf = (a) => {
   if (a.role === 'admin') return 'admin';
   const t = String(a.title || '').toLowerCase();
+  if (/kế toán/.test(t)) return 'accountant'; // trước 'trưởng': "Kế toán trưởng" là kế toán, không phải quản lý cửa hàng
   if (/quản lý|trưởng|giám đốc/.test(t) && !/kho/.test(t)) return 'manager';
   if (/kho/.test(t)) return 'warehouse';
   if (/giao hàng|shipper/.test(t)) return 'delivery';

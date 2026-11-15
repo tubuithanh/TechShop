@@ -12,6 +12,7 @@ import { useAuth } from '../../store/AuthContext';
 import { hasPagePermission } from '../../utils/permissions';
 import { orderDateTime, timeAgo } from '../../utils/orderTime';
 import AdminThumb from '../../components/admin/AdminThumb';
+import AccountingWorkspace from '../../components/admin/AccountingWorkspace';
 
 const vnd = (v) => (v ?? 0).toLocaleString('vi-VN') + 'đ';
 const short = (v) => (v >= 1e9 ? `${(v / 1e9).toFixed(1)} tỷ` : v >= 1e6 ? `${(v / 1e6).toFixed(1)} tr` : vnd(v));
@@ -80,6 +81,7 @@ const ACTIONS = {
   delivery: [['/admin/my-deliveries', 'Đơn tôi cần giao', Bicycle, 'primary'], ['/admin/my-report', 'Báo cáo của tôi', PersonBadge]],
   warranty: [['/admin/warranties', 'Phiếu bảo hành', Tools, 'primary'], ['/admin/warranty-cards', 'Tra sổ bảo hành', ShieldCheck], ['/admin/my-report', 'Báo cáo của tôi', PersonBadge]],
   manager: [['/admin/orders', 'Xử lý đơn', ClockHistory, 'primary'], ['/admin/deliveries', 'Phân công giao', Truck], ['/admin/pos', 'Bán tại quầy', Cart3], ['/admin/express', 'Mở hỏa tốc', LightningChargeFill], ['/admin/einvoices', 'Hóa đơn', FileEarmarkText], ['/admin/staff-reports', 'Báo cáo nhân viên', People], ['/admin/store-health', 'Sức khỏe chi nhánh', HeartPulse]],
+  accountant: [['/admin/orders?view=all&paymentMode=bank_transfer&paymentStatus=pending', 'Xác nhận chuyển khoản', ClockHistory, 'primary'], ['/admin/deliveries', 'Đối soát COD', Truck], ['/admin/einvoices', 'Hóa đơn điện tử', FileEarmarkText], ['/admin', 'Thống kê doanh thu', GraphUpArrow], ['/admin/my-report', 'Báo cáo của tôi', PersonBadge]],
   admin: [['/admin/orders', 'Xử lý đơn', ClockHistory, 'primary'], ['/admin/deliveries', 'Phân công giao', Truck], ['/admin/einvoices', 'Hóa đơn', FileEarmarkText], ['/admin/products', 'Sản phẩm', BoxSeam], ['/admin/staff-reports', 'Báo cáo nhân viên', People], ['/admin/store-health', 'Sức khỏe chi nhánh', HeartPulse], ['/admin', 'Thống kê', GraphUpArrow]]
 };
 const SECTIONS = [['charts', 'Biểu đồ hôm nay'], ['confirm', 'Đơn chờ xác nhận'], ['prepare', 'Đơn cần chuẩn bị'], ['stock', 'Hàng sắp hết'], ['pickup', 'Khách nhận tại quầy'], ['team', 'Đội ngũ hôm nay'], ['stores', 'Các chi nhánh hôm nay'], ['feed', 'Hoạt động gần nhất'], ['route', 'Lộ trình giao'], ['shipping', 'Đơn đang giao'], ['tickets', 'Phiếu bảo hành']];
@@ -146,6 +148,9 @@ export default function AdminWorkspacePage() {
           </Form>
         )}
       </div>
+
+      {/* ===== KẾ TOÁN ===== */}
+      {d.accounting && <AccountingWorkspace a={d.accounting} can={can} />}
 
       {/* ===== TRƯỞNG CỬA HÀNG / ADMIN ===== */}
       {m && (

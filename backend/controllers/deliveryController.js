@@ -5,7 +5,7 @@ const Admin = require('../models/Admin'); // nhân viên (shipper)
 const Setting = require('../models/Setting'); // cấu hình (số lần giao tối đa)
 const Notification = require('../models/Notification'); // thông báo cho khách
 const asyncHandler = require('../utils/asyncHandler');
-const { getScopedStoreId } = require('../middlewares/authMiddleware'); // chi nhánh nhân viên bị giới hạn
+const { getScopedStoreId, hasPermission } = require('../middlewares/authMiddleware'); // chi nhánh nhân viên bị giới hạn
 const { transitionOrder, inScope } = require('./orderController'); // đổi trạng thái đơn theo quy tắc chung
 const { searchFilter } = require('../utils/search'); // tìm kiếm không dấu
 const { historyEntry } = require('../utils/orderHistory'); // dòng lịch sử đơn
@@ -41,6 +41,10 @@ async function findShippers(storeId) {
 
 // @route GET /api/deliveries?view=assign|cod&storeId= - quản lý: đơn cần giao / tiền COD chờ đối soát
 const getDeliveries = asyncHandler(async (req, res) => {
+  // Kế toán (chỉ có finance.cod, không có deliveries.manage) chỉ xem các tab tiền: COD shipper đang giữ, đối soát, COD đơn vị vận chuyển
+  if (!hasPermission(req, 'deliveries.manage') && !['cod', 'settlement', 'carrier'].includes(req.query.view)) {
+    return res.status(403).json({ message: 'Kế toán chỉ xem được tab tiền COD và vận đơn / COD đơn vị vận chuyển' });
+  }
   const filter = { deliveryMethod: 'home_delivery', ...storeFilter(req) }; // chỉ đơn giao tận nơi, đúng phạm vi chi nhánh
   if (req.query.view === 'cod') Object.assign(filter, { paymentMode: 'cod', codCollectedAt: { $ne: null }, codSettledAt: null }); // tab COD: shipper đã thu tiền, chưa nộp chi nhánh
   else if (req.query.view === 'carrier') Object.assign(filter, { 'shipment.phase': { $in: ['creating', 'unknown', 'active', 'cancelled', 'failed'] } }); // tab vận đơn đơn vị vận chuyển
@@ -254,6 +258,10 @@ const pickUp = asyncHandler(async (req, res) => {
   const order = await loadOwnDelivery(req, res);
   if (!order) return;
   if (!routing.internalAllowed(order)) return res.status(409).json({ message: 'Cần xác minh phạm vi giao nội bộ trước khi lấy hàng' }); // ngoài phạm vi tự giao (khác tỉnh / quá 20 km)
+  // Đơn trả trước (chuyển khoản / online) chưa xác nhận đủ tiền: được phân công trước, nhưng CHƯA được lấy hàng
+  if (order.paymentMode !== 'cod' && order.paymentStatus !== 'paid') {
+    return res.status(400).json({ message: 'Chờ kế toán xác nhận đã nhận đủ tiền chuyển khoản - chưa thể lấy hàng' });
+  }
   if (order.status !== 'processing') { // chỉ lấy hàng khi chi nhánh đã chuẩn bị xong
     return res.status(400).json({ message: order.status === 'confirmed' ? 'Chi nhánh chưa chuẩn bị xong hàng' : 'Đơn không ở bước lấy hàng' });
   }

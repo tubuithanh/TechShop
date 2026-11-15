@@ -202,7 +202,7 @@ const settle = asyncHandler(async (req, res) => {
   const reference = typeof req.body.reference === 'string' ? req.body.reference.trim() : ''; // mã đối soát (VD số phiếu chuyển tiền của GHN)
   if (!reference || reference.length > 200) fail(400, 'Nhập mã đối soát (tối đa 200 ký tự)');
   const updated = await Order.findOneAndUpdate({ _id: order._id, storeId: order.storeId, status: 'delivered', 'shipment.phase': 'active', 'shipment.codAmount': { $gt: 0 }, 'shipment.codSettledAt': null }, { // chỉ đối soát 1 lần, đơn đã giao có thu hộ
-    $set: { 'shipment.codSettledAt': new Date(), 'shipment.codSettlementReference': reference },
+    $set: { 'shipment.codSettledAt': new Date(), 'shipment.codSettlementReference': reference, 'shipment.codSettledBy': req.account._id },
     $push: { statusHistory: historyEntry(req, order.status, `Đối soát COD GHN ${order.shipment?.environment === 'simulation' ? 'giả lập' : 'sandbox'}: ${reference}`) }
   }, { new: true });
   if (!updated) fail(409, 'Không có COD GHN chờ đối soát');

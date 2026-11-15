@@ -10,6 +10,7 @@ const Admin = require('../models/Admin');
 const Order = require('../models/Order');
 const Warranty = require('../models/Warranty');
 const WarrantyCard = require('../models/WarrantyCard');
+const EInvoice = require('../models/EInvoice');
 const asyncHandler = require('../utils/asyncHandler');
 const { subordinateIds } = require('../utils/reportingLine'); // cấp dưới theo tuyến báo cáo
 
@@ -23,6 +24,7 @@ const DELIVERY_NEGATIVE = ['Giao hàng chậm', 'Đóng gói sơ sài']; // th�
 // Vai trò suy ra từ chức danh (seed/generateStaff.js: TITLES)
 function staffKind(s) {
   const t = String(s.title || '').toLowerCase();
+  if (/kế toán/.test(t)) return 'accountant'; // trước 'quản lý' / 'trưởng': kế toán trưởng vẫn là kế toán
   if (/quản lý/.test(t)) return 'manager';
   if (/giao hàng|shipper/.test(t)) return 'delivery';
   if (/bảo hành|kỹ thuật/.test(t)) return 'warranty';
@@ -37,7 +39,7 @@ function resolveKind(s, m) {
   const act = [['warranty', m.warranty.tickets], ['delivery', m.delivery.assigned], ['sales', m.sales.orders + m.sales.onlineConfirmed]].sort((a, b) => b[1] - a[1]); // việc làm nhiều nhất trong kỳ
   return act[0][1] > 0 ? act[0][0] : 'other';
 }
-const KIND_LABEL = { sales: 'Bán hàng', delivery: 'Giao hàng', warranty: 'Bảo hành', manager: 'Quản lý', warehouse: 'Kho', other: 'Khác' };
+const KIND_LABEL = { sales: 'Bán hàng', delivery: 'Giao hàng', warranty: 'Bảo hành', manager: 'Quản lý', warehouse: 'Kho', accountant: 'Kế toán', other: 'Khác' };
 
 // Khoảng thời gian: ?from=YYYY-MM-DD&to=YYYY-MM-DD (mặc định: tháng này). to tính hết ngày.
 function parseRange(q) {
@@ -156,7 +158,19 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
     ])
   ]);
 
+  // ----- KẾ TOÁN: khoản đã xác nhận chuyển khoản / đối soát COD shipper / đối soát COD đơn vị vận chuyển / hoàn tiền / hóa đơn phát hành
+  const [finTransfer, finCod, finCarrier, finRefund, finInvoice] = await Promise.all([
+    Order.aggregate([
+      { $match: { 'receipt.by': { $in: sid }, 'receipt.channel': 'bank_transfer', 'receipt.at': inRange } },
+      { $group: { _id: '$receipt.by', n: { $sum: 1 }, amount: { $sum: '$receipt.amount' }, minutes: { $avg: { $divide: [{ $subtract: ['$receipt.at', '$createdAt'] }, 60000] } } } } // thời gian từ đặt đơn tới xác nhận
+    ]),
+    Order.aggregate([{ $match: { codSettledBy: { $in: sid }, codSettledAt: inRange } }, { $group: { _id: '$codSettledBy', n: { $sum: 1 }, amount: { $sum: '$grandTotal' } } }]),
+    Order.aggregate([{ $match: { 'shipment.codSettledBy': { $in: sid }, 'shipment.codSettledAt': inRange } }, { $group: { _id: '$shipment.codSettledBy', n: { $sum: 1 }, amount: { $sum: '$shipment.codAmount' } } }]),
+    Order.aggregate([{ $match: { refundedBy: { $in: sid }, refundedAt: inRange } }, { $group: { _id: '$refundedBy', n: { $sum: 1 }, amount: { $sum: { $ifNull: ['$refundInfo.amount', '$grandTotal'] } } } }]),
+    EInvoice.aggregate([{ $match: { issuedBy: { $in: sid }, issuedAt: inRange } }, { $group: { _id: '$issuedBy', n: { $sum: 1 }, amount: { $sum: '$totals.total' } } }])
+  ]);
   const byId = (rows) => new Map(rows.map((r) => [String(r._id), r])); // mảng -> Map theo id
+  const fT = byId(finTransfer); const fC = byId(finCod); const fG = byId(finCarrier); const fR = byId(finRefund); const fI = byId(finInvoice);
   const S = sales[0]; const D = deliveries[0]; const W = warranties[0];
   const sT = byId(S.totals); const sR = byId(S.ratings); const conf = byId(confirmed);
   const dT = byId(D.totals); const dR = byId(D.ratings);
@@ -194,6 +208,13 @@ async function buildMetrics(ids, { from, to, bucket }, { withSeries = false, wit
         doneRate: w.tickets ? Math.round((w.done / w.tickets) * 100) : null,
         avgDays: r1(w.days), revenue: w.revenue || 0, rating: r1(w.rating), reviews: w.rated || 0,
         extensions: e.n || 0, extensionRevenue: e.revenue || 0
+      },
+      finance: { // kế toán
+        transfers: fT.get(id)?.n || 0, transferAmount: fT.get(id)?.amount || 0, avgConfirmMinutes: fT.get(id) ? Math.round(fT.get(id).minutes) : null,
+        codSettled: fC.get(id)?.n || 0, codAmount: fC.get(id)?.amount || 0,
+        carrierSettled: fG.get(id)?.n || 0, carrierAmount: fG.get(id)?.amount || 0,
+        refunds: fR.get(id)?.n || 0, refundAmount: fR.get(id)?.amount || 0,
+        invoices: fI.get(id)?.n || 0, invoiceAmount: fI.get(id)?.amount || 0
       }
     };
     if (withSeries) {
@@ -226,6 +247,7 @@ const RANK_BY = {
   warranty: (m) => m.warranty.done * (m.warranty.rating ? m.warranty.rating / 5 : 0.8) + m.warranty.extensions, // bảo hành: số phiếu xong × điểm + gói bán được
   manager: (m) => m.sales.revenue + m.sales.onlineConfirmed,
   warehouse: (m) => m.sales.onlineConfirmed,
+  accountant: (m) => m.finance.transfers + m.finance.codSettled + m.finance.carrierSettled + m.finance.refunds + m.finance.invoices, // kế toán: tổng số khoản đã xử lý
   other: (m) => m.sales.revenue
 };
 
@@ -256,6 +278,7 @@ function teamTotals(list) {
   return {
     sales: { orders: sumBy(list, 'sales.orders'), revenue: sumBy(list, 'sales.revenue'), units: sumBy(list, 'sales.units'), onlineConfirmed: sumBy(list, 'sales.onlineConfirmed'), rating: avgBy(list, 'sales.rating', 'sales.reviews') },
     delivery: { assigned: sumBy(list, 'delivery.assigned'), delivered: sumBy(list, 'delivery.delivered'), failedTries: sumBy(list, 'delivery.failedTries'), cod: sumBy(list, 'delivery.cod'), score: avgBy(list, 'delivery.score', 'delivery.reviews'), avgHours: avgBy(list, 'delivery.avgHours', 'delivery.delivered'), complaints: sumBy(list, 'delivery.complaints') },
+    finance: { transfers: sumBy(list, 'finance.transfers'), transferAmount: sumBy(list, 'finance.transferAmount'), codSettled: sumBy(list, 'finance.codSettled'), codAmount: sumBy(list, 'finance.codAmount'), carrierSettled: sumBy(list, 'finance.carrierSettled'), carrierAmount: sumBy(list, 'finance.carrierAmount'), refunds: sumBy(list, 'finance.refunds'), refundAmount: sumBy(list, 'finance.refundAmount'), invoices: sumBy(list, 'finance.invoices'), invoiceAmount: sumBy(list, 'finance.invoiceAmount'), avgConfirmMinutes: avgBy(list, 'finance.avgConfirmMinutes', 'finance.transfers') },
     warranty: { tickets: sumBy(list, 'warranty.tickets'), done: sumBy(list, 'warranty.done'), inProgress: sumBy(list, 'warranty.inProgress'), revenue: sumBy(list, 'warranty.revenue'), extensionRevenue: sumBy(list, 'warranty.extensionRevenue'), rating: avgBy(list, 'warranty.rating', 'warranty.reviews'), avgDays: avgBy(list, 'warranty.avgDays', 'warranty.done') }
   };
 }
@@ -328,7 +351,7 @@ async function personalReport(staff, query) {
   return {
     staff: { _id: staff._id, name: staff.name, title: staff.title, avatar: staff.avatar, store: staff.storeId?.name || '', kind, kindLabel: KIND_LABEL[kind], manager: staff.managerId ? { name: staff.managerId.name, title: staff.managerId.title } : null },
     range: { from: range.from, to: range.to, bucket: range.bucket },
-    metrics: { sales: m.sales, delivery: m.delivery, warranty: m.warranty },
+    metrics: { sales: m.sales, delivery: m.delivery, warranty: m.warranty, finance: m.finance },
     prev: prev.get(String(staff._id)),
     series: m.series, topProducts: m.topProducts, feedback: m.feedback,
     rank: { store: rankIn(storePeers), company: rankIn(sameKind) },

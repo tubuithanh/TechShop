@@ -3,7 +3,7 @@ import { Offcanvas, Button, Badge, Form, Spinner } from 'react-bootstrap';
 import { TelephoneFill, GeoAltFill, ChevronLeft, ChevronRight, Truck, PencilSquare, ArrowLeftRight, XCircle, ArrowReturnLeft, CheckLg, Shop, Receipt } from 'react-bootstrap-icons';
 import { orderService } from '../../services/orderService';
 import { ORDER_LABELS, orderActions, orderLabel, orderMethod } from '../../utils/orderWorkflow';
-import { primaryAction } from './OrderActions';
+import { primaryAction, financeAction } from './OrderActions';
 import api from '../../services/api';
 import { EInvoiceModal } from '../../pages/admin/AdminEInvoicesPage';
 import EInvoiceDraftModal from './EInvoiceDraftModal';
@@ -18,7 +18,9 @@ const locked = (o) => ['creating', 'unknown', 'active'].includes(o.shipment?.pha
 
 // KHUNG XỬ LÝ ĐƠN bên phải: chữ lớn, nút lớn, mọi thao tác hiện sẵn; xong 1 đơn tự nhảy sang đơn kế tiếp.
 // list: danh sách đơn đang xem (để chuyển trước / sau); onRun(order, key) -> Promise
-export default function OrderWorkPanel({ order, list, onClose, onRun, onSelect, onReceipt, busy, canDeliver }) {
+// financeOnly: kế toán - chỉ thao tác tiền / hóa đơn (xem OrderActions.financeAction)
+export default function OrderWorkPanel({ order, list, onClose, onRun, onSelect, onReceipt, busy, canDeliver, financeOnly = false }) {
+  const mainAction = (x) => (financeOnly ? financeAction(x) : primaryAction(x, { canDeliver }));
   const [o, setO] = useState(order);
   const [autoNext, setAutoNext] = useState(() => { try { return localStorage.getItem('orders.autoNext') !== '0'; } catch { return true; } });
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,7 @@ export default function OrderWorkPanel({ order, list, onClose, onRun, onSelect, 
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       if (e.key === 'ArrowRight' && next) onSelect(next);
       if (e.key === 'ArrowLeft' && prev) onSelect(prev);
-      if (e.key === 'Enter') { const p = primaryAction(o, { canDeliver }); if (p && !p.disabled && !busy) { e.preventDefault(); run(p.key); } }
+      if (e.key === 'Enter') { const p = mainAction(o); if (p && !p.disabled && !busy) { e.preventDefault(); run(p.key); } }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -70,9 +72,9 @@ export default function OrderWorkPanel({ order, list, onClose, onRun, onSelect, 
 
   const flow = o.deliveryMethod === 'store_pickup' ? FLOW_PICKUP : FLOW_HOME;
   const at = flow.indexOf(o.status);
-  const primary = primaryAction(o, { canDeliver });
-  const t = orderActions(o);
-  const others = [
+  const primary = mainAction(o);
+  const t = financeOnly ? [] : orderActions(o); // kế toán: không chuyển trạng thái
+  const others = financeOnly ? [] : [
     ...t.filter((s) => !['cancelled', 'returning'].includes(s) && `status:${s}` !== primary?.key).map((s) => ({ key: `status:${s}`, label: ORDER_LABELS[s], icon: CheckLg, variant: 'outline-primary' })),
     canDeliver && o.deliveryMethod === 'home_delivery' && ['confirmed', 'processing', 'shipping'].includes(o.status) && primary?.key !== 'deliver' && { key: 'deliver', label: 'Giao hàng', icon: Truck, variant: 'outline-primary' },
     !locked(o) && !o.activeTransferId && ['pending', 'confirmed'].includes(o.status) && { key: 'edit', label: 'Sửa người nhận', icon: PencilSquare, variant: 'outline-secondary' },

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const EInvoice = require('../models/EInvoice'); // hóa đơn đã phát hành
 const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
-const { getScopedStoreId, isStoreAllowed, hasPermission } = require('../middlewares/authMiddleware');
+const { getScopedStoreId, isStoreAllowed, hasPermission, hasAnyPermission } = require('../middlewares/authMiddleware');
 const { issueForOrder, verifySignature, draftForOrder } = require('../utils/einvoice'); // phát hành / kiểm chữ ký / bản nháp
 const { searchFilter } = require('../utils/search');
 
@@ -149,7 +149,7 @@ const byOrder = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.orderId).select('userId storeId').lean(); // đơn gốc
   if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
   // SỬA LỖI: nhân viên trước đây chỉ cần đúng chi nhánh (VD nhân viên kho) là xem được thông tin người mua -> nay cần thêm quyền quản lý đơn
-  if (req.accountRole === 'customer' ? String(order.userId) !== String(req.account._id) : (!hasPermission(req, 'orders.manage') || !isStoreAllowed(req, order.storeId))) return res.status(403).json({ message: 'Không có quyền xem' });
+  if (req.accountRole === 'customer' ? String(order.userId) !== String(req.account._id) : (!hasAnyPermission(req, ['orders.manage', 'einvoices.manage', 'orders.view']) || !isStoreAllowed(req, order.storeId))) return res.status(403).json({ message: 'Không có quyền xem' });
   const list = await EInvoice.find({ orderId: order._id }).sort({ issuedAt: -1 }).lean(); // mọi hóa đơn của đơn (gồm đã hủy / bị thay thế)
   res.json({ data: list.map(withVerify) });
 });

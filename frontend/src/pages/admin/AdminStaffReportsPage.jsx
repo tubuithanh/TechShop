@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import { Card, Row, Col, Form, Spinner, Alert, Table, Nav, Badge, Button } from 'react-bootstrap';
-import { Trophy, Cart3, Truck, Tools, People, StarFill, ChevronRight } from 'react-bootstrap-icons';
+import { Trophy, Cart3, Truck, Tools, People, StarFill, ChevronRight, Calculator } from 'react-bootstrap-icons';
 import { staffReportService } from '../../services/staffReportService';
 import { storeService } from '../../services/storeService';
 import { useAuth } from '../../store/AuthContext';
@@ -13,7 +13,8 @@ const TABS = [
   ['overview', 'Tổng quan', People],
   ['sales', 'Bán hàng', Cart3],
   ['delivery', 'Giao hàng', Truck],
-  ['warranty', 'Bảo hành', Tools]
+  ['warranty', 'Bảo hành', Tools],
+  ['accountant', 'Kế toán', Calculator]
 ];
 const PIE = ['#0d6efd', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#adb5bd'];
 const labelOf = (key) => (key?.length === 10 ? `${key.slice(8, 10)}/${key.slice(5, 7)}` : `T${Number(key?.slice(5, 7))}/${key?.slice(2, 4)}`);
@@ -241,7 +242,42 @@ export default function AdminStaffReportsPage() {
         </>
       )}
 
-      {data && tab !== 'overview' && (
+      {data && tab === 'accountant' && (
+        <>
+          <Row xs={2} md={3} xl={6} className="g-3 mb-3">
+            <Col><Kpi label="Chuyển khoản đã xác nhận" value={t.finance.transfers} cur={t.finance.transfers} prev={p.finance?.transfers} sub={shortMoney(t.finance.transferAmount)} /></Col>
+            <Col><Kpi label="Xác nhận TB sau" value={t.finance.avgConfirmMinutes == null ? '—' : `${Math.round(t.finance.avgConfirmMinutes / 60)} giờ`} cur={t.finance.avgConfirmMinutes} prev={p.finance?.avgConfirmMinutes} inverse /></Col>
+            <Col><Kpi label="COD shipper đã đối soát" value={t.finance.codSettled} cur={t.finance.codSettled} prev={p.finance?.codSettled} sub={shortMoney(t.finance.codAmount)} /></Col>
+            <Col><Kpi label="COD đơn vị VC đã đối soát" value={t.finance.carrierSettled} cur={t.finance.carrierSettled} prev={p.finance?.carrierSettled} sub={shortMoney(t.finance.carrierAmount)} /></Col>
+            <Col><Kpi label="Đã hoàn tiền" value={t.finance.refunds} cur={t.finance.refunds} prev={p.finance?.refunds} sub={shortMoney(t.finance.refundAmount)} /></Col>
+            <Col><Kpi label="Hóa đơn phát hành" value={t.finance.invoices} cur={t.finance.invoices} prev={p.finance?.invoices} sub={shortMoney(t.finance.invoiceAmount)} /></Col>
+          </Row>
+          <Card className="shadow-sm"><Card.Body>
+            <div className="fw-semibold mb-2"><Calculator className="me-1" />Kế toán viên</div>
+            <div className="table-responsive"><Table size="sm" hover className="small mb-0 align-middle">
+              <thead><tr><th>Nhân viên</th><th>Chi nhánh</th><th className="text-end">CK xác nhận</th><th className="text-end">TB xác nhận</th><th className="text-end">COD shipper</th><th className="text-end">COD đơn vị VC</th><th className="text-end">Hoàn tiền</th><th className="text-end">Hóa đơn</th><th /></tr></thead>
+              <tbody>
+                {byKind('accountant').map((r) => (
+                  <tr key={r._id}>
+                    <td className="fw-medium">{r.name}<div className="text-muted">{r.title}</div></td>
+                    <td>{r.store || 'Toàn hệ thống'}</td>
+                    <td className="text-end">{r.finance.transfers}<div className="text-muted">{shortMoney(r.finance.transferAmount)}</div></td>
+                    <td className="text-end">{r.finance.avgConfirmMinutes == null ? '—' : r.finance.avgConfirmMinutes >= 60 ? `${Math.round(r.finance.avgConfirmMinutes / 60)} giờ` : `${r.finance.avgConfirmMinutes} phút`}</td>
+                    <td className="text-end">{r.finance.codSettled}<div className="text-muted">{shortMoney(r.finance.codAmount)}</div></td>
+                    <td className="text-end">{r.finance.carrierSettled}<div className="text-muted">{shortMoney(r.finance.carrierAmount)}</div></td>
+                    <td className="text-end">{r.finance.refunds}<div className="text-muted">{shortMoney(r.finance.refundAmount)}</div></td>
+                    <td className="text-end">{r.finance.invoices}</td>
+                    <td><Link to={`/admin/staff-reports/${r._id}`}><ChevronRight /></Link></td>
+                  </tr>
+                ))}
+                {!byKind('accountant').length && <tr><td colSpan={9} className="text-center text-muted">Chưa có kế toán viên trong phạm vi</td></tr>}
+              </tbody>
+            </Table></div>
+          </Card.Body></Card>
+        </>
+      )}
+
+      {data && tab !== 'overview' && tab !== 'accountant' && (
         <>
           <Row className="g-3 mb-3">
             <Col lg={7}>

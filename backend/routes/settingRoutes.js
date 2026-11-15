@@ -25,7 +25,7 @@ const {
   updateThemeTemplate,
   deleteThemeTemplate
 } = require('../controllers/themeController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, authorize, can } = require('../middlewares/authMiddleware');
 
 // Cấu hình email (có mật khẩu SMTP/API key) - CHỈ admin, tách khỏi GET / vốn là API công khai
 router.get('/mail', protect, authorize('admin'), getMailConfig);
@@ -54,9 +54,10 @@ const demoAcc = require('../controllers/demoAccountsController');
 router.get('/demo-accounts', protect, authorize('admin'), demoAcc.getDemoSetting);
 router.put('/demo-accounts', protect, authorize('admin'), demoAcc.updateDemoSetting);
 const einvoiceCfg = require('../controllers/einvoiceConfigController');
-router.get('/einvoice', protect, authorize('admin'), einvoiceCfg.getConfig);
-router.put('/einvoice', protect, authorize('admin'), einvoiceCfg.updateConfig);
-router.post('/einvoice/test', protect, authorize('admin'), einvoiceCfg.testConfig);
+// Cấu hình hóa đơn điện tử: admin hoặc kế toán trưởng (einvoices.config) - khóa bí mật không bao giờ trả về giao diện
+router.get('/einvoice', protect, can('einvoices.config'), einvoiceCfg.getConfig);
+router.put('/einvoice', protect, can('einvoices.config'), einvoiceCfg.updateConfig);
+router.post('/einvoice/test', protect, can('einvoices.config'), einvoiceCfg.testConfig);
 
 // Template màu sắc giao diện - CHỈ admin
 router.get('/themes', protect, authorize('admin'), getThemeTemplates);

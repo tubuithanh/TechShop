@@ -107,6 +107,17 @@ const can = (permission) => {
   };
 };
 
+// Có ÍT NHẤT 1 trong các quyền liệt kê là được (VD đơn hàng: quản lý đơn HOẶC kế toán xem đơn)
+const hasAnyPermission = (req, permissions) => permissions.some((p) => hasPermission(req, p));
+const canAny = (...permissions) => {
+  return (req, res, next) => {
+    if (!hasAnyPermission(req, permissions)) {
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này (cần một trong các quyền: ' + permissions.join(', ') + ')' });
+    }
+    next();
+  };
+};
+
 // Trả về storeId (dạng string) mà staff này bị giới hạn thao tác trong phạm vi đó, hoặc null nếu
 // không bị giới hạn theo chi nhánh (admin, hoặc staff không được gán chi nhánh cụ thể). Dùng ở các
 // controller cần thêm 1 lớp giới hạn "chỉ chi nhánh của mình" bên trên permission thông thường (VD:
@@ -133,4 +144,4 @@ function isStoreAllowed(req, storeId) {
   return allowed.length === 0 || allowed.includes(String(storeId?._id || storeId)); // rỗng = không giới hạn
 }
 
-module.exports = { protect, authorize, can, hasPermission, getScopedStoreId, isStoreAllowed };
+module.exports = { protect, authorize, can, canAny, hasPermission, hasAnyPermission, getScopedStoreId, isStoreAllowed };
