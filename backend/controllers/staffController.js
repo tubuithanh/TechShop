@@ -167,12 +167,30 @@ const updateStaff = asyncHandler(async (req, res) => {
   res.json({ data: target.toSafeObject() });
 });
 
+// Mô tả hoạt động đầu tiên tìm thấy của 1 tài khoản (null = chưa từng hoạt động)
+async function staffActivity(id) {
+  const Order = require('../models/Order');
+  const checks = [
+    [Order, { createdBy: id }, 'đơn bán tại quầy'],
+    [Order, { shipperId: id }, 'đơn được phân công giao'],
+    [Order, { 'statusHistory.changedBy': id }, 'thao tác xử lý đơn hàng'],
+    [require('../models/Warranty'), { 'statusHistory.changedBy': id }, 'thao tác phiếu bảo hành'],
+    [require('../models/EInvoice'), { issuedBy: id }, 'hóa đơn đã phát hành']
+  ];
+  for (const [Model, q, label] of checks) if (await Model.exists(q)) return label;
+  return null;
+}
+
 const deleteStaff = asyncHandler(async (req, res) => {
   const target = await Admin.findById(req.params.id);
   if (!target) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
   if (target._id.toString() === req.account._id.toString()) {
     return res.status(400).json({ message: 'Không thể tự xóa tài khoản của chính mình' });
   }
+  // Đã có hoạt động (bán / xử lý / giao đơn, bảo hành, hóa đơn) -> KHÔNG xóa hẳn: lịch sử đơn, báo cáo, hiệu suất sẽ mất người
+  // thực hiện. Chỉ khóa tài khoản. Tài khoản chưa từng hoạt động (tạo nhầm) vẫn xóa được.
+  const activity = await staffActivity(target._id);
+  if (activity) return res.status(409).json({ message: `Tài khoản đã có ${activity} - không xóa được để giữ lịch sử. Hãy KHÓA tài khoản thay vì xóa.`, code: 'HAS_ACTIVITY' });
   // Cấp dưới của người bị xóa chuyển sang báo cáo cho quản lý của người đó (không bị mất tuyến báo cáo)
   await Admin.updateMany({ managerId: target._id }, { $set: { managerId: target.managerId || null } }); // cấp dưới chuyển lên quản lý cấp trên
   await target.deleteOne(); // xóa hẳn

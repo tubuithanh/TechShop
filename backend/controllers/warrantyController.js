@@ -239,24 +239,59 @@ const submitWarrantyFeedback = asyncHandler(async (req, res) => {
 });
 
 // @route GET /api/warranties/admin/all - danh sách phiếu cho nhân viên
+const OVERDUE_DAYS = 7; // phiếu mở quá 7 ngày = quá hạn
+
 const getAllWarranties = asyncHandler(async (req, res) => {
-  const { status, method, q, coverage, page = 1, limit = 20 } = req.query;
-  const filter = status ? { status } : {};
-  if (method) filter.method = method;
-  if (['in_warranty', 'manufacturer', 'out_of_warranty'].includes(coverage)) filter['coverage.type'] = coverage; // lọc loại bảo hành
-  Object.assign(filter, searchFilter(q)); // mã phiếu, mã đơn, SĐT, tên sản phẩm (không dấu)
+  const { status, method, q, coverage, assigned, page = 1, limit = 20 } = req.query;
+  // ----- Phạm vi chung (chi nhánh + tìm kiếm + hình thức + loại bảo hành) - dùng cho cả danh sách và số đếm
+  const scope = {};
+  if (method) scope.method = method;
+  if (['in_warranty', 'manufacturer', 'out_of_warranty'].includes(coverage)) scope['coverage.type'] = coverage; // lọc loại bảo hành
+  Object.assign(scope, searchFilter(q)); // mã phiếu, mã đơn, SĐT, tên sản phẩm (không dấu)
   // Nhân viên bị giới hạn chi nhánh -> chỉ phiếu có đơn gốc thuộc chi nhánh đang chọn
   const scopedStoreId = getScopedStoreId(req);
-  if (scopedStoreId) filter.orderId = { $in: await Order.distinct('_id', { storeId: scopedStoreId }) };
-  const warranties = await Warranty.find(filter)
-    .populate('userId', 'displayName phoneNumber email')
-    .populate('productId', 'title')
-    .populate('statusHistory.changedBy', 'name') // tên nhân viên trong lịch sử
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(Number(limit));
-  const total = await Warranty.countDocuments(filter);
-  res.json({ data: warranties, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+  if (scopedStoreId) scope.orderId = { $in: await Order.distinct('_id', { storeId: scopedStoreId }) };
+  const overdueAt = new Date(Date.now() - OVERDUE_DAYS * 86400000);
+  const openQ = { status: { $nin: FINISHED } };
+
+  // ----- Bộ lọc danh sách: status = 1 trạng thái | 'open' (đang xử lý) | 'overdue' (mở quá 7 ngày); assigned = me | none
+  const filter = { ...scope };
+  if (status === 'open') Object.assign(filter, openQ);
+  else if (status === 'overdue') Object.assign(filter, openQ, { createdAt: { $lt: overdueAt } });
+  else if (status) filter.status = status;
+  if (assigned === 'me') filter.assignedTo = req.account._id; // phiếu tôi phụ trách
+  else if (assigned === 'none') filter.assignedTo = null; // chưa phân công
+
+  const [warranties, total, byStatus, overdue, mine, unassigned] = await Promise.all([
+    Warranty.find(filter)
+      .populate('userId', 'displayName phoneNumber email')
+      .populate('productId', 'title featuredImage')
+      .populate('assignedTo', 'name') // người phụ trách
+      .populate('statusHistory.changedBy', 'name') // tên nhân viên trong lịch sử
+      .sort(status === 'overdue' || status === 'open' ? { createdAt: 1 } : { createdAt: -1 }) // đang xử lý: tồn lâu nhất lên đầu
+      .skip((page - 1) * limit)
+      .limit(Number(limit)),
+    Warranty.countDocuments(filter),
+    Warranty.aggregate([{ $match: scope }, { $group: { _id: '$status', n: { $sum: 1 } } }]), // số phiếu từng trạng thái
+    Warranty.countDocuments({ ...scope, ...openQ, createdAt: { $lt: overdueAt } }),
+    Warranty.countDocuments({ ...scope, ...openQ, assignedTo: req.account._id }),
+    Warranty.countDocuments({ ...scope, ...openQ, assignedTo: null })
+  ]);
+  const counts = Object.fromEntries(byStatus.map((x) => [x._id, x.n]));
+  counts.open = byStatus.filter((x) => !FINISHED.includes(x._id)).reduce((t, x) => t + x.n, 0);
+  res.json({ data: warranties, total, page: Number(page), totalPages: Math.ceil(total / limit), counts, overdue, mine, unassigned, overdueDays: OVERDUE_DAYS });
+});
+
+// @route GET /api/warranties/admin/technicians - người phân công được (admin + nhân viên có quyền bảo hành, đúng chi nhánh)
+const getTechnicians = asyncHandler(async (req, res) => {
+  const scopedStoreId = getScopedStoreId(req);
+  const list = await Admin.find({ isActive: true }).select('name title role storeId groupIds').populate('groupIds', 'permissions').populate('storeId', 'name').lean();
+  const data = list
+    .filter((a) => a.role === 'admin' || (a.groupIds || []).some((g) => g.permissions?.includes('warranties.manage')))
+    .filter((a) => !scopedStoreId || a.role === 'admin' || !a.storeId || String(a.storeId._id) === String(scopedStoreId)) // nhân viên: người cùng chi nhánh
+    .map((a) => ({ _id: a._id, name: a.name, title: a.role === 'admin' ? 'Quản trị viên' : a.title, store: a.storeId?.name || '' }))
+    .sort((a, b) => (/kỹ thuật|bảo hành/i.test(b.title) - /kỹ thuật|bảo hành/i.test(a.title)) || a.name.localeCompare(b.name, 'vi'));
+  res.json({ data });
 });
 
 // @route PUT /api/warranties/:id/status - đổi nhanh trạng thái ngay trong bảng
@@ -340,6 +375,7 @@ module.exports = {
   trackWarranty,
   submitWarrantyFeedback,
   getAllWarranties,
+  getTechnicians,
   updateWarrantyStatus,
   updateWarranty
 };

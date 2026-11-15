@@ -36,13 +36,21 @@ export function primaryAction(o, { canDeliver } = {}) {
 // Thanh tiến trình nhỏ của đơn
 const FLOW_HOME = ['pending', 'confirmed', 'processing', 'shipping', 'delivered'];
 const FLOW_PICKUP = ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'delivered'];
+// Việc của bước tiếp theo (hiện dưới thanh tiến trình)
+const NEXT_TODO = { pending: 'Xác nhận đơn', confirmed: 'Chuẩn bị hàng', processing: 'Giao cho shipper / chờ khách lấy', shipping: 'Giao tới khách', ready_for_pickup: 'Bàn giao tại quầy' };
 export function MiniProgress({ o }) {
-  if (['cancelled', 'returning', 'returned'].includes(o.status) || o.source === 'pos') return null;
+  if (o.source === 'pos') return <div className="small text-muted mb-1">Bán tại quầy · hoàn tất khi thanh toán</div>;
+  if (['cancelled', 'returning', 'returned'].includes(o.status)) return <div className="small text-muted mb-1">{o.status === 'cancelled' ? 'Đơn đã hủy' : o.status === 'returning' ? 'Đang chờ nhận hàng trả' : 'Đã nhận lại hàng trả'}</div>;
   const flow = o.deliveryMethod === 'store_pickup' ? FLOW_PICKUP : FLOW_HOME;
   const at = flow.indexOf(o.status);
   return (
-    <div className="order-mini-steps" title={flow.map((s) => ORDER_LABELS[s]).join(' → ')}>
-      {flow.map((s, i) => <span key={s} className={i < at ? 'done' : i === at ? 'current' : ''} />)}
+    <div className="mb-1">
+      <div className="order-mini-steps" title={flow.map((s) => ORDER_LABELS[s]).join(' → ')}>
+        {flow.map((s, i) => <span key={s} className={i < at ? 'done' : i === at ? 'current' : ''} />)}
+      </div>
+      <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+        Bước {at + 1}/{flow.length}{NEXT_TODO[o.status] ? <> · tiếp: <b>{NEXT_TODO[o.status]}</b></> : ' · hoàn tất'}
+      </div>
     </div>
   );
 }

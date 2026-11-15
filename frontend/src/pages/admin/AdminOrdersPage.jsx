@@ -25,6 +25,7 @@ import useAdminList from '../../hooks/useAdminList';
 import EInvoiceExportModal from '../../components/admin/EInvoiceExportModal';
 import RefundModal from '../../components/admin/RefundModal';
 import OrderInbox from '../../components/admin/OrderInbox';
+import OrderPipeline from '../../components/admin/OrderPipeline';
 import { FileEarmarkSpreadsheet } from 'react-bootstrap-icons';
 import { downloadCsv } from '../../utils/csvExport';
 import AuditStamp from '../../components/admin/AuditStamp';
@@ -275,6 +276,8 @@ export default function AdminOrdersPage() {
         </InputGroup>
         {view === 'all' && query.values.q && <div className="small text-muted mt-1">{loading ? 'Đang tìm…' : `${total} đơn khớp "${query.values.q}"`}{!loading && total === 0 && ' - thử tìm bằng số điện thoại hoặc vài chữ trong tên khách'}</div>}
       </Form>
+      {/* Sơ đồ quy trình: các bước + người phụ trách + số đơn; bấm 1 bước -> xem đơn ở bước đó (chuyển sang "Tất cả đơn") */}
+      <OrderPipeline counts={meta?.statusCounts || {}} status={query.values.status || ''} onPick={(s) => { if (view !== 'all') setView('all'); query.update({ status: s }); }} />
       <div className="order-view-switch mb-3" role="tablist" aria-label="Chế độ xem đơn hàng">
         {!financeOnly && (
           <button type="button" role="tab" aria-selected={view === 'inbox'} className={view === 'inbox' ? 'active' : ''} onClick={() => setView('inbox')}>
@@ -298,30 +301,6 @@ export default function AdminOrdersPage() {
         total={total}
         loading={loading}
       />
-
-      {/* Tab lọc nhanh theo trạng thái - số đếm theo đúng các bộ lọc khác đang chọn */}
-      <div className="order-status-tabs mb-3" role="tablist" aria-label="Lọc theo trạng thái">
-        {[{ value: '', label: 'Tất cả' }, ...statusOptions.map((s) => ({ value: s, label: ORDER_LABELS[s] }))].map((t) => {
-          const counts = meta?.statusCounts || {};
-          const count = t.value ? counts[t.value] || 0 : Object.values(counts).reduce((a, b) => a + b, 0);
-          const active = (query.values.status || '') === t.value;
-          if (t.value && !count && !active) return null; // ẩn trạng thái không có đơn nào cho gọn
-          return (
-            <button
-              key={t.value || 'all'}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              className={`order-status-tab${active ? ' active' : ''}`}
-              onClick={() => query.update({ status: t.value })}
-            >
-              {t.value && <span className={`order-status-dot bg-${STATUS_VARIANT[t.value]}`} />}
-              {t.label}
-              <span className="order-status-count">{count}</span>
-            </button>
-          );
-        })}
-      </div>
 
       {selected.length > 0 && (
         <div className="order-bulk mb-2">

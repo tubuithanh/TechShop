@@ -24,7 +24,8 @@ router.post('/', createWarrantyRequest); // gửi yêu cầu (khách) / tiếp n
 router.get('/', getMyWarranties); // phiếu của tôi
 router.put('/:id/feedback', submitWarrantyFeedback); // đánh giá dịch vụ
 
-router.get('/admin/all', can('warranties.manage'), getAllWarranties); // danh sách (giới hạn chi nhánh)
+router.get('/admin/all', can('warranties.manage'), getAllWarranties);
+router.get('/admin/technicians', can('warranties.manage'), require('../controllers/warrantyController').getTechnicians); // người phân công được // danh sách (giới hạn chi nhánh)
 router.put('/:id/status', can('warranties.manage'), updateWarrantyStatus); // đổi trạng thái
 router.put('/:id', can('warranties.manage'), updateWarranty); // sửa toàn bộ phiếu
 
