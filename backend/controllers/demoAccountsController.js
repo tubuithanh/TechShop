@@ -10,7 +10,7 @@ const asyncHandler = require('../utils/asyncHandler');
 
 // Mật khẩu demo công khai (seed + tài khoản demo nhân viên). Thêm mật khẩu demo mới ở đây.
 const DEMO_PASSWORDS = ['admin123', 'staff123', 'manager123', 'shipper123', 'nhanvien123', 'customer123'];
-const MAX = 80;
+const MAX = 200; // trang đăng nhập chia tab theo chi nhánh -> cần đủ tài khoản của mọi chi nhánh
 let cache = null; // { at, data } - so khớp bcrypt tốn thời gian -> lưu 10 phút
 
 async function isEnabled() {
@@ -50,7 +50,7 @@ const kindOf = (a) => {
 
 async function build() {
   const admins = await Admin.find({ isActive: { $ne: false } }).select('+password name email title role storeId managedStoreIds')
-    .populate('storeId', 'name').populate('managedStoreIds', 'name').populate('groupIds', 'name').limit(300).lean();
+    .populate('storeId', 'name').populate('managedStoreIds', 'name').populate('groupIds', 'name').limit(400).lean();
   const rows = [];
   for (const a of admins) {
     const password = await demoPassword(a.password, a.email);
