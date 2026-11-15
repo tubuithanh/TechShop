@@ -16,7 +16,7 @@ function formatVND(value) {
 // - Ảnh nền trắng, hiển thị trọn sản phẩm (contain) -> các ảnh nền sáng/tối khác nhau vẫn đồng đều
 // - Rê chuột: hiện ảnh thứ 2 + nút So sánh / Yêu thích (trên điện thoại luôn hiện)
 // - Nhãn giảm giá, trả góp, đánh giá, các màu đang bán
-export default function ProductCard({ product }) {
+export default function ProductCard({ product, storeId = '' }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const compareList = useLocalList(COMPARE_KEY);
@@ -69,7 +69,7 @@ export default function ProductCard({ product }) {
   };
 
   return (
-    <Link to={`/products/${product.slug}`} className="product-card h-100 text-decoration-none text-reset">
+    <Link to={`/products/${product.slug}${storeId ? `?store=${storeId}` : ''}`} className="product-card h-100 text-decoration-none text-reset">
       <div className="product-card-media">
         {discountPercent > 0 && <span className="product-card-discount">-{discountPercent}%</span>}
         <div className="product-card-actions">

@@ -69,7 +69,8 @@ const getProducts = asyncHandler(async (req, res) => {
     page,
     limit = 12,
     includeInactive,
-    isActive
+    isActive,
+    storeId
   } = req.query;
 
   const filter = includeInactive === 'true' ? {} : { isActive: true };
@@ -79,6 +80,11 @@ const getProducts = asyncHandler(async (req, res) => {
   Object.assign(filter, searchFilter(keyword));
   if (categoryId) filter.categoryId = categoryId;
   if (brandId) filter.brandId = { $in: brandId.split(',') };
+  // Xem sản phẩm của 1 cửa hàng: chỉ những sản phẩm còn hàng (ít nhất 1 phiên bản) ở cửa hàng đó
+  if (storeId) {
+    if (!mongoose.isValidObjectId(storeId)) return res.status(400).json({ message: 'Cửa hàng không hợp lệ' });
+    filter._id = { $in: await StoreInventory.distinct('productId', { storeId, stock: { $gt: 0 } }) };
+  }
   // Lọc/sắp xếp theo effectivePrice (giá THẬT khách trả = salePrice||price), không phải "price"
   // (giá gốc trước khuyến mãi) - nếu không, sản phẩm đang giảm giá sâu có thể bị loại khỏi kết quả
   // lọc theo ngân sách của khách dù giá thực tế vẫn nằm trong khoảng đó.

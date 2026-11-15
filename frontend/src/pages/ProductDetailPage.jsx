@@ -1,6 +1,6 @@
 import { useActivePromotions, promotionPrice, describeExtra } from '../utils/promotionPrice';
 import { Fragment, useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Container, Row, Col, Breadcrumb, Badge, Button, Form, Nav, Table, Spinner, Alert, InputGroup, Modal } from 'react-bootstrap';
 import { GiftFill, Truck, ShieldCheck, ArrowRepeat, ArrowLeftRight, Check2, StarFill, CartPlus, LightningChargeFill } from 'react-bootstrap-icons';
 import RecentlyViewed from '../components/RecentlyViewed';
@@ -39,6 +39,7 @@ const TABS = [
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
+  const preferredStore = useSearchParams()[0].get('store') || ''; // cửa hàng khách đang xem (từ trang cửa hàng)
   const { user } = useAuth();
   const { addToCart } = useCart();
   const navigate = useNavigate();
@@ -97,8 +98,10 @@ export default function ProductDetailPage() {
         addRecentlyViewed(data);
         // Mặc định chọn phiên bản đang bán đầu tiên còn hàng ở bất kỳ cửa hàng nào
         const active = (data.variants || []).filter((v) => v.isActive);
-        const inStock = active.find((v) => data.inventories?.some((inv) => inv.variantId === v._id && inv.stock > 0));
-        selectVariant(data, inStock || active[0], '');
+        const has = (v, store) => data.inventories?.some((inv) => inv.variantId === v._id && inv.stock > 0 && (!store || inv.storeId?._id === store));
+        // Ưu tiên phiên bản còn hàng ở cửa hàng khách đang xem
+        const inStock = (preferredStore && active.find((v) => has(v, preferredStore))) || active.find((v) => has(v));
+        selectVariant(data, inStock || active[0], preferredStore);
 
         const [rel, rev, qna] = await Promise.all([
           productService.getRelated(data._id).catch(() => []),

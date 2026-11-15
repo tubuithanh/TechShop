@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Container, Row, Col, Card, Nav, Spinner } from 'react-bootstrap';
 import { storeService } from '../services/storeService';
 
@@ -80,6 +81,9 @@ export default function StoreLocatorPage() {
                       Chỉ đường trên Google Maps →
                     </a>
                   )}
+                  <div className="mt-3">
+                    <Link to={`/products?storeId=${s._id}`} className="btn btn-primary btn-sm">Xem sản phẩm tại cửa hàng này</Link>
+                  </div>
                 </Card.Body>
               </Card>
             </Col>

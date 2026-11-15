@@ -5,6 +5,7 @@ import { Funnel, X, Search as SearchIcon } from 'react-bootstrap-icons';
 import { productService } from '../services/productService';
 import ProductCard from '../components/ProductCard';
 import ProductGridSkeleton from '../components/ProductCardSkeleton';
+import { storeService } from '../services/storeService';
 
 const SORTS = [
   { value: 'newest', label: 'Mới nhất' },
@@ -58,6 +59,11 @@ export default function ProductListPage() {
   const keyword = searchParams.get('keyword') || '';
   const categoryId = searchParams.get('categoryId') || '';
   const brandId = searchParams.get('brandId') || '';
+  // Đang xem sản phẩm của 1 cửa hàng (từ trang Hệ thống cửa hàng); trống = mọi cửa hàng
+  const storeId = searchParams.get('storeId') || '';
+  const [stores, setStores] = useState([]);
+  useEffect(() => { storeService.getStores().then(setStores).catch(() => setStores([])); }, []);
+  const currentStore = stores.find((s) => s._id === storeId);
   // Sắp xếp cũng nằm trên URL (trước đây là state riêng, tải lại trang là mất)
   const sort = searchParams.get('sort') || 'newest';
   // Khoảng giá đang lọc - lưu trên URL để tải lại trang / gửi link vẫn giữ bộ lọc
@@ -146,6 +152,7 @@ export default function ProductListPage() {
     brandId,
     sort,
     limit: settings.productsPerPage,
+    ...(storeId ? { storeId } : {}),
     ...(minPrice ? { minPrice } : {}),
     ...(maxPrice ? { maxPrice } : {}),
     ...(appliedSpecFilters ? { specFilters: appliedSpecFilters } : {})
@@ -178,7 +185,7 @@ export default function ProductListPage() {
     return () => {
       ignore = true;
     };
-  }, [keyword, categoryId, brandId, sort, settings.productsPerPage, appliedSpecFilters, minPrice, maxPrice]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [keyword, categoryId, brandId, storeId, sort, settings.productsPerPage, appliedSpecFilters, minPrice, maxPrice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Xem thêm": nối trang kế tiếp vào cuối danh sách, cùng bộ lọc / cách sắp xếp
   const loadMore = async () => {
@@ -207,6 +214,7 @@ export default function ProductListPage() {
   const chips = [
     keyword && { key: 'keyword', label: `Từ khóa: "${keyword}"`, clear: () => updateParams({ keyword: '' }) },
     selectedCategory && { key: 'cat', label: selectedCategory.name, clear: () => handleCategoryChange('') },
+    storeId && { key: 'store', label: `Cửa hàng: ${currentStore?.name || '...'}`, clear: () => updateParams({ storeId: '' }) },
     brandId && { key: 'brand', label: 'Thương hiệu đã chọn', clear: () => updateParams({ brandId: '' }) },
     (minPrice || maxPrice) && {
       key: 'price',
@@ -350,6 +358,17 @@ export default function ProductListPage() {
             </Button>
           </div>
 
+          {/* Đang xem theo cửa hàng: đổi sang cửa hàng khác / xem tất cả */}
+          {storeId && (
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 border rounded-3 bg-body-tertiary">
+              <span className="small">🏪 Sản phẩm còn hàng tại</span>
+              <select className="form-select form-select-sm w-auto" value={storeId} onChange={(e) => updateParams({ storeId: e.target.value })} aria-label="Chọn cửa hàng">
+                {stores.map((s) => <option key={s._id} value={s._id}>{s.name}{s.city ? ` (${s.city})` : ''}</option>)}
+              </select>
+              <button type="button" className="btn btn-sm btn-link" onClick={() => updateParams({ storeId: '' })}>Xem tất cả cửa hàng</button>
+            </div>
+          )}
+
           {/* Sắp xếp nhanh dạng tab (cuộn ngang trên điện thoại) */}
           <div className="sort-tabs mb-3" role="tablist" aria-label="Sắp xếp">
             <span className="small text-muted me-1 d-none d-sm-inline">Sắp xếp:</span>
@@ -405,7 +424,7 @@ export default function ProductListPage() {
             <Row className="g-3">
               {products.map((p) => (
                 <Col key={p._id} xs={6} md={4}>
-                  <ProductCard product={p} />
+                  <ProductCard product={p} storeId={storeId} />
                 </Col>
               ))}
               {nextCursor && (
